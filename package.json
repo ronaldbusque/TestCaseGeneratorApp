@@ -1,0 +1,56 @@
+{
+  "name": "ai-test-generator",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "generate-icons": "ts-node scripts/generate-icons.ts"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "@heroicons/react": "^2.0.18",
+    "clsx": "^2.1.1",
+    "framer-motion": "^10.16.4",
+    "mammoth": "^1.6.0",
+    "next": "^14.2.24",
+    "react": "^18",
+    "react-dom": "^18",
+    "react-markdown": "^9.0.3",
+    "tailwind-merge": "^2.6.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/typography": "^0.5.16",
+    "@testing-library/jest-dom": "^6.1.4",
+    "@testing-library/react": "^14.0.0",
+    "@testing-library/user-event": "^14.5.1",
+    "@types/jest": "^29.5.6",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10",
+    "ico-endec": "^0.1.6",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "jimp": "^1.6.0",
+    "postcss": "^8",
+    "sharp": "^0.33.5",
+    "tailwindcss": "^3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "setupFilesAfterEnv": [
+      "<rootDir>/jest.setup.js"
+    ],
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/src/$1"
+    }
+  }
+}
