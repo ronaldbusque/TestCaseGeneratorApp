@@ -1,50 +1,36 @@
 'use client';
 
-import { useState } from 'react';
 import { AIModel } from '@/lib/types';
-import { cn } from '@/lib/utils';
 
-interface ModelSelectorProps {
-  onModelSelect: (model: AIModel) => void;
-}
+const models = [
+  {
+    id: 'O1-Mini' as AIModel,
+    name: 'O1 Mini',
+    description: 'Fast and efficient test case generation',
+    isAvailable: true,
+  },
+  {
+    id: 'Gemini' as AIModel,
+    name: 'Google Gemini',
+    description: 'Advanced test case generation with Google AI',
+    isAvailable: true,
+  },
+];
 
-export function ModelSelector({ onModelSelect }: ModelSelectorProps) {
-  const [selectedModel, setSelectedModel] = useState<AIModel>('O1-Mini');
-
-  const modelOptions = [
-    { id: 'GPT-4-Turbo', name: 'GPT-4 Turbo', isAvailable: true },
-    { id: 'GPT-4-Stable', name: 'GPT-4 Stable', isAvailable: true },
-    { id: 'O1-Mini', name: 'O1 Mini', isAvailable: true },
-    { 
-      id: 'Gemini-2.0-Flash-Thinking-Exp-01-21', 
-      name: 'Google Gemini', 
-      isAvailable: true 
-    },
-  ] as const;
-
-  const handleModelSelect = (model: AIModel) => {
-    setSelectedModel(model);
-    onModelSelect(model);
-  };
-
+export const ModelSelector = ({ onModelSelect }: { onModelSelect: (model: AIModel) => void }) => {
   return (
-    <div className="flex flex-col space-y-4">
+    <div className="space-y-3">
       <h2 className="text-lg font-semibold">Select Model</h2>
-      <div className="flex flex-wrap gap-2">
-        {modelOptions.map((model) => (
+      <div className="flex flex-wrap gap-3">
+        {models.map((model) => (
           <button
             key={model.id}
-            onClick={() => handleModelSelect(model.id)}
-            disabled={!model.isAvailable}
-            className={cn(
-              'rounded-lg px-4 py-2 text-sm font-medium transition-colors',
-              'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
-              {
-                'bg-blue-600 text-white': selectedModel === model.id && model.isAvailable,
-                'bg-gray-100 text-gray-900': selectedModel !== model.id && model.isAvailable,
-                'cursor-not-allowed bg-gray-100 text-gray-400': !model.isAvailable,
-              }
-            )}
+            onClick={() => onModelSelect(model.id)}
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              model.isAvailable
+                ? 'hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
+                : 'opacity-50 cursor-not-allowed'
+            }`}
           >
             {model.name}
           </button>
@@ -52,4 +38,4 @@ export function ModelSelector({ onModelSelect }: ModelSelectorProps) {
       </div>
     </div>
   );
-} 
+}; 

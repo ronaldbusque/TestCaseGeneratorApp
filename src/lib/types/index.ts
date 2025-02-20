@@ -1,4 +1,4 @@
-export type AIModel = 'O1-Mini' | 'GPT-4-Turbo' | 'GPT-4-Stable' | 'Gemini';
+export type AIModel = 'O1-Mini' | 'Gemini';
 
 export type ModelType = 
   | 'gpt-4'
