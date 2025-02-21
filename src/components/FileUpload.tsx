@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useCallback, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './ui/Button';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { cn } from '@/lib/utils';
@@ -24,93 +24,98 @@ const SUPPORTED_FILE_TYPES = {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-export function FileUpload({ onFilesSelect }: FileUploadProps) {
-  const [isDragging, setIsDragging] = useState(false);
+export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelect }) => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [error, setError] = useState<string>('');
   const [previews, setPreviews] = useState<{ [key: string]: string }>({});
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const validateFiles = (files: File[]): { valid: File[], errors: string[] } => {
-    const validFiles: File[] = [];
-    const errors: string[] = [];
+  const handleFileSelect = useCallback(async (files: FileList | null) => {
+    if (!files?.length) return;
 
-    files.forEach(file => {
-      if (!Object.keys(SUPPORTED_FILE_TYPES).includes(file.type)) {
-        errors.push(`${file.name}: Unsupported file type`);
-      } else if (file.size > MAX_FILE_SIZE) {
-        errors.push(`${file.name}: File size exceeds 10MB limit`);
-      } else {
-        validFiles.push(file);
-      }
-    });
+    const newFiles = Array.from(files);
+    const validFiles = newFiles.filter(file => 
+      file.type.startsWith('image/') || 
+      file.type === 'application/pdf' || 
+      file.type === 'text/plain' ||
+      file.type === 'application/msword' ||
+      file.type.includes('document')
+    );
 
-    return { valid: validFiles, errors };
-  };
-
-  const generatePreview = async (file: File) => {
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setPreviews(prev => ({
-          ...prev,
-          [file.name]: e.target?.result as string
-        }));
-      };
-      reader.readAsDataURL(file);
+    if (validFiles.length !== newFiles.length) {
+      console.warn('Some files were skipped due to unsupported file types');
     }
-  };
 
-  const handleDragOver = (e: React.DragEvent) => {
+    const updatedFiles = [...selectedFiles, ...validFiles];
+    setSelectedFiles(updatedFiles);
+    onFilesSelect(updatedFiles);
+
+    // Generate previews for new image files
+    const newPreviews: { [key: string]: string } = { ...previews };
+    for (const file of validFiles) {
+      if (file.type.startsWith('image/')) {
+        try {
+          const preview = URL.createObjectURL(file);
+          newPreviews[`${file.name}-${file.lastModified}`] = preview;
+        } catch (error) {
+          console.error('Failed to generate preview for:', file.name, error);
+        }
+      }
+    }
+    setPreviews(newPreviews);
+  }, [selectedFiles, previews, onFilesSelect]);
+
+  const handleRemoveFile = useCallback((fileToRemove: File) => {
+    console.log('Removing file:', fileToRemove.name);
+    console.log('Current files:', selectedFiles.map(f => f.name));
+    
+    const updatedFiles = selectedFiles.filter(file => 
+      `${file.name}-${file.lastModified}` !== `${fileToRemove.name}-${fileToRemove.lastModified}`
+    );
+    
+    console.log('Updated files:', updatedFiles.map(f => f.name));
+    setSelectedFiles(updatedFiles);
+    onFilesSelect(updatedFiles);
+
+    // Clean up preview if it exists
+    const previewKey = `${fileToRemove.name}-${fileToRemove.lastModified}`;
+    if (previews[previewKey]) {
+      URL.revokeObjectURL(previews[previewKey]);
+      const { [previewKey]: removed, ...remainingPreviews } = previews;
+      setPreviews(remainingPreviews);
+    }
+  }, [selectedFiles, previews, onFilesSelect]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
-  };
+  }, []);
 
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files);
-    handleFiles(files);
-  };
+  }, []);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    handleFiles(files);
-  };
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleFileSelect(e.dataTransfer.files);
+  }, [handleFileSelect]);
 
-  const handleFiles = (files: File[]) => {
-    const { valid, errors } = validateFiles(files);
-    
-    if (errors.length > 0) {
-      setError(errors.join('\n'));
-      return;
-    }
+  const handleClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
 
-    setError('');
-    valid.forEach(generatePreview);
-    setSelectedFiles(prev => [...prev, ...valid]);
-    onFilesSelect([...selectedFiles, ...valid]);
-  };
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    handleFileSelect(e.target.files);
+  }, [handleFileSelect]);
 
-  const handleRemoveFile = (fileToRemove: File) => {
-    setSelectedFiles(prev => prev.filter(file => file !== fileToRemove));
-    setPreviews(prev => {
-      const newPreviews = { ...prev };
-      delete newPreviews[fileToRemove.name];
-      return newPreviews;
-    });
-    onFilesSelect(selectedFiles.filter(file => file !== fileToRemove));
-  };
-
-  const handleRemoveAllFiles = () => {
-    setSelectedFiles([]);
-    setPreviews({});
-    setError('');
-    onFilesSelect([]);
-  };
+  // Cleanup previews on unmount
+  React.useEffect(() => {
+    return () => {
+      Object.values(previews).forEach(URL.revokeObjectURL);
+    };
+  }, [previews]);
 
   return (
     <div className="space-y-4">
@@ -120,7 +125,10 @@ export function FileUpload({ onFilesSelect }: FileUploadProps) {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleRemoveAllFiles}
+            onClick={() => {
+              setSelectedFiles([]);
+              setPreviews({});
+            }}
             className="text-red-500"
           >
             <XMarkIcon className="h-4 w-4" />
@@ -136,21 +144,32 @@ export function FileUpload({ onFilesSelect }: FileUploadProps) {
           onDrop={handleDrop}
           className={cn(
             'flex flex-col items-center justify-center w-full h-64',
-            'border-2 border-dashed rounded-lg cursor-pointer',
+            'border-2 border-dashed rounded-lg',
             'transition-colors duration-200',
-            isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:bg-gray-50'
+            isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:bg-gray-50',
+            selectedFiles.length === 0 ? 'cursor-pointer' : 'cursor-default'
           )}
+          onClick={selectedFiles.length === 0 ? handleClick : undefined}
         >
           {selectedFiles.length > 0 ? (
             <div className="w-full p-4 space-y-3 overflow-y-auto max-h-full">
-              {selectedFiles.map((file, index) => (
-                <div key={`${file.name}-${index}`} className="flex items-center justify-between bg-white p-2 rounded-lg shadow-sm">
+              {selectedFiles.map((file) => (
+                <div
+                  key={`${file.name}-${file.lastModified}`}
+                  className="flex items-center justify-between bg-white p-2 rounded-lg shadow-sm"
+                >
                   <div className="flex items-center space-x-3">
-                    {previews[file.name] ? (
-                      <img src={previews[file.name]} alt={file.name} className="w-10 h-10 object-cover rounded" />
+                    {previews[`${file.name}-${file.lastModified}`] ? (
+                      <img
+                        src={previews[`${file.name}-${file.lastModified}`]}
+                        alt={file.name}
+                        className="w-10 h-10 object-cover rounded"
+                      />
                     ) : (
                       <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center">
-                        <span className="text-xs font-medium">{SUPPORTED_FILE_TYPES[file.type as keyof typeof SUPPORTED_FILE_TYPES]}</span>
+                        <span className="text-xs font-medium">
+                          {SUPPORTED_FILE_TYPES[file.type as keyof typeof SUPPORTED_FILE_TYPES]}
+                        </span>
                       </div>
                     )}
                     <span className="text-sm text-gray-500">{file.name}</span>
@@ -158,7 +177,11 @@ export function FileUpload({ onFilesSelect }: FileUploadProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleRemoveFile(file)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleRemoveFile(file);
+                    }}
                     className="text-red-500"
                   >
                     <XMarkIcon className="h-4 w-4" />
@@ -192,18 +215,15 @@ export function FileUpload({ onFilesSelect }: FileUploadProps) {
           )}
           
           <input
+            ref={fileInputRef}
             type="file"
             className="hidden"
             multiple
-            accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.gif,.webp"
-            onChange={handleFileSelect}
+            accept="image/*,.pdf,.doc,.docx,.txt"
+            onChange={handleInputChange}
           />
         </label>
       </div>
-
-      {error && (
-        <div className="text-sm text-red-500 whitespace-pre-line">{error}</div>
-      )}
     </div>
   );
-} 
+};

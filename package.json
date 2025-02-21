@@ -10,7 +10,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.2.0",
+    "@google/generative-ai": "^0.22.0",
     "@heroicons/react": "^2.1.1",
     "@types/node": "20.11.19",
     "@types/react": "18.2.56",
@@ -29,13 +29,18 @@
     "react-markdown": "^9.0.1",
     "tailwind-merge": "^2.2.1",
     "tailwindcss": "3.4.1",
-    "typescript": "5.3.3"
+    "typescript": "5.3.3",
+    "tesseract.js": "^5.0.5",
+    "turndown": "^7.1.2",
+    "html-to-text": "^9.0.5"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.4.2",
     "@testing-library/react": "^14.2.1",
     "@types/jest": "^29.5.12",
     "@types/pdfjs-dist": "^2.10.378",
+    "@types/turndown": "^5.0.4",
+    "@types/html-to-text": "^9.0.4",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0"
   }
