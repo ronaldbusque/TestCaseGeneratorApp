@@ -11,6 +11,9 @@ import { AnimatePresence } from 'framer-motion';
 import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { LoadingAnimation } from '@/components/LoadingAnimation';
 import { parseDocument } from '@/lib/services/documentParser';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Button } from '@/components/ui/Button';
+import { ArrowPathIcon } from '@heroicons/react/24/outline';
 
 export default function Home() {
   const [selectedModel, setSelectedModel] = useState<AIModel>('Gemini');
@@ -22,12 +25,63 @@ export default function Home() {
   const [generationStep, setGenerationStep] = useState<'idle' | 'analyzing' | 'generating' | 'complete'>('idle');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [isFileContentVisible, setIsFileContentVisible] = useState(false);
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [pendingModelChange, setPendingModelChange] = useState<AIModel | null>(null);
+  const [confirmationType, setConfirmationType] = useState<'new_session' | 'model_change' | null>(null);
+  const [shouldResetFiles, setShouldResetFiles] = useState(false);
+
+  const clearSession = () => {
+    setRequirements('');
+    setFileContent('');
+    setTestCases([]);
+    setError(null);
+    setUploadedFiles([]);
+    setIsFileContentVisible(false);
+    setGenerationStep('idle');
+    setShouldResetFiles(true);
+    
+    if (pendingModelChange) {
+      setSelectedModel(pendingModelChange);
+      setPendingModelChange(null);
+    }
+  };
 
   const handleModelSelect = (model: AIModel) => {
-    setSelectedModel(model);
+    if (hasExistingData()) {
+      setPendingModelChange(model);
+      setConfirmationType('model_change');
+      setIsConfirmDialogOpen(true);
+    } else {
+      setSelectedModel(model);
+    }
+  };
+
+  const handleNewSession = () => {
+    setConfirmationType('new_session');
+    setIsConfirmDialogOpen(true);
+  };
+
+  const getConfirmationDetails = () => {
+    if (confirmationType === 'model_change') {
+      return {
+        title: "Change AI Model",
+        message: `Switching to ${pendingModelChange} model will clear your current work. Would you like to proceed?`,
+        confirmLabel: "Switch Model",
+      };
+    }
+    return {
+      title: "Start New Session",
+      message: "This will clear all current files, requirements, and generated test cases. Are you sure you want to start fresh?",
+      confirmLabel: "Clear & Start New",
+    };
+  };
+
+  const hasExistingData = () => {
+    return uploadedFiles.length > 0 || requirements.trim() !== '' || testCases.length > 0;
   };
 
   const handleFilesSelect = async (files: File[]) => {
+    setShouldResetFiles(false); // Reset the flag when new files are selected
     try {
       setUploadedFiles(files);
       setGenerationStep('analyzing');
@@ -121,12 +175,36 @@ export default function Home() {
         </div>
         
         <div className="mt-8 sm:mt-12 space-y-6 sm:space-y-8">
-          <ModelSelector onModelSelect={handleModelSelect} selectedModel={selectedModel} />
+          <div className="flex items-center justify-between">
+            <ModelSelector onModelSelect={handleModelSelect} selectedModel={selectedModel} />
+            {hasExistingData() && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleNewSession}
+                className="ml-4 group relative flex items-center gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:border-blue-300 transition-all duration-200"
+              >
+                <ArrowPathIcon className="h-4 w-4 group-hover:rotate-180 transition-transform duration-300" />
+                <span className="relative">
+                  New Session
+                  {testCases.length > 0 && (
+                    <span className="absolute -top-1 -right-2 flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                    </span>
+                  )}
+                </span>
+              </Button>
+            )}
+          </div>
           
           <div className="space-y-6">
             <div className="grid gap-6 sm:gap-8 lg:grid-cols-2">
               <div className="space-y-4">
-                <FileUpload onFilesSelect={handleFilesSelect} />
+                <FileUpload 
+                  onFilesSelect={handleFilesSelect}
+                  shouldReset={shouldResetFiles}
+                />
                 {uploadedFiles.length > 0 && (
                   <div className="flex items-center text-sm text-gray-600">
                     <svg className="w-5 h-5 mr-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -150,7 +228,8 @@ export default function Home() {
                 onSubmit={handleRequirementsSubmit}
                 initialValue={requirements}
                 placeholder="Enter additional test requirements here..."
-                isEnabled={true} // Always enable input
+                isEnabled={true}
+                hasUploadedFiles={uploadedFiles.length > 0}
               />
             </div>
 
@@ -207,6 +286,18 @@ export default function Home() {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={isConfirmDialogOpen}
+        onClose={() => {
+          setIsConfirmDialogOpen(false);
+          setPendingModelChange(null);
+          setConfirmationType(null);
+        }}
+        onConfirm={clearSession}
+        {...getConfirmationDetails()}
+        cancelLabel="Cancel"
+      />
     </main>
   );
 } 

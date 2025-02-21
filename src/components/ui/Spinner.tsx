@@ -1,9 +1,18 @@
-export function Spinner({ className = "h-4 w-4" }: { className?: string }) {
+'use client';
+
+import { cn } from '@/lib/utils';
+
+interface SpinnerProps {
+  className?: string;
+}
+
+export function Spinner({ className }: SpinnerProps) {
   return (
     <div
-      className={`animate-spin rounded-full border-2 border-current border-t-transparent ${className}`}
-      role="status"
-      aria-label="Loading"
+      className={cn(
+        'animate-spin rounded-full border-2 border-current border-t-transparent',
+        className
+      )}
     />
   );
 } 

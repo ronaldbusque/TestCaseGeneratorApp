@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './ui/Button';
 import { XMarkIcon } from '@heroicons/react/24/outline';
@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 
 interface FileUploadProps {
   onFilesSelect: (files: File[]) => void;
+  shouldReset?: boolean;
 }
 
 const SUPPORTED_FILE_TYPES = {
@@ -24,11 +25,25 @@ const SUPPORTED_FILE_TYPES = {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelect }) => {
+export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelect, shouldReset = false }) => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<{ [key: string]: string }>({});
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Effect to handle resetting the component
+  useEffect(() => {
+    if (shouldReset) {
+      setSelectedFiles([]);
+      // Cleanup previews
+      Object.values(previews).forEach(URL.revokeObjectURL);
+      setPreviews({});
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  }, [shouldReset]);
 
   const handleFileSelect = useCallback(async (files: FileList | null) => {
     if (!files?.length) return;
@@ -128,6 +143,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelect }) => {
             onClick={() => {
               setSelectedFiles([]);
               setPreviews({});
+              onFilesSelect([]);
             }}
             className="text-red-500"
           >
