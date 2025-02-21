@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, GenerativeModel } from "@google/generative-ai";
+import { GoogleGenerativeAI, GenerativeModel, Part } from "@google/generative-ai";
 import { AIService, TestCaseGenerationRequest, TestCaseGenerationResponse, ModelType } from '@/lib/types';
 
 export class GeminiService implements AIService {
@@ -21,10 +21,43 @@ export class GeminiService implements AIService {
     this.model = this.genAI.getGenerativeModel({ model: "gemini-2.0-flash-thinking-exp-01-21" });
   }
 
+  private async fileToGenerativePart(file: File): Promise<Part> {
+    if (file.type.startsWith('image/')) {
+      const arrayBuffer = await file.arrayBuffer();
+      return {
+        inlineData: {
+          data: Buffer.from(arrayBuffer).toString('base64'),
+          mimeType: file.type
+        }
+      };
+    } else {
+      const text = await this.extractTextFromFile(file);
+      return { text: `Content of ${file.name}:\n${text}` };
+    }
+  }
+
+  private async extractTextFromFile(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsText(file);
+    });
+  }
+
   async generateTestCases(request: TestCaseGenerationRequest): Promise<TestCaseGenerationResponse> {
     this.debugLog = [];
     try {
-      const prompt = `You are a QA engineer. Generate test cases in JSON format for the following requirements.
+      const parts: Part[] = [];
+
+      // Add files if present
+      if (request.files && request.files.length > 0) {
+        const fileParts = await Promise.all(request.files.map(file => this.fileToGenerativePart(file)));
+        parts.push(...fileParts);
+      }
+
+      // Add the requirements prompt
+      const prompt = `You are a QA engineer. Generate test cases in JSON format for the following requirements and any provided files.
 
 Requirements:
 ${request.requirements}
@@ -44,48 +77,25 @@ Return ONLY a JSON array containing test cases. Each test case should have this 
   "expectedResult": "Expected outcome of the test"
 }
 
-Example response format:
-[
-  {
-    "title": "User Login - Valid Credentials",
-    "description": "Verify user can login with valid username and password",
-    "preconditions": [
-      "User account exists in system",
-      "User is not already logged in"
-    ],
-    "testData": [
-      "Username: validuser@example.com",
-      "Password: ValidPass123"
-    ],
-    "steps": [
-      {
-        "number": 1,
-        "description": "Navigate to login page"
-      },
-      {
-        "number": 2,
-        "description": "Enter username and password"
-      },
-      {
-        "number": 3,
-        "description": "Click login button"
-      }
-    ],
-    "expectedResult": "User is successfully logged in and redirected to dashboard"
-  }
-]
+For any images provided:
+- Include visual verification steps
+- Add accessibility test cases if applicable
+- Include responsive design test cases
+- Add cross-browser compatibility test cases
 
 IMPORTANT: 
 1. Response must be a valid JSON array
 2. Do not include any explanatory text
 3. Follow the exact structure shown above`;
 
+      parts.push({ text: prompt });
+
       this.log('System Prompt', prompt);
 
       const result = await this.model.generateContent({
         contents: [{
           role: 'user',
-          parts: [{ text: prompt }]
+          parts
         }],
         generationConfig: {
           temperature: 0.1,

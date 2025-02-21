@@ -5,74 +5,103 @@ import { ModelSelector } from '@/components/ModelSelector';
 import { FileUpload } from '../components/FileUpload';
 import { RequirementsInput } from '@/components/RequirementsInput';
 import { TestCaseList } from '@/components/TestCaseList';
-import { parseWordDocument } from '@/lib/services/documentParser';
 import { createAIService } from '@/lib/services/ai/factory';
 import { AIModel, TestCase } from '@/lib/types';
 import { AnimatePresence } from 'framer-motion';
 import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { LoadingAnimation } from '@/components/LoadingAnimation';
+import { parseDocument } from '@/lib/services/documentParser';
 
 export default function Home() {
-  const [selectedModel, setSelectedModel] = useState<AIModel>('O1-Mini');
+  const [selectedModel, setSelectedModel] = useState<AIModel>('Gemini');
   const [requirements, setRequirements] = useState('');
+  const [fileContent, setFileContent] = useState('');
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState<'idle' | 'analyzing' | 'generating' | 'complete'>('idle');
-
-  const handleFileSelect = async (file: File) => {
-    try {
-      const parsedRequirements = await parseWordDocument(file);
-      setRequirements(parsedRequirements);
-      setError(null);
-    } catch (error) {
-      console.error('Error parsing document:', error);
-      setError('Failed to parse document. Please try again.');
-    }
-  };
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [isFileContentVisible, setIsFileContentVisible] = useState(false);
 
   const handleModelSelect = (model: AIModel) => {
     setSelectedModel(model);
   };
 
-  const handleRequirementsSubmit = async (requirements: string) => {
-    setError(null);
-    setGenerationStep('analyzing');
-    
+  const handleFilesSelect = async (files: File[]) => {
     try {
-      // Show analyzing state for a moment
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      setUploadedFiles(files);
+      setGenerationStep('analyzing');
       
-      setGenerationStep('generating');
-      const service = createAIService(selectedModel);
-      const response = await service.generateTestCases({
-        model: selectedModel,
-        requirements
-      });
+      const extractedRequirements = await Promise.all(
+        files.map(file => parseDocument(file))
+      );
 
-      if (response.error) {
-        setError(response.error);
-        setGenerationStep('idle');
-        return;
+      const textRequirements = extractedRequirements
+        .filter(req => req) // Remove any null results
+        .join('\n\n');
+
+      // Handle image files
+      const imageFiles = files.filter(file => file.type.startsWith('image/'));
+      const imageRequirements = imageFiles.length > 0 
+        ? `\n\nImage Files for Testing:\n${imageFiles.map(file => `- ${file.name}`).join('\n')}`
+        : '';
+
+      // Combine text and image requirements
+      const combinedRequirements = textRequirements + imageRequirements;
+
+      if (combinedRequirements) {
+        setFileContent(combinedRequirements);
+      } else if (imageFiles.length > 0) {
+        // If we only have images and no text requirements, set a default message
+        setFileContent('Image files uploaded for testing.');
       }
 
-      setTestCases(response.testCases);
-      setGenerationStep('complete');
-      
-      // Auto-hide the success message after 5 seconds
-      setTimeout(() => {
-        setGenerationStep('idle');
-      }, 5000);
-      
-    } catch (err) {
-      const error = err as Error;
-      setError(error.message);
+      setGenerationStep('idle');
+    } catch (error) {
+      console.error('File processing error:', error);
+      setError(error instanceof Error ? error.message : 'Failed to process files');
       setGenerationStep('idle');
     }
   };
 
+  const generateTestCases = async (manualRequirements: string) => {
+    try {
+      setError(null);
+      setIsGenerating(true);
+      setGenerationStep('generating');
+
+      // Combine file content with manual requirements
+      const combinedRequirements = [fileContent, manualRequirements]
+        .filter(Boolean)
+        .join('\n\n');
+
+      const aiService = createAIService(selectedModel);
+      const result = await aiService.generateTestCases({
+        requirements: combinedRequirements,
+        files: uploadedFiles
+      });
+
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      setTestCases(result.testCases);
+      setGenerationStep('complete');
+    } catch (error) {
+      console.error('Generation error:', error);
+      setError(error instanceof Error ? error.message : 'Failed to generate test cases');
+      setGenerationStep('idle');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleRequirementsSubmit = (manualRequirements: string) => {
+    generateTestCases(manualRequirements);
+  };
+
   const handleRegenerate = () => {
-    handleRequirementsSubmit(requirements);
+    generateTestCases(requirements);
   };
 
   const handleTestCaseUpdate = (updatedTestCases: TestCase[]) => {
@@ -92,13 +121,55 @@ export default function Home() {
         </div>
         
         <div className="mt-8 sm:mt-12 space-y-6 sm:space-y-8">
-          <ModelSelector onModelSelect={handleModelSelect} />
-          <div className="grid gap-6 sm:gap-8 lg:grid-cols-2">
-            <FileUpload onFileSelect={handleFileSelect} />
-            <RequirementsInput
-              onSubmit={handleRequirementsSubmit}
-              initialValue={requirements}
-            />
+          <ModelSelector onModelSelect={handleModelSelect} selectedModel={selectedModel} />
+          
+          <div className="space-y-6">
+            <div className="grid gap-6 sm:gap-8 lg:grid-cols-2">
+              <div className="space-y-4">
+                <FileUpload onFilesSelect={handleFilesSelect} />
+                {uploadedFiles.length > 0 && (
+                  <div className="flex items-center text-sm text-gray-600">
+                    <svg className="w-5 h-5 mr-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>
+                      {uploadedFiles.length} {uploadedFiles.length === 1 ? 'file' : 'files'} ready for processing
+                      {fileContent && (
+                        <button
+                          onClick={() => setIsFileContentVisible(!isFileContentVisible)}
+                          className="ml-2 text-blue-500 hover:text-blue-600 underline"
+                        >
+                          View extracted content
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <RequirementsInput
+                onSubmit={handleRequirementsSubmit}
+                initialValue={requirements}
+                placeholder="Enter additional test requirements here..."
+                isEnabled={true} // Always enable input
+              />
+            </div>
+
+            {isFileContentVisible && fileContent && (
+              <div className="rounded-lg border border-gray-200 p-4 bg-gray-50">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-medium text-gray-900">Extracted Content Preview</h3>
+                  <button
+                    onClick={() => setIsFileContentVisible(false)}
+                    className="text-gray-400 hover:text-gray-500"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="text-sm text-gray-600 whitespace-pre-wrap">{fileContent}</div>
+              </div>
+            )}
           </div>
 
           {error && (
@@ -107,6 +178,15 @@ export default function Home() {
               <p>{error}</p>
             </div>
           )}
+
+          <AnimatePresence>
+            {generationStep === 'analyzing' && (
+              <LoadingAnimation message="Analyzing uploaded files..." />
+            )}
+            {generationStep === 'generating' && (
+              <LoadingAnimation message="Generating test cases..." />
+            )}
+          </AnimatePresence>
 
           {generationStep === 'complete' && testCases.length > 0 && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-6 animate-fade-in">
@@ -118,30 +198,15 @@ export default function Home() {
                   {testCases.length} Tests
                 </span>
               </div>
+              <TestCaseList
+                testCases={testCases}
+                onRegenerate={handleRegenerate}
+                onUpdate={handleTestCaseUpdate}
+              />
             </div>
           )}
-
-          <TestCaseList
-            testCases={testCases}
-            onRegenerate={handleRegenerate}
-            onUpdate={handleTestCaseUpdate}
-          />
         </div>
       </div>
-
-      {(generationStep === 'analyzing' || generationStep === 'generating') && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-            <LoadingAnimation 
-              message={
-                generationStep === 'analyzing' 
-                  ? "Analyzing Requirements..." 
-                  : "Generating Test Cases..."
-              } 
-            />
-          </div>
-        </div>
-      )}
     </main>
   );
 } 

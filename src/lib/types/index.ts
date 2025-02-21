@@ -11,8 +11,8 @@ export interface TestCase {
   id: string;
   title: string;
   description: string;
-  preconditions?: string[];
-  testData?: string[];
+  preconditions: string[];
+  testData: string[];
   steps: TestStep[];
   expectedResult: string;
   createdAt: Date;
@@ -38,8 +38,8 @@ export interface AIModelConfig {
 }
 
 export interface TestCaseGenerationRequest {
-  model: AIModel;
   requirements: string;
+  files?: File[];
 }
 
 export interface TestCaseGenerationResponse {
@@ -60,7 +60,7 @@ export interface TestCaseGenerationResponse {
 
 export interface AIService {
   generateTestCases(request: TestCaseGenerationRequest): Promise<TestCaseGenerationResponse>;
-  generateContent(prompt: string, model: ModelType): Promise<string>;
+  generateContent?(prompt: string, model: ModelType): Promise<string>;
 }
 
 export interface TestCaseResponse {
