@@ -302,77 +302,89 @@ export default function Home() {
               AI Test Case Generator
             </h1>
             <p className="mt-4 text-lg text-blue-100 sm:text-xl max-w-3xl mx-auto">
-              Generate comprehensive test cases using advanced AI models. Perfect for QA teams and developers.
+              Generate comprehensive test cases using advanced AI models.
             </p>
           </div>
           
           <div className="space-y-8">
             <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 sm:p-8 border border-white/20">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-                <div className="flex items-center gap-6 flex-wrap">
+              <div className="flex flex-col space-y-6">
+                {/* Top row with model selector and new session button */}
+                <div className="flex items-center justify-between">
                   <ModelSelector onModelSelect={handleModelSelect} selectedModel={selectedModel} />
-                  <div className="flex flex-col sm:flex-row gap-6">
-                    <TestCaseModeToggle mode={testCaseMode} onModeChange={setTestCaseMode} />
+                  {hasExistingData() && (
+                    <Button
+                      onClick={handleNewSession}
+                      className="group relative flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-blue-100 backdrop-blur-sm rounded-xl px-4 py-2 transition-all duration-200"
+                    >
+                      <ArrowPathIcon className="h-4 w-4 group-hover:rotate-180 transition-transform duration-300" />
+                      <span className="relative">
+                        New Session
+                        {testCases.length > 0 && (
+                          <span className="absolute -top-1 -right-2 flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                          </span>
+                        )}
+                      </span>
+                    </Button>
+                  )}
+                </div>
+
+                {/* Bottom row with generation controls */}
+                <div className="flex flex-col sm:flex-row gap-6">
+                  <div className="flex-1">
+                    <TestCaseModeToggle 
+                      mode={testCaseMode} 
+                      onModeChange={setTestCaseMode}
+                    />
+                  </div>
+                  <div className="flex-1">
                     <TestPriorityToggle
                       priorityMode={testPriorityMode}
                       onPriorityChange={setTestPriorityMode}
                     />
                   </div>
                 </div>
-                {hasExistingData() && (
-                  <Button
-                    onClick={handleNewSession}
-                    className="group relative flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-blue-100 backdrop-blur-sm rounded-xl px-4 py-2 transition-all duration-200"
-                  >
-                    <ArrowPathIcon className="h-4 w-4 group-hover:rotate-180 transition-transform duration-300" />
-                    <span className="relative">
-                      New Session
-                      {testCases.length > 0 && (
-                        <span className="absolute -top-1 -right-2 flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                        </span>
-                      )}
-                    </span>
-                  </Button>
-                )}
               </div>
             </div>
-            
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 sm:p-8 transition-all duration-300 hover:shadow-2xl border border-white/20">
-                <FileUpload 
-                  onFilesSelect={handleFilesSelect}
-                  shouldReset={shouldResetFiles}
-                />
-                {uploadedFiles.length > 0 && (
-                  <div className="flex items-center text-sm text-blue-100 mt-4">
-                    <svg className="w-5 h-5 mr-2 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>
-                      {uploadedFiles.length} {uploadedFiles.length === 1 ? 'file' : 'files'} ready for processing
-                      {fileContent && (
-                        <button
-                          onClick={() => setIsFileContentVisible(!isFileContentVisible)}
-                          className="ml-2 text-blue-300 hover:text-blue-200 underline font-medium"
-                        >
-                          View extracted content
-                        </button>
-                      )}
-                    </span>
-                  </div>
-                )}
-              </div>
 
-              <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 sm:p-8 transition-all duration-300 hover:shadow-2xl border border-white/20">
-                <RequirementsInput
-                  onSubmit={handleRequirementsSubmit}
-                  initialValue={requirements}
-                  placeholder="Enter additional test requirements here..."
-                  isEnabled={true}
-                  hasUploadedFiles={uploadedFiles.length > 0}
-                />
+            <div>
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 sm:p-8 transition-all duration-300 hover:shadow-2xl border border-white/20">
+                  <FileUpload 
+                    onFilesSelect={handleFilesSelect}
+                    shouldReset={shouldResetFiles}
+                  />
+                  {uploadedFiles.length > 0 && (
+                    <div className="flex items-center text-sm text-blue-100 mt-4">
+                      <svg className="w-5 h-5 mr-2 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span>
+                        {uploadedFiles.length} {uploadedFiles.length === 1 ? 'file' : 'files'} ready for processing
+                        {fileContent && (
+                          <button
+                            onClick={() => setIsFileContentVisible(!isFileContentVisible)}
+                            className="ml-2 text-blue-300 hover:text-blue-200 underline font-medium"
+                          >
+                            View extracted content
+                          </button>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 sm:p-8 transition-all duration-300 hover:shadow-2xl border border-white/20">
+                  <RequirementsInput
+                    onSubmit={handleRequirementsSubmit}
+                    initialValue={requirements}
+                    placeholder="Enter additional requirements or specifications here..."
+                    isEnabled={true}
+                    hasUploadedFiles={uploadedFiles.length > 0}
+                  />
+                </div>
               </div>
             </div>
 

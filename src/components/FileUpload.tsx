@@ -61,6 +61,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelect, shouldRes
 
   return (
     <div className="space-y-4">
+      <h2 className="text-lg font-semibold text-blue-100 mb-4">System Requirements</h2>
       <div 
         {...getRootProps()} 
         className={`

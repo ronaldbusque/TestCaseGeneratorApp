@@ -7,18 +7,23 @@ import { DocumentTextIcon, DocumentMagnifyingGlassIcon } from '@heroicons/react/
 interface TestCaseModeToggleProps {
   mode: TestCaseMode;
   onModeChange: (mode: TestCaseMode) => void;
+  className?: string;
 }
 
-export function TestCaseModeToggle({ mode, onModeChange }: TestCaseModeToggleProps) {
+export function TestCaseModeToggle({
+  mode,
+  onModeChange,
+  className
+}: TestCaseModeToggleProps) {
   return (
-    <div className="space-y-3">
+    <div className={cn('space-y-3', className)}>
       <h2 className="text-lg font-semibold text-blue-100">Generation Type</h2>
-      <div className="p-1 bg-white/5 backdrop-blur-lg rounded-2xl border border-white/10">
+      <div className="p-1 bg-white/5 backdrop-blur-lg rounded-xl border border-white/10">
         <div className="flex gap-1">
           <button
             onClick={() => onModeChange('high-level')}
             className={cn(
-              'relative px-4 py-2.5 rounded-xl transition-all duration-300 flex items-center gap-2 group',
+              'flex-1 relative px-4 py-2.5 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 group',
               'focus:outline-none',
               mode === 'high-level' 
                 ? [
@@ -46,7 +51,7 @@ export function TestCaseModeToggle({ mode, onModeChange }: TestCaseModeTogglePro
           <button
             onClick={() => onModeChange('detailed')}
             className={cn(
-              'relative px-4 py-2.5 rounded-xl transition-all duration-300 flex items-center gap-2 group',
+              'flex-1 relative px-4 py-2.5 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 group',
               'focus:outline-none',
               mode === 'detailed'
                 ? [
@@ -72,6 +77,12 @@ export function TestCaseModeToggle({ mode, onModeChange }: TestCaseModeTogglePro
             )}
           </button>
         </div>
+        <p className="mt-2 text-xs text-blue-300 text-center">
+          {mode === 'detailed' 
+            ? 'Generate detailed test cases with step-by-step instructions'
+            : 'Generate high-level test scenarios and acceptance criteria'
+          }
+        </p>
       </div>
     </div>
   );

@@ -9,7 +9,7 @@ const models = [
   {
     id: 'Gemini' as AIModel,
     name: 'Google Gemini',
-    description: 'Advanced test case generation with Google AI',
+    description: 'Using gemini-2.0-flash-thinking-exp-01-21',
     isAvailable: true,
     logo: (
       <Image
@@ -24,7 +24,7 @@ const models = [
   {
     id: 'O1-Mini' as AIModel,
     name: 'OpenAI O1-Mini',
-    description: 'Fast and efficient test case generation',
+    description: 'Using o1-mini model',
     isAvailable: true,
     logo: (
       <Image
@@ -46,7 +46,7 @@ interface ModelSelectorProps {
 export const ModelSelector = ({ onModelSelect, selectedModel = 'Gemini' }: ModelSelectorProps) => {
   return (
     <div className="space-y-3">
-      <h2 className="text-lg font-semibold text-blue-100">Select Model</h2>
+      <h2 className="text-lg font-semibold text-blue-100">Select AI Model</h2>
       <div className="p-1 bg-white/5 backdrop-blur-lg rounded-2xl border border-white/10">
         <div className="flex gap-1">
           {models.map((model) => (
