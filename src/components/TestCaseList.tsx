@@ -2,18 +2,26 @@
 
 import { TestCase, TestCaseMode, HighLevelTestCase, DetailedTestCase } from '@/lib/types';
 import { Button } from './ui/Button';
-import { ChevronDownIcon, ChevronUpIcon, ClipboardIcon, PencilIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon, ChevronUpIcon, ClipboardIcon, PencilIcon, ArrowPathIcon, ArrowDownIcon, CheckCircleIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TestCaseEditForm } from './TestCaseEditForm';
 import ReactMarkdown from 'react-markdown';
+import type { utils as XLSXUtils, writeFile } from 'xlsx';
+import type { Document, Paragraph, TextRun, HeadingLevel, Packer, ISectionOptions } from 'docx';
 
 interface TestCaseListProps {
   testCases: TestCase[];
   onRegenerate: () => void;
   onUpdate: (testCases: TestCase[]) => void;
   mode: TestCaseMode;
+  convertedTestCases?: TestCase[];
+  onSelectTestCase?: (id: string, selected: boolean) => void;
+  selectedTestCases?: Set<string>;
+  onConvertSelected?: () => void;
+  convertedScenarioIds?: Set<string>;
+  onUpdateConverted?: (testCases: TestCase[]) => void;
 }
 
 const isHighLevelTestCase = (testCase: TestCase): testCase is HighLevelTestCase => {
@@ -37,7 +45,18 @@ const extractAreaFromTestCase = (testCase: DetailedTestCase): string => {
   return foundKeyword || 'General';
 };
 
-export function TestCaseList({ testCases, onRegenerate, onUpdate, mode }: TestCaseListProps) {
+export function TestCaseList({ 
+  testCases, 
+  onRegenerate, 
+  onUpdate, 
+  mode,
+  convertedTestCases = [],
+  onSelectTestCase,
+  selectedTestCases = new Set(),
+  onConvertSelected,
+  convertedScenarioIds = new Set(),
+  onUpdateConverted
+}: TestCaseListProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -77,6 +96,18 @@ export function TestCaseList({ testCases, onRegenerate, onUpdate, mode }: TestCa
     setEditingId(null);
   };
 
+  const handleSaveConverted = (updatedTestCase: TestCase) => {
+    if (!onUpdateConverted) return;
+    const newTestCases = convertedTestCases.map(tc => 
+      tc.id === updatedTestCase.id ? {
+        ...tc,
+        markdownContent: updatedTestCase.markdownContent
+      } : tc
+    );
+    onUpdateConverted(newTestCases);
+    setEditingId(null);
+  };
+
   const handleCancel = () => {
     setEditingId(null);
   };
@@ -110,6 +141,138 @@ export function TestCaseList({ testCases, onRegenerate, onUpdate, mode }: TestCa
     return sections.filter(Boolean).join('\n\n');
   };
 
+  const getConvertedTestCase = (scenarioId: string) => {
+    return convertedTestCases.find(tc => tc.originalScenarioId === scenarioId);
+  };
+
+  const handleExportCSV = (testCases: TestCase[]) => {
+    const headers = ['ID', 'Title', 'Area', 'Scenario'];
+    const rows = testCases.map((tc) => {
+      if (!isHighLevelTestCase(tc)) return [];
+      return [
+        tc.id,
+        tc.title,
+        tc.area,
+        tc.scenario
+      ];
+    }).filter(row => row.length > 0);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'test-scenarios.csv';
+    link.click();
+  };
+
+  const handleExportXLSX = async (testCases: TestCase[]) => {
+    try {
+      // Import the XLSX module
+      const XLSX = await import('xlsx');
+      
+      const scenarioData = testCases
+        .filter(isHighLevelTestCase)
+        .map(tc => ({
+          ID: tc.id,
+          Title: tc.title,
+          Area: tc.area,
+          Scenario: tc.scenario
+        }));
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(scenarioData, {
+        header: ['ID', 'Title', 'Area', 'Scenario'],
+        skipHeader: false
+      });
+
+      // Auto-size columns
+      const colWidths = [
+        { wch: 10 },  // ID
+        { wch: 30 },  // Title
+        { wch: 15 },  // Area
+        { wch: 50 }   // Scenario
+      ];
+      ws['!cols'] = colWidths;
+
+      // Add the worksheet to the workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Test Scenarios');
+
+      // Write the file
+      XLSX.writeFile(wb, 'test-scenarios.xlsx');
+    } catch (error) {
+      console.error('Failed to export XLSX:', error);
+      alert('Failed to export Excel file. Please try again.');
+    }
+  };
+
+  const handleExportDOCX = async (testCases: TestCase[]) => {
+    try {
+      const { Document, Paragraph, TextRun, HeadingLevel, Packer } = await import('docx');
+      
+      const children = testCases
+        .filter(isHighLevelTestCase)
+        .reduce((acc: ISectionOptions['children'], tc) => {
+          return [
+            ...acc,
+            new Paragraph({
+              text: tc.title,
+              heading: HeadingLevel.HEADING_2,
+              spacing: { after: 200 }
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: "ID: ", bold: true }),
+                new TextRun(tc.id),
+              ],
+              spacing: { after: 200 }
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: "Area: ", bold: true }),
+                new TextRun(tc.area),
+              ],
+              spacing: { after: 200 }
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: "Scenario: ", bold: true }),
+                new TextRun(tc.scenario),
+              ],
+              spacing: { after: 400 }
+            }),
+          ];
+        }, []);
+
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: [
+            new Paragraph({
+              text: "Test Scenarios",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 400 }
+            }),
+            ...children
+          ],
+        }],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'test-scenarios.docx';
+      link.click();
+    } catch (error) {
+      console.error('Failed to export DOCX:', error);
+      alert('Failed to export Word document. Please try again.');
+    }
+  };
+
   if (!testCases.length) return null;
 
   return (
@@ -131,15 +294,61 @@ export function TestCaseList({ testCases, onRegenerate, onUpdate, mode }: TestCa
                 </span>
               )}
             </div>
-            <Button
-              onClick={onRegenerate}
-              variant="outline"
-              className="group"
-              title={`Generate new ${mode === 'high-level' ? 'scenarios' : 'test cases'}`}
-            >
-              <ArrowPathIcon className="h-4 w-4 mr-2 group-hover:rotate-180 transition-transform" />
-              Generate New Set
-            </Button>
+            <div className="flex items-center gap-3">
+              {mode === 'high-level' && (
+                <div className="relative group">
+                  <Button
+                    variant="outline"
+                    className="group"
+                  >
+                    <DocumentArrowDownIcon className="h-4 w-4 mr-2" />
+                    Export
+                  </Button>
+                  <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                    <div className="py-1">
+                      <button
+                        onClick={() => handleExportCSV(testCases)}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        Export as CSV
+                      </button>
+                      <button
+                        onClick={() => handleExportXLSX(testCases)}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        Export as Excel
+                      </button>
+                      <button
+                        onClick={() => handleExportDOCX(testCases)}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        Export as Word
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {mode === 'high-level' && onConvertSelected && (
+                <Button
+                  onClick={onConvertSelected}
+                  variant="outline"
+                  className="group"
+                  disabled={selectedTestCases.size === 0}
+                >
+                  <ArrowDownIcon className="h-4 w-4 mr-2" />
+                  Convert Selected to Detailed
+                </Button>
+              )}
+              <Button
+                onClick={onRegenerate}
+                variant="outline"
+                className="group"
+                title={`Generate new ${mode === 'high-level' ? 'scenarios' : 'test cases'}`}
+              >
+                <ArrowPathIcon className="h-4 w-4 mr-2 group-hover:rotate-180 transition-transform" />
+                Generate New Set
+              </Button>
+            </div>
           </div>
           <div className="space-y-4">
             {mode === 'high-level' && (
@@ -158,13 +367,34 @@ export function TestCaseList({ testCases, onRegenerate, onUpdate, mode }: TestCa
                     <div className="space-y-2">
                       {areaTestCases.map((testCase) => {
                         if (!isHighLevelTestCase(testCase)) return null;
+                        const isConverted = convertedScenarioIds.has(testCase.id);
+                        const convertedTestCase = getConvertedTestCase(testCase.id);
                         return (
                           <div
                             key={testCase.id}
-                            className="border border-gray-200 rounded p-3 hover:bg-gray-50"
+                            className={cn(
+                              "border border-gray-200 rounded p-3",
+                              isConverted ? "bg-gray-50" : "hover:bg-gray-50"
+                            )}
                           >
                             <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-gray-900">{testCase.title}</span>
+                              <div className="flex items-center gap-3">
+                                {onSelectTestCase && !isConverted && (
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedTestCases.has(testCase.id)}
+                                    onChange={(e) => onSelectTestCase(testCase.id, e.target.checked)}
+                                    className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                  />
+                                )}
+                                {isConverted && (
+                                  <span className="flex items-center text-green-600">
+                                    <CheckCircleIcon className="h-4 w-4 mr-1" />
+                                    <span className="text-xs">Converted to {convertedTestCase?.id}</span>
+                                  </span>
+                                )}
+                                <span className="text-sm font-medium text-gray-900">{testCase.title}</span>
+                              </div>
                               <div className="flex space-x-2 ml-4">
                                 <button
                                   onClick={(e) => {
@@ -309,6 +539,130 @@ export function TestCaseList({ testCases, onRegenerate, onUpdate, mode }: TestCa
               </div>
             )}
           </div>
+          {/* Converted Test Cases Section */}
+          {convertedTestCases.length > 0 && (
+            <div className="mt-8">
+              <div className="flex items-center gap-3 mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Converted Test Cases ({convertedTestCases.length})
+                </h2>
+                <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+                  Detailed View
+                </span>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {Object.entries(
+                  convertedTestCases.reduce((acc: Record<string, TestCase[]>, testCase) => {
+                    const area = testCase.area || 'General';
+                    acc[area] = [...(acc[area] || []), testCase];
+                    return acc;
+                  }, {})
+                ).map(([area, areaTestCases]) => (
+                  <div key={area} className="bg-white shadow rounded-lg p-4">
+                    <h3 className="text-lg font-medium text-gray-900 mb-3">{area}</h3>
+                    <div className="space-y-3">
+                      {areaTestCases.map((testCase) => (
+                        <motion.div
+                          key={testCase.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="border border-gray-200 rounded-lg overflow-hidden"
+                        >
+                          <div className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
+                            <button
+                              onClick={() => toggleExpanded(testCase.id)}
+                              className="flex-1 flex items-center space-x-3 text-left"
+                            >
+                              <span className="text-sm font-medium text-gray-500">{testCase.id}</span>
+                              <h3 className="text-sm font-medium text-gray-900">
+                                {testCase.title}
+                              </h3>
+                              {expandedIds.has(testCase.id) ? (
+                                <ChevronUpIcon className="h-4 w-4 text-gray-400" />
+                              ) : (
+                                <ChevronDownIcon className="h-4 w-4 text-gray-400" />
+                              )}
+                            </button>
+                            <div className="flex space-x-1">
+                              <button
+                                onClick={(e) => handleEdit(e, testCase)}
+                                className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+                                title="Edit test case"
+                              >
+                                <PencilIcon className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopy(testCase);
+                                }}
+                                className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+                                title="Copy test case"
+                              >
+                                <ClipboardIcon className="h-4 w-4" />
+                                {copiedId === testCase.id && (
+                                  <span className="absolute top-0 right-0 px-2 py-1 text-xs text-white bg-green-500 rounded-md">
+                                    Copied!
+                                  </span>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                          <AnimatePresence>
+                            {expandedIds.has(testCase.id) && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                              >
+                                {editingId === testCase.id ? (
+                                  <div className="px-4 py-3">
+                                    <TestCaseEditForm
+                                      testCase={testCase}
+                                      onChange={(updatedTestCase) => {
+                                        if (!onUpdateConverted) return;
+                                        const newTestCases = convertedTestCases.map(tc => 
+                                          tc.id === updatedTestCase.id ? {
+                                            ...tc,
+                                            markdownContent: updatedTestCase.markdownContent
+                                          } : tc
+                                        );
+                                        onUpdateConverted(newTestCases);
+                                      }}
+                                      onSave={() => handleSaveConverted(testCase)}
+                                      onCancel={handleCancel}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="px-4 py-3">
+                                    <div className="markdown-content text-sm">
+                                      <ReactMarkdown
+                                        components={{
+                                          h1: ({children}) => <h1 className="text-xl font-bold text-gray-900 mb-3">{children}</h1>,
+                                          h2: ({children}) => <h2 className="text-base font-semibold text-gray-900 mt-4 mb-2">{children}</h2>,
+                                          p: ({children}) => <p className="text-gray-600 mb-3">{children}</p>,
+                                          ul: ({children}) => <ul className="list-disc list-inside text-gray-600 mb-3 space-y-1">{children}</ul>,
+                                          ol: ({children}) => <ol className="list-decimal list-inside text-gray-600 mb-3 space-y-1">{children}</ol>,
+                                          li: ({children}) => <li className="ml-4 text-gray-600">{children}</li>,
+                                        }}
+                                      >
+                                        {testCase.markdownContent || formatTestCaseMarkdown(testCase)}
+                                      </ReactMarkdown>
+                                    </div>
+                                  </div>
+                                )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

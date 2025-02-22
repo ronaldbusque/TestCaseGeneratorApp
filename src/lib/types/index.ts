@@ -13,6 +13,8 @@ export interface BaseTestCase {
   description: string;
   createdAt: Date;
   markdownContent?: string;
+  area?: string;
+  originalScenarioId?: string;  // Reference to the original scenario this was converted from
 }
 
 export interface DetailedTestCase extends BaseTestCase {
@@ -53,6 +55,7 @@ export interface TestCaseGenerationRequest {
   requirements: string;
   files?: File[];
   mode: TestCaseMode;
+  selectedScenarios?: HighLevelTestCase[];
 }
 
 export interface TestCaseGenerationResponse {

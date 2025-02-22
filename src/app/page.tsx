@@ -6,7 +6,7 @@ import { FileUpload } from '../components/FileUpload';
 import { RequirementsInput } from '@/components/RequirementsInput';
 import { TestCaseList } from '@/components/TestCaseList';
 import { createAIService } from '@/lib/services/ai/factory';
-import { AIModel, TestCase, TestCaseMode } from '@/lib/types';
+import { AIModel, TestCase, TestCaseMode, HighLevelTestCase } from '@/lib/types';
 import { AnimatePresence } from 'framer-motion';
 import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { LoadingAnimation } from '@/components/LoadingAnimation';
@@ -16,12 +16,19 @@ import { Button } from '@/components/ui/Button';
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { TestCaseModeToggle } from '@/components/TestCaseModeToggle';
 
+const isHighLevelTestCase = (testCase: TestCase): testCase is HighLevelTestCase => {
+  return 'scenario' in testCase && 'area' in testCase;
+};
+
 export default function Home() {
   const [selectedModel, setSelectedModel] = useState<AIModel>('Gemini');
   const [testCaseMode, setTestCaseMode] = useState<TestCaseMode>('high-level');
   const [requirements, setRequirements] = useState('');
   const [fileContent, setFileContent] = useState('');
   const [testCases, setTestCases] = useState<TestCase[]>([]);
+  const [convertedTestCases, setConvertedTestCases] = useState<TestCase[]>([]);
+  const [selectedTestCases, setSelectedTestCases] = useState<Set<string>>(new Set());
+  const [convertedScenarioIds, setConvertedScenarioIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState<'idle' | 'analyzing' | 'generating' | 'complete'>('idle');
@@ -36,6 +43,9 @@ export default function Home() {
     setRequirements('');
     setFileContent('');
     setTestCases([]);
+    setConvertedTestCases([]);
+    setSelectedTestCases(new Set());
+    setConvertedScenarioIds(new Set());
     setError(null);
     setUploadedFiles([]);
     setIsFileContentVisible(false);
@@ -167,6 +177,115 @@ export default function Home() {
     setTestCases(updatedTestCases);
   };
 
+  const handleSelectTestCase = (id: string, selected: boolean) => {
+    // Don't allow selection of already converted scenarios
+    if (convertedScenarioIds.has(id)) return;
+
+    setSelectedTestCases(prev => {
+      const newSet = new Set(prev);
+      if (selected) {
+        newSet.add(id);
+      } else {
+        newSet.delete(id);
+      }
+      return newSet;
+    });
+  };
+
+  const getNextTestCaseId = (prefix: string) => {
+    // Get all existing IDs from both converted test cases and original test cases
+    const allIds = [
+      ...convertedTestCases.map(tc => tc.id),
+      ...testCases.map(tc => tc.id)
+    ];
+    
+    let maxNumber = 0;
+    
+    for (const id of allIds) {
+      if (id.startsWith(prefix)) {
+        const number = parseInt(id.split('-')[1]);
+        if (!isNaN(number) && number > maxNumber) {
+          maxNumber = number;
+        }
+      }
+    }
+    
+    return `${prefix}-${String(maxNumber + 1).padStart(3, '0')}`;
+  };
+
+  const handleConvertSelected = async () => {
+    if (selectedTestCases.size === 0) return;
+
+    setIsGenerating(true);
+    setGenerationStep('generating');
+    
+    try {
+      const selectedScenarios = testCases
+        .filter((tc): tc is HighLevelTestCase => 
+          isHighLevelTestCase(tc) && selectedTestCases.has(tc.id)
+        );
+      const aiService = createAIService(selectedModel);
+      
+      const result = await aiService.generateTestCases({
+        requirements,
+        files: uploadedFiles,
+        mode: 'detailed',
+        selectedScenarios
+      });
+
+      if (result.error) {
+        setError(result.error);
+      } else if (result.testCases) {
+        // First, prepare all the IDs we'll need
+        const existingIds: Set<string> = new Set([
+          ...convertedTestCases.map(tc => tc.id),
+          ...testCases.map(tc => tc.id)
+        ]);
+
+        // Generate IDs for all new test cases first
+        const newIds: string[] = result.testCases.map((_, index) => {
+          const originalScenario = selectedScenarios[index];
+          const baseId = originalScenario?.id || '';
+          const matchNumber = baseId.split('-')[1];
+          let id = matchNumber ? `TC-${matchNumber}` : getNextTestCaseId('TC');
+          
+          // If the ID already exists, generate a new one
+          while (existingIds.has(id)) {
+            id = getNextTestCaseId('TC');
+          }
+          existingIds.add(id); // Add to set to prevent duplicates in subsequent iterations
+          return id;
+        });
+
+        // Now create the test cases with their unique IDs
+        const newTestCases: TestCase[] = result.testCases.map((tc, index) => {
+          const originalScenario = selectedScenarios[index];
+          return {
+            ...tc,
+            id: newIds[index],
+            area: originalScenario?.area || tc.area || 'General',
+            originalScenarioId: originalScenario?.id || ''
+          };
+        });
+
+        setConvertedTestCases(prev => [...prev, ...newTestCases]);
+        
+        // Mark these scenarios as converted
+        setConvertedScenarioIds(prev => {
+          const newSet = new Set(prev);
+          selectedScenarios.forEach(scenario => newSet.add(scenario.id));
+          return newSet;
+        });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to convert test scenarios');
+    } finally {
+      setIsGenerating(false);
+      setGenerationStep('complete');
+      setSelectedTestCases(new Set());
+    }
+  };
+
   return (
     <main className="min-h-screen bg-gray-50 py-6 sm:py-12">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -295,6 +414,12 @@ export default function Home() {
                 onRegenerate={handleRegenerate}
                 onUpdate={handleTestCaseUpdate}
                 mode={testCaseMode}
+                convertedTestCases={convertedTestCases}
+                onSelectTestCase={testCaseMode === 'high-level' ? handleSelectTestCase : undefined}
+                selectedTestCases={selectedTestCases}
+                onConvertSelected={testCaseMode === 'high-level' ? handleConvertSelected : undefined}
+                convertedScenarioIds={convertedScenarioIds}
+                onUpdateConverted={setConvertedTestCases}
               />
             </div>
           )}

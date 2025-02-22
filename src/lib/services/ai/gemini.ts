@@ -124,24 +124,56 @@ export class GeminiService implements AIService {
 
   async generateTestCases(request: TestCaseGenerationRequest): Promise<TestCaseGenerationResponse> {
     this.log('Starting test case generation', {
+      mode: request.mode,
       requirementsLength: request.requirements.length,
       numberOfFiles: request.files?.length || 0,
-      mode: request.mode
+      selectedScenarios: request.selectedScenarios?.length || 0
     });
-    
+
     this.debugLog = [];
     try {
       const parts: Part[] = [];
 
-      // Add files if present
-      if (request.files && request.files.length > 0) {
-        this.log('Processing input files', { fileCount: request.files.length });
-        const fileParts = await Promise.all(request.files.map(file => this.fileToGenerativePart(file)));
-        parts.push(...fileParts);
-        this.log('Files processed successfully', { processedCount: fileParts.length });
+      // Add requirements
+      if (request.requirements) {
+        parts.push({ text: request.requirements });
       }
 
-      // Add the requirements prompt
+      // Add selected scenarios if converting
+      if (request.selectedScenarios?.length) {
+        const scenariosText = request.selectedScenarios
+          .map(s => `${s.title}:\n${s.scenario}`)
+          .join('\n\n');
+        parts.push({ text: `\n\nSelected Test Scenarios to Convert:\n${scenariosText}` });
+      }
+
+      // Process uploaded files
+      if (request.files?.length) {
+        const processedContents = await Promise.all(
+          request.files.map(async (file) => {
+            try {
+              const content = await file.text();
+              return {
+                source: file.name,
+                text: content
+              };
+            } catch (error) {
+              console.error(`Error reading file ${file.name}:`, error);
+              return null;
+            }
+          })
+        );
+
+        const validContents = processedContents.filter((content): content is NonNullable<typeof content> => content !== null);
+
+        if (validContents.length > 0) {
+          const filesText = validContents
+            .map(content => `=== ${content.source} ===\n${content.text}`)
+            .join('\n\n');
+          parts.push({ text: `\n\nAdditional Context from Files:\n${filesText}` });
+        }
+      }
+
       const basePrompt = request.mode === 'high-level'
         ? `You are a seasoned QA engineer with a proven track record in uncovering critical bugs and breaking software. Your task is to generate a comprehensive set of test scenarios in JSON format based on the requirements provided below. These scenarios should explore all angles: standard functionality, edge cases, error conditions, security vulnerabilities, performance limits, and unexpected user behavior.
 
@@ -155,82 +187,53 @@ Return ONLY a JSON array of test scenarios. Each scenario should follow this str
   "title": "A short, descriptive identifier for the test case",
   "area": "The functional area or module being tested (e.g., 'Authentication', 'User Management', 'Data Validation', 'Security')",
   "scenario": "A one-line statement detailing what aspect or behavior to test, including potential edge or negative conditions"
-}
-
-Consider including, but not limited to, scenarios that test:
-- Valid and invalid inputs (e.g., boundary values, out-of-range values)
-- Error handling and response to unexpected user actions
-- Data integrity and state management under stress
-- Security threats such as injection attacks, cross-site scripting, and unauthorized access
-- Concurrency, race conditions, and performance limits
-
-Example:
-[
-  {
-    "title": "SQL Injection in Login",
-    "area": "Authentication",
-    "scenario": "Test the login functionality for SQL injection vulnerabilities by providing malicious input"
-  },
-  {
-    "title": "Invalid Email Registration",
-    "area": "User Registration",
-    "scenario": "Ensure that the system rejects registrations with improperly formatted email addresses"
-  }
-]`
-        : `You are a meticulous software testing expert with years of experience in creating detailed, bulletproof test cases. Your mission is to generate comprehensive test cases that leave no stone unturned, ensuring thorough validation of functionality, edge cases, and potential failure points.
-
-Your test cases should be detailed enough that any QA engineer can execute them consistently and reliably. While high-level scenarios focus on WHAT to test, your detailed test cases must specify exactly HOW to test it, including precise steps, test data, and expected outcomes. Focus on creating test cases that:
-- Thoroughly validate core functionality
-- Handle edge cases and boundary conditions
-- Account for various user roles and permissions
-- Consider system states and data conditions
-- Verify error handling and recovery
-- Test integration points and data flow
+}`
+        : request.selectedScenarios
+          ? `You are a QA automation expert. Your task is to convert the provided high-level test scenarios into detailed test cases. For each scenario, create a comprehensive test case that includes step-by-step instructions, preconditions, test data, and expected results.
 
 Requirements:
 ${request.requirements}
 
-Return ONLY a JSON array containing test cases. Each test case should have this structure:
+Selected Test Scenarios to Convert:
+${request.selectedScenarios.map(s => `${s.title} (Area: ${s.area}):\n${s.scenario}`).join('\n\n')}
+
+Return ONLY a JSON array of detailed test cases. Each test case should follow this structure:
 {
-  "title": "Brief test case title",
-  "area": "Functional area or module (e.g., 'Login', 'User Management', 'Security')",
-  "description": "Detailed description of what is being tested",
-  "preconditions": ["List of required conditions"],
-  "testData": ["List of test data items in format 'field: value'"],
+  "title": "A descriptive title for the test case",
+  "area": "The functional area being tested (IMPORTANT: Use the exact area from the original scenario)",
+  "description": "A detailed description of what this test case verifies",
+  "preconditions": ["List of conditions that must be met before test execution"],
+  "testData": ["List of test data required for the test"],
   "steps": [
     {
       "number": 1,
-      "description": "Step description"
+      "description": "Step-by-step instruction"
     }
   ],
-  "expectedResult": "Expected outcome of the test"
+  "expectedResult": "The expected outcome after executing all steps"
 }
 
-Example:
-[
-  {
-    "title": "Login with Valid Credentials",
-    "area": "Authentication",
-    "description": "Verify that users can successfully log in with valid credentials",
-    "preconditions": ["User account exists", "User is not logged in"],
-    "testData": ["username: validUser", "password: validPass123"],
-    "steps": [
-      {
-        "number": 1,
-        "description": "Navigate to login page"
-      },
-      {
-        "number": 2,
-        "description": "Enter valid username and password"
-      },
-      {
-        "number": 3,
-        "description": "Click login button"
-      }
-    ],
-    "expectedResult": "User is successfully logged in and redirected to dashboard"
-  }
-]`;
+IMPORTANT: Each converted test case must maintain the same functional area as its original scenario.`
+          : `You are a QA automation expert. Your task is to generate detailed test cases based on the requirements provided. Each test case should include step-by-step instructions, preconditions, test data, and expected results.
+
+Requirements:
+${request.requirements}
+
+Return ONLY a JSON array of detailed test cases. Each test case should follow this structure:
+{
+  "title": "A descriptive title for the test case",
+  "area": "The functional area being tested",
+  "description": "A detailed description of what this test case verifies",
+  "preconditions": ["List of conditions that must be met before test execution"],
+  "testData": ["List of test data required for the test"],
+  "steps": [
+    {
+      "number": 1,
+      "description": "Step-by-step instruction"
+    }
+  ],
+  "expectedResult": "The expected outcome after executing all steps"
+}`;
 
       const modeSpecificInstructions = request.mode === 'high-level' 
         ? `\n\nFor test scenarios:
@@ -253,6 +256,16 @@ Example:
       parts.push({ text: prompt });
 
       this.log('System Prompt', prompt);
+      this.log('Complete Prompt Content', {
+        parts: parts.map(part => {
+          if ('text' in part) {
+            return part.text;
+          } else if ('inlineData' in part && part.inlineData?.mimeType) {
+            return `[Binary data: ${part.inlineData.mimeType}]`;
+          }
+          return '[Unknown part type]';
+        }).join('\n\n---\n\n')
+      });
       this.log('Initiating API call to Gemini', {
         numberOfParts: parts.length,
         promptLength: prompt.length
