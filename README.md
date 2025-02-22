@@ -25,12 +25,17 @@ A modern web application that leverages AI models to automatically generate comp
   - Structure preservation
   - Metadata extraction
 
-- 💡 **Smart Test Case Generation**
-  - Comprehensive test scenarios
-  - Detailed test steps
-  - Preconditions and expected results
-  - Test data suggestions
-  - Visual verification steps for images
+- 💡 **Dual Test Generation Modes**
+  - High-level Test Scenarios
+    - Concise, focused test objectives
+    - Organized by functional areas
+    - Perfect for test planning and coverage analysis
+    - Emphasis on WHAT needs to be tested
+  - Detailed Test Cases
+    - Comprehensive test steps
+    - Preconditions and expected results
+    - Test data suggestions
+    - Visual verification steps for images
 
 - 🎨 **Modern User Interface**
   - Responsive design
@@ -38,6 +43,7 @@ A modern web application that leverages AI models to automatically generate comp
   - Real-time processing feedback
   - Smooth animations
   - Interactive test case management
+  - Smart grouping by functional areas
 
 ## 🚀 Getting Started
 
@@ -104,20 +110,25 @@ yarn dev
    - Choose between Google Gemini or OpenAI O1-Mini
    - Each model has its own strengths for different types of requirements
 
-2. **Input Requirements**
+2. **Choose Generation Type**
+   - High-level Test Scenarios: For planning and coverage analysis
+   - Detailed Test Cases: For step-by-step test execution
+
+3. **Input Requirements**
    - Upload relevant documents (PDF, Word, images, etc.)
    - Enter additional requirements in the text area
    - View extracted content from uploaded files
 
-3. **Generate Test Cases**
+4. **Generate Test Cases**
    - Click "Generate Test Cases" button
    - Wait for AI processing
-   - Review generated test cases
+   - Review generated test cases organized by functional areas
 
-4. **Manage Test Cases**
-   - View, edit, or delete generated test cases
+5. **Manage Test Cases**
+   - View test cases grouped by functional areas
+   - Edit or copy test cases as needed
    - Regenerate test cases if needed
-   - Export test cases (if implemented)
+   - Switch between high-level and detailed views
 
 ## 🤝 Contributing
 
