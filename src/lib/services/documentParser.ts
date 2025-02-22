@@ -156,10 +156,9 @@ async function parseWordDocument(file: File, options: ParsingOptions): Promise<P
     reader.onload = async (e) => {
       try {
         const arrayBuffer = e.target?.result as ArrayBuffer;
-        const result = await mammoth.convert(
+        const result = await mammoth.convertToHtml(
           { arrayBuffer },
           {
-            preserveEmptyParagraphs: true,
             styleMap: [
               "p[style-name='Heading 1'] => h1:fresh",
               "p[style-name='Heading 2'] => h2:fresh",
@@ -173,16 +172,32 @@ async function parseWordDocument(file: File, options: ParsingOptions): Promise<P
         let content: string;
 
         if (options.preserveStructure) {
+          const turndownService = new TurndownService();
           content = turndownService.turndown(htmlContent);
         } else {
-          content = convert(htmlContent, htmlToTextOptions);
+          content = convert(htmlContent, {
+            wordwrap: false,
+            preserveNewlines: true,
+            selectors: [
+              { selector: 'h1', format: 'heading' },
+              { selector: 'h2', format: 'heading' },
+              { selector: 'h3', format: 'heading' },
+              { selector: 'h4', format: 'heading' },
+              { selector: 'p', format: 'paragraph' },
+              { selector: 'ul', format: 'unorderedList' },
+              { selector: 'ol', format: 'orderedList' }
+            ]
+          } as HtmlToTextOptions);
         }
+
+        // Check for images by looking for <img> tags in the HTML content
+        const hasImages = htmlContent.toLowerCase().includes('<img');
 
         resolve({
           content,
           metadata: {
             wordCount: content.split(/\s+/).length,
-            hasImages: result.messages.some(msg => msg.type === 'image'),
+            hasImages,
             format: 'docx',
             structureLevel: options.preserveStructure ? 'full' : 'none'
           }
