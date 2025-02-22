@@ -6,7 +6,7 @@ import { FileUpload } from '../components/FileUpload';
 import { RequirementsInput } from '@/components/RequirementsInput';
 import { TestCaseList } from '@/components/TestCaseList';
 import { createAIService } from '@/lib/services/ai/factory';
-import { AIModel, TestCase } from '@/lib/types';
+import { AIModel, TestCase, TestCaseMode } from '@/lib/types';
 import { AnimatePresence } from 'framer-motion';
 import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { LoadingAnimation } from '@/components/LoadingAnimation';
@@ -14,9 +14,11 @@ import { parseDocument } from '@/lib/services/documentParser';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
+import { TestCaseModeToggle } from '@/components/TestCaseModeToggle';
 
 export default function Home() {
   const [selectedModel, setSelectedModel] = useState<AIModel>('Gemini');
+  const [testCaseMode, setTestCaseMode] = useState<TestCaseMode>('high-level');
   const [requirements, setRequirements] = useState('');
   const [fileContent, setFileContent] = useState('');
   const [testCases, setTestCases] = useState<TestCase[]>([]);
@@ -47,6 +49,8 @@ export default function Home() {
   };
 
   const handleModelSelect = (model: AIModel) => {
+    if (model === selectedModel) return;
+
     if (hasExistingData()) {
       setPendingModelChange(model);
       setConfirmationType('model_change');
@@ -132,7 +136,8 @@ export default function Home() {
       const aiService = createAIService(selectedModel);
       const result = await aiService.generateTestCases({
         requirements: combinedRequirements,
-        files: uploadedFiles
+        files: uploadedFiles,
+        mode: testCaseMode
       });
 
       if (result.error) {
@@ -176,7 +181,10 @@ export default function Home() {
         
         <div className="mt-8 sm:mt-12 space-y-6 sm:space-y-8">
           <div className="flex items-center justify-between">
-            <ModelSelector onModelSelect={handleModelSelect} selectedModel={selectedModel} />
+            <div className="flex items-center gap-6">
+              <ModelSelector onModelSelect={handleModelSelect} selectedModel={selectedModel} />
+              <TestCaseModeToggle mode={testCaseMode} onModeChange={setTestCaseMode} />
+            </div>
             {hasExistingData() && (
               <Button
                 variant="outline"
@@ -270,9 +278,14 @@ export default function Home() {
           {generationStep === 'complete' && testCases.length > 0 && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-6 animate-fade-in">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-green-800">
-                  ✨ Test Cases Generated Successfully!
-                </h2>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-semibold text-green-800">
+                    ✨ Test Cases Generated Successfully!
+                  </h2>
+                  <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                    {testCaseMode === 'high-level' ? 'High-level' : 'Detailed'}
+                  </span>
+                </div>
                 <span className="bg-green-100 text-green-800 text-sm font-medium px-3 py-1 rounded-full">
                   {testCases.length} Tests
                 </span>
@@ -281,6 +294,7 @@ export default function Home() {
                 testCases={testCases}
                 onRegenerate={handleRegenerate}
                 onUpdate={handleTestCaseUpdate}
+                mode={testCaseMode}
               />
             </div>
           )}

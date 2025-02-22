@@ -1,6 +1,6 @@
 'use client';
 
-import { TestCase } from '@/lib/types';
+import { TestCase, HighLevelTestCase } from '@/lib/types';
 import { Button } from './ui/Button';
 import { useState, useEffect } from 'react';
 
@@ -11,6 +11,10 @@ interface TestCaseEditFormProps {
   onCancel: () => void;
 }
 
+const isHighLevelTestCase = (testCase: TestCase): testCase is HighLevelTestCase => {
+  return 'category' in testCase && 'considerations' in testCase;
+};
+
 export function TestCaseEditForm({ testCase, onChange, onSave, onCancel }: TestCaseEditFormProps) {
   const [markdown, setMarkdown] = useState('');
 
@@ -19,6 +23,20 @@ export function TestCaseEditForm({ testCase, onChange, onSave, onCancel }: TestC
   }, [testCase]);
 
   const formatInitialMarkdown = (testCase: TestCase): string => {
+    if (isHighLevelTestCase(testCase)) {
+      const sections = [
+        `# ${testCase.title} (${testCase.id})`,
+        `## Category`,
+        testCase.category,
+        `## Description`,
+        testCase.description,
+        testCase.considerations?.length ? 
+          `## Key Considerations\n${testCase.considerations.map(c => `* ${c}`).join('\n')}` : ''
+      ];
+      return sections.filter(Boolean).join('\n\n');
+    }
+
+    // Detailed test case format
     const sections = [
       `# ${testCase.title} (${testCase.id})`,
       `## Description`,
@@ -32,7 +50,6 @@ export function TestCaseEditForm({ testCase, onChange, onSave, onCancel }: TestC
       `## Expected Result`,
       testCase.expectedResult
     ];
-
     return sections.filter(Boolean).join('\n\n');
   };
 

@@ -126,7 +126,8 @@ export class O1MiniService implements AIService {
     try {
       this.log('Starting test case generation', {
         requirementsLength: request.requirements.length,
-        numberOfFiles: request.files?.length || 0
+        numberOfFiles: request.files?.length || 0,
+        mode: request.mode
       });
 
       // Process all files first
@@ -175,15 +176,59 @@ export class O1MiniService implements AIService {
         sources: processedContents.map(pc => pc.source)
       });
 
-      // Prepare the prompt
-      const prompt = `You are a software testing expert. Generate comprehensive test cases in JSON format for the following requirements and context.
+      // Prepare the prompt based on mode
+      const basePrompt = request.mode === 'high-level'
+        ? `You are a seasoned QA engineer with a proven track record in uncovering critical bugs and breaking software. Your task is to generate a comprehensive set of test scenarios in JSON format based on the requirements provided below. These scenarios should explore all angles: standard functionality, edge cases, error conditions, security vulnerabilities, performance limits, and unexpected user behavior.
 
-Requirements and Context:
+Each test scenario must be a concise, one-line statement that explains WHAT needs to be tested—do not include HOW to implement the test. Focus on provoking failures, ensuring robustness, and uncovering hidden issues in the software.
+
+Requirements:
+${combinedContent}
+
+Return ONLY a JSON array of test scenarios. Each scenario should follow this structure:
+{
+  "title": "A short, descriptive identifier for the test case",
+  "area": "The functional area or module being tested (e.g., 'Authentication', 'User Management', 'Data Validation', 'Security')",
+  "scenario": "A one-line statement detailing what aspect or behavior to test, including potential edge or negative conditions"
+}
+
+Consider including, but not limited to, scenarios that test:
+- Valid and invalid inputs (e.g., boundary values, out-of-range values)
+- Error handling and response to unexpected user actions
+- Data integrity and state management under stress
+- Security threats such as injection attacks, cross-site scripting, and unauthorized access
+- Concurrency, race conditions, and performance limits
+
+Example:
+[
+  {
+    "title": "SQL Injection in Login",
+    "area": "Authentication",
+    "scenario": "Test the login functionality for SQL injection vulnerabilities by providing malicious input"
+  },
+  {
+    "title": "Invalid Email Registration",
+    "area": "User Registration",
+    "scenario": "Ensure that the system rejects registrations with improperly formatted email addresses"
+  }
+]`
+        : `You are a meticulous software testing expert with years of experience in creating detailed, bulletproof test cases. Your mission is to generate comprehensive test cases that leave no stone unturned, ensuring thorough validation of functionality, edge cases, and potential failure points.
+
+Your test cases should be detailed enough that any QA engineer can execute them consistently and reliably. While high-level scenarios focus on WHAT to test, your detailed test cases must specify exactly HOW to test it, including precise steps, test data, and expected outcomes. Focus on creating test cases that:
+- Thoroughly validate core functionality
+- Handle edge cases and boundary conditions
+- Account for various user roles and permissions
+- Consider system states and data conditions
+- Verify error handling and recovery
+- Test integration points and data flow
+
+Requirements:
 ${combinedContent}
 
 Return ONLY a JSON array containing test cases. Each test case should have this structure:
 {
   "title": "Brief test case title",
+  "area": "Functional area or module (e.g., 'Login', 'User Management', 'Security')",
   "description": "Detailed description of what is being tested",
   "preconditions": ["List of required conditions"],
   "testData": ["List of test data items in format 'field: value'"],
@@ -196,18 +241,53 @@ Return ONLY a JSON array containing test cases. Each test case should have this 
   "expectedResult": "Expected outcome of the test"
 }
 
-IMPORTANT: 
+Example:
+[
+  {
+    "title": "Login with Valid Credentials",
+    "area": "Authentication",
+    "description": "Verify that users can successfully log in with valid credentials",
+    "preconditions": ["User account exists", "User is not logged in"],
+    "testData": ["username: validUser", "password: validPass123"],
+    "steps": [
+      {
+        "number": 1,
+        "description": "Navigate to login page"
+      },
+      {
+        "number": 2,
+        "description": "Enter valid username and password"
+      },
+      {
+        "number": 3,
+        "description": "Click login button"
+      }
+    ],
+    "expectedResult": "User is successfully logged in and redirected to dashboard"
+  }
+]`;
+
+      const modeSpecificInstructions = request.mode === 'high-level'
+        ? `\n\nFor test scenarios:
+- Keep scenarios concise and focused on WHAT, not HOW
+- Each scenario should be a single, clear statement
+- Group scenarios by functional area
+- Focus on business requirements and user workflows
+- Avoid implementation details or specific steps`
+        : `\n\nFor detailed test cases:
+- Include specific step-by-step instructions
+- Add detailed test data
+- Cover edge cases and specific scenarios
+- Include validation steps`;
+
+      const prompt = basePrompt + modeSpecificInstructions + `\n\nIMPORTANT:
 1. Response must be a valid JSON array
-2. Do not include markdown code blocks or any other formatting
+2. Do not include any explanatory text
 3. Follow the exact structure shown above`;
 
       this.log('Sending request to O1-Mini API', {
-        promptLength: prompt.length
-      });
-
-      this.log('Exact prompt being sent', {
-        prompt,
-        model: 'o1-mini'
+        promptLength: prompt.length,
+        mode: request.mode
       });
 
       const response = await this.callO1MiniAPI(prompt);
@@ -223,9 +303,21 @@ IMPORTANT:
         });
 
         const testCases = parsedTestCases.map((tc: any, index: number) => {
-          const processedCase = {
+          if (request.mode === 'high-level') {
+            return {
+              id: `TS-${String(index + 1).padStart(3, '0')}`,  // TS for Test Scenario
+              title: tc.title || `Scenario ${index + 1}`,
+              area: tc.area || 'General',
+              scenario: tc.scenario || tc.description || '',  // Fallback to description if scenario not provided
+              description: '',  // Not needed for scenarios
+              createdAt: new Date()
+            };
+          }
+
+          return {
             id: `TC-${String(index + 1).padStart(3, '0')}`,
             title: tc.title || `Test Case ${index + 1}`,
+            area: tc.area || 'General',  // Add area field for detailed test cases
             description: tc.description || '',
             preconditions: tc.preconditions || [],
             testData: tc.testData || [],
@@ -238,14 +330,6 @@ IMPORTANT:
             expectedResult: tc.expectedResult || '',
             createdAt: new Date()
           };
-
-          this.log(`Processed test case ${index + 1}`, {
-            id: processedCase.id,
-            title: processedCase.title,
-            stepsCount: processedCase.steps.length
-          });
-
-          return processedCase;
         });
 
         logPerformance('Test case generation', startTime, {
@@ -258,7 +342,7 @@ IMPORTANT:
         logError('Failed to parse API response', error);
         return {
           testCases: [],
-          error: 'Failed to parse API response'
+          error: 'Failed to parse JSON response'
         };
       }
     } catch (error) {

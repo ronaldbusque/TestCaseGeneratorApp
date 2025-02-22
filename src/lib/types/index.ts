@@ -7,17 +7,27 @@ export type ModelType =
   | 'claude-3-sonnet-20240229'
   | 'gemini-2.0-flash-thinking-exp-01-21';
 
-export interface TestCase {
+export interface BaseTestCase {
   id: string;
   title: string;
   description: string;
+  createdAt: Date;
+  markdownContent?: string;
+}
+
+export interface DetailedTestCase extends BaseTestCase {
   preconditions: string[];
   testData: string[];
   steps: TestStep[];
   expectedResult: string;
-  createdAt: Date;
-  markdownContent?: string;
 }
+
+export interface HighLevelTestCase extends BaseTestCase {
+  scenario: string;  // The actual test scenario (what needs to be tested)
+  area: string;      // The functional area or module being tested
+}
+
+export type TestCase = DetailedTestCase | HighLevelTestCase;
 
 export interface TestData {
   field: string;
@@ -37,9 +47,12 @@ export interface AIModelConfig {
   isAvailable: boolean;
 }
 
+export type TestCaseMode = 'detailed' | 'high-level';
+
 export interface TestCaseGenerationRequest {
   requirements: string;
   files?: File[];
+  mode: TestCaseMode;
 }
 
 export interface TestCaseGenerationResponse {
