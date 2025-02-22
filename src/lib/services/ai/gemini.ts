@@ -120,9 +120,17 @@ export class GeminiService implements AIService {
       }
 
       const basePrompt = request.mode === 'high-level'
-        ? `You are a seasoned QA engineer with a proven track record in uncovering critical bugs and breaking software. Your task is to generate a comprehensive set of test scenarios in JSON format based on the requirements provided. These scenarios should explore all angles: standard functionality, edge cases, error conditions, and unexpected user behavior.
+        ? `You are a seasoned QA engineer with a proven track record in uncovering critical bugs and breaking software. Your task is to generate a ${request.priorityMode === 'comprehensive' ? 'comprehensive' : 'focused'} set of test scenarios in JSON format based on the requirements provided. ${
+          request.priorityMode === 'comprehensive' 
+            ? 'These scenarios should explore all angles: standard functionality, edge cases, error conditions, and unexpected user behavior.'
+            : 'Focus on core functionality and critical path testing, prioritizing the most important user workflows and basic error handling.'
+          }
 
-Ensure that contents of uploaded images and text files are covered in the test scenarios when applicable. Each test scenario must be a concise, one-line statement that explains WHAT needs to be tested—do not include HOW to implement the test. Focus on provoking failures, ensuring robustness, and uncovering hidden issues in the software.
+Ensure that contents of uploaded images and text files are covered in the test scenarios when applicable. Each test scenario must be a concise, one-line statement that explains WHAT needs to be tested—do not include HOW to implement the test. ${
+  request.priorityMode === 'comprehensive'
+    ? 'Focus on provoking failures, ensuring robustness, and uncovering hidden issues in the software.'
+    : 'Focus on validating the most critical functionality and basic error cases.'
+}
 
 Return ONLY a JSON array of test scenarios. Each scenario should follow this structure:
 {
@@ -130,7 +138,7 @@ Return ONLY a JSON array of test scenarios. Each scenario should follow this str
   "area": "The functional area or module being tested (e.g., 'Authentication', 'User Management', 'Data Validation', 'Security')",
   "scenario": "A one-line statement detailing what aspect or behavior to test, including potential edge or negative conditions"
 }`
-        : request.selectedScenarios
+        : request.selectedScenarios?.length
           ? `You are a meticulous software testing expert with years of experience in creating detailed, bulletproof test cases. Your task is to convert the provided high-level test scenarios into detailed test cases. For each scenario, create a comprehensive test case that includes step-by-step instructions, preconditions, test data, and expected results.
 
 Selected Test Scenarios to Convert:
@@ -153,15 +161,28 @@ Return ONLY a JSON array of detailed test cases. Each test case should follow th
 }
 
 IMPORTANT: Each converted test case must maintain the same functional area as its original scenario.`
-          : `You are a meticulous software testing expert with years of experience in creating detailed, bulletproof test cases. Your mission is to generate comprehensive test cases that leave no stone unturned, ensuring thorough validation of functionality, edge cases, and potential failure points.
+          : `You are a meticulous software testing expert with years of experience in creating detailed, bulletproof test cases. Your task is to generate ${
+            request.priorityMode === 'comprehensive' ? 'comprehensive' : 'focused'
+          } test cases that ${
+            request.priorityMode === 'comprehensive'
+              ? 'thoroughly validate all aspects of the system'
+              : 'validate core functionality and critical paths'
+          }. Your test cases should be detailed enough that any QA engineer can execute them consistently and reliably.
 
-Your test cases should be detailed enough that any QA engineer can execute them consistently and reliably. While high-level scenarios focus on WHAT to test, your detailed test cases must specify exactly HOW to test it, including precise steps, test data, and expected outcomes. Focus on creating test cases that:
-- Thoroughly validate core functionality
+While high-level scenarios focus on WHAT to test, your detailed test cases must specify exactly HOW to test it, including precise steps, test data, and expected outcomes. Focus on creating test cases that:
+${request.priorityMode === 'comprehensive' 
+  ? `- Thoroughly validate core functionality
 - Handle edge cases and boundary conditions
 - Account for various user roles and permissions
 - Consider system states and data conditions
 - Verify error handling and recovery
-- Test integration points and data flow
+- Test integration points and data flow`
+  : `- Validate core functionality and critical paths
+- Handle basic error conditions
+- Test primary user roles and permissions
+- Verify essential system states
+- Test basic integration points`
+}
 
 Return ONLY a JSON array containing test cases. Each test case should have this structure:
 {
@@ -177,45 +198,19 @@ Return ONLY a JSON array containing test cases. Each test case should have this 
     }
   ],
   "expectedResult": "Expected outcome of the test"
-}
-
-Example:
-[
-  {
-    "title": "Login with Valid Credentials",
-    "area": "Authentication",
-    "description": "Verify that users can successfully log in with valid credentials",
-    "preconditions": ["User account exists", "User is not logged in"],
-    "testData": ["username: validUser", "password: validPass123"],
-    "steps": [
-      {
-        "number": 1,
-        "description": "Navigate to login page"
-      },
-      {
-        "number": 2,
-        "description": "Enter valid username and password"
-      },
-      {
-        "number": 3,
-        "description": "Click login button"
-      }
-    ],
-    "expectedResult": "User is successfully logged in and redirected to dashboard"
-  }
-]`;
+}`;
 
       const modeSpecificInstructions = request.mode === 'high-level' 
         ? `\n\nFor test scenarios:
 - Keep scenarios concise and focused on WHAT, not HOW
 - Each scenario should be a single, clear statement
 - Group scenarios by functional area
-- Focus on business requirements and user workflows
-- Avoid implementation details or specific steps`
+- Focus on ${request.priorityMode === 'comprehensive' ? 'business requirements and user workflows' : 'core functionality and critical paths'}
+- ${request.priorityMode === 'comprehensive' ? 'Include edge cases and error conditions' : 'Focus on basic error handling'}`
         : `\n\nFor detailed test cases:
 - Include specific step-by-step instructions
 - Add detailed test data
-- Cover edge cases and specific scenarios
+- ${request.priorityMode === 'comprehensive' ? 'Cover edge cases and specific scenarios' : 'Focus on core functionality'}
 - Include validation steps`;
 
       const prompt = basePrompt + modeSpecificInstructions + `\n\nIMPORTANT: 

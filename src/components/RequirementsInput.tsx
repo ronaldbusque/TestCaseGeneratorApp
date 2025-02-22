@@ -38,11 +38,11 @@ export function RequirementsInput({
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-2">
         <label htmlFor="requirements" className="block text-lg font-semibold text-blue-100">
-          Test Requirements
+          System Requirements (SRS/PRD)
         </label>
         {hasUploadedFiles && (
           <p className="text-sm text-blue-200">
-            Add any additional requirements or context for the test cases.
+            Add any additional requirements or specifications from your SRS/PRD documents.
           </p>
         )}
       </div>
@@ -51,7 +51,7 @@ export function RequirementsInput({
         id="requirements"
         value={requirements}
         onChange={(e) => setRequirements(e.target.value)}
-        placeholder={placeholder}
+        placeholder={placeholder || "Enter system requirements or specifications here..."}
         disabled={!isEnabled}
         className={`
           w-full min-h-[200px] p-4 rounded-xl

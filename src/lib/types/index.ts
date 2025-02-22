@@ -49,13 +49,15 @@ export interface AIModelConfig {
   isAvailable: boolean;
 }
 
-export type TestCaseMode = 'detailed' | 'high-level';
+export type TestCaseMode = 'high-level' | 'detailed';
+export type TestPriorityMode = 'comprehensive' | 'core-functionality';
 
 export interface TestCaseGenerationRequest {
   requirements: string;
   files?: File[];
   mode: TestCaseMode;
   selectedScenarios?: HighLevelTestCase[];
+  priorityMode?: TestPriorityMode;
 }
 
 export interface TestCaseGenerationResponse {

@@ -6,7 +6,7 @@ import { FileUpload } from '../components/FileUpload';
 import { RequirementsInput } from '@/components/RequirementsInput';
 import { TestCaseList } from '@/components/TestCaseList';
 import { createAIService } from '@/lib/services/ai/factory';
-import { AIModel, TestCase, TestCaseMode, HighLevelTestCase } from '@/lib/types';
+import { AIModel, TestCase, TestCaseMode, HighLevelTestCase, TestPriorityMode } from '@/lib/types';
 import { AnimatePresence } from 'framer-motion';
 import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { LoadingAnimation } from '@/components/LoadingAnimation';
@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { TestCaseModeToggle } from '@/components/TestCaseModeToggle';
 import { NetworkBackground } from '@/components/NetworkBackground';
+import { TestPriorityToggle } from '@/components/TestPriorityToggle';
 
 const isHighLevelTestCase = (testCase: TestCase): testCase is HighLevelTestCase => {
   return 'scenario' in testCase && 'area' in testCase;
@@ -24,6 +25,7 @@ const isHighLevelTestCase = (testCase: TestCase): testCase is HighLevelTestCase 
 export default function Home() {
   const [selectedModel, setSelectedModel] = useState<AIModel>('Gemini');
   const [testCaseMode, setTestCaseMode] = useState<TestCaseMode>('high-level');
+  const [testPriorityMode, setTestPriorityMode] = useState<TestPriorityMode>('comprehensive');
   const [requirements, setRequirements] = useState('');
   const [fileContent, setFileContent] = useState('');
   const [testCases, setTestCases] = useState<TestCase[]>([]);
@@ -150,7 +152,8 @@ export default function Home() {
       const result = await aiService.generateTestCases({
         requirements: combinedRequirements,
         files: uploadedFiles,
-        mode: testCaseMode
+        mode: testCaseMode,
+        priorityMode: testPriorityMode
       });
 
       if (result.error) {
@@ -308,7 +311,13 @@ export default function Home() {
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
                 <div className="flex items-center gap-6 flex-wrap">
                   <ModelSelector onModelSelect={handleModelSelect} selectedModel={selectedModel} />
-                  <TestCaseModeToggle mode={testCaseMode} onModeChange={setTestCaseMode} />
+                  <div className="flex flex-col sm:flex-row gap-6">
+                    <TestCaseModeToggle mode={testCaseMode} onModeChange={setTestCaseMode} />
+                    <TestPriorityToggle
+                      priorityMode={testPriorityMode}
+                      onPriorityChange={setTestPriorityMode}
+                    />
+                  </div>
                 </div>
                 {hasExistingData() && (
                   <Button
