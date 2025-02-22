@@ -12,7 +12,7 @@ interface TestCaseEditFormProps {
 }
 
 const isHighLevelTestCase = (testCase: TestCase): testCase is HighLevelTestCase => {
-  return 'category' in testCase && 'considerations' in testCase;
+  return 'scenario' in testCase && 'area' in testCase;
 };
 
 export function TestCaseEditForm({ testCase, onChange, onSave, onCancel }: TestCaseEditFormProps) {
@@ -26,12 +26,10 @@ export function TestCaseEditForm({ testCase, onChange, onSave, onCancel }: TestC
     if (isHighLevelTestCase(testCase)) {
       const sections = [
         `# ${testCase.title} (${testCase.id})`,
-        `## Category`,
-        testCase.category,
-        `## Description`,
-        testCase.description,
-        testCase.considerations?.length ? 
-          `## Key Considerations\n${testCase.considerations.map(c => `* ${c}`).join('\n')}` : ''
+        `## Area`,
+        testCase.area,
+        `## Scenario`,
+        testCase.scenario
       ];
       return sections.filter(Boolean).join('\n\n');
     }
