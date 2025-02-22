@@ -8,8 +8,8 @@ import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TestCaseEditForm } from './TestCaseEditForm';
 import ReactMarkdown from 'react-markdown';
-import type { utils as XLSXUtils, writeFile } from 'xlsx';
 import type { Document, Paragraph, TextRun, HeadingLevel, Packer, ISectionOptions } from 'docx';
+import { Workbook } from 'exceljs';
 
 interface TestCaseListProps {
   testCases: TestCase[];
@@ -171,39 +171,45 @@ export function TestCaseList({
 
   const handleExportXLSX = async (testCases: TestCase[]) => {
     try {
-      // Import the XLSX module
-      const XLSX = await import('xlsx');
-      
+      const workbook = new Workbook();
+      const worksheet = workbook.addWorksheet('Test Scenarios');
+
+      // Define columns
+      worksheet.columns = [
+        { header: 'ID', key: 'id', width: 10 },
+        { header: 'Title', key: 'title', width: 30 },
+        { header: 'Area', key: 'area', width: 15 },
+        { header: 'Scenario', key: 'scenario', width: 50 }
+      ];
+
+      // Add data
       const scenarioData = testCases
         .filter(isHighLevelTestCase)
         .map(tc => ({
-          ID: tc.id,
-          Title: tc.title,
-          Area: tc.area,
-          Scenario: tc.scenario
+          id: tc.id,
+          title: tc.title,
+          area: tc.area,
+          scenario: tc.scenario
         }));
 
-      // Create workbook and worksheet
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(scenarioData, {
-        header: ['ID', 'Title', 'Area', 'Scenario'],
-        skipHeader: false
-      });
+      worksheet.addRows(scenarioData);
 
-      // Auto-size columns
-      const colWidths = [
-        { wch: 10 },  // ID
-        { wch: 30 },  // Title
-        { wch: 15 },  // Area
-        { wch: 50 }   // Scenario
-      ];
-      ws['!cols'] = colWidths;
+      // Style the header row
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+      };
 
-      // Add the worksheet to the workbook
-      XLSX.utils.book_append_sheet(wb, ws, 'Test Scenarios');
-
-      // Write the file
-      XLSX.writeFile(wb, 'test-scenarios.xlsx');
+      // Generate blob and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'test-scenarios.xlsx';
+      link.click();
     } catch (error) {
       console.error('Failed to export XLSX:', error);
       alert('Failed to export Excel file. Please try again.');
