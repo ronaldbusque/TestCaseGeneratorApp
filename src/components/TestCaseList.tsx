@@ -276,7 +276,7 @@ export function TestCaseList({
   if (!testCases.length) return null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {!testCases.length ? (
         <div className="text-center py-12">
           <p className="text-gray-500 mb-4">No test cases generated yet</p>
@@ -285,11 +285,11 @@ export function TestCaseList({
         <>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <h2 className="text-xl font-semibold text-gray-900">
+              <h2 className="text-2xl font-bold text-gray-900">
                 {mode === 'high-level' ? 'Test Scenarios' : 'Test Cases'} ({testCases.length})
               </h2>
               {mode === 'high-level' && (
-                <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
+                <span className="bg-purple-100/80 backdrop-blur-sm text-purple-800 text-sm px-3 py-1 rounded-full font-medium">
                   High-level Overview
                 </span>
               )}
@@ -299,28 +299,28 @@ export function TestCaseList({
                 <div className="relative group">
                   <Button
                     variant="outline"
-                    className="group"
+                    className="group bg-white/80 backdrop-blur-sm hover:bg-white transition-all duration-200"
                   >
                     <DocumentArrowDownIcon className="h-4 w-4 mr-2" />
                     Export
                   </Button>
-                  <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                  <div className="absolute right-0 mt-1 w-48 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 border border-gray-100">
                     <div className="py-1">
                       <button
                         onClick={() => handleExportCSV(testCases)}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors first:rounded-t-xl last:rounded-b-xl"
                       >
                         Export as CSV
                       </button>
                       <button
                         onClick={() => handleExportXLSX(testCases)}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                       >
                         Export as Excel
                       </button>
                       <button
                         onClick={() => handleExportDOCX(testCases)}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                       >
                         Export as Word
                       </button>
@@ -332,7 +332,7 @@ export function TestCaseList({
                 <Button
                   onClick={onConvertSelected}
                   variant="outline"
-                  className="group"
+                  className="group bg-white/80 backdrop-blur-sm hover:bg-white transition-all duration-200"
                   disabled={selectedTestCases.size === 0}
                 >
                   <ArrowDownIcon className="h-4 w-4 mr-2" />
@@ -342,7 +342,7 @@ export function TestCaseList({
               <Button
                 onClick={onRegenerate}
                 variant="outline"
-                className="group"
+                className="group bg-white/80 backdrop-blur-sm hover:bg-white transition-all duration-200"
                 title={`Generate new ${mode === 'high-level' ? 'scenarios' : 'test cases'}`}
               >
                 <ArrowPathIcon className="h-4 w-4 mr-2 group-hover:rotate-180 transition-transform" />
@@ -350,9 +350,9 @@ export function TestCaseList({
               </Button>
             </div>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-6">
             {mode === 'high-level' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {Object.entries(
                   testCases.reduce((acc: Record<string, TestCase[]>, testCase) => {
                     if (isHighLevelTestCase(testCase)) {
@@ -362,9 +362,9 @@ export function TestCaseList({
                     return acc;
                   }, {})
                 ).map(([area, areaTestCases]) => (
-                  <div key={area} className="bg-white shadow rounded-lg p-4">
-                    <h3 className="text-lg font-medium text-gray-900 mb-3">{area}</h3>
-                    <div className="space-y-2">
+                  <div key={area} className="bg-white/70 backdrop-blur-sm rounded-xl shadow-lg p-6 transition-all duration-300 hover:shadow-xl border border-gray-100">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">{area}</h3>
+                    <div className="space-y-3">
                       {areaTestCases.map((testCase) => {
                         if (!isHighLevelTestCase(testCase)) return null;
                         const isConverted = convertedScenarioIds.has(testCase.id);
@@ -373,8 +373,8 @@ export function TestCaseList({
                           <div
                             key={testCase.id}
                             className={cn(
-                              "border border-gray-200 rounded p-3",
-                              isConverted ? "bg-gray-50" : "hover:bg-gray-50"
+                              "border border-gray-200 rounded-lg p-4 transition-all duration-200",
+                              isConverted ? "bg-gray-50/80" : "hover:bg-gray-50/80 hover:shadow-md"
                             )}
                           >
                             <div className="flex items-center justify-between">
@@ -388,9 +388,9 @@ export function TestCaseList({
                                   />
                                 )}
                                 {isConverted && (
-                                  <span className="flex items-center text-green-600">
+                                  <span className="flex items-center text-green-600 bg-green-50 px-2 py-1 rounded-full text-xs">
                                     <CheckCircleIcon className="h-4 w-4 mr-1" />
-                                    <span className="text-xs">Converted to {convertedTestCase?.id}</span>
+                                    <span>Converted to {convertedTestCase?.id}</span>
                                   </span>
                                 )}
                                 <span className="text-sm font-medium text-gray-900">{testCase.title}</span>
@@ -401,19 +401,19 @@ export function TestCaseList({
                                     e.stopPropagation();
                                     handleCopy(testCase);
                                   }}
-                                  className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+                                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
                                   title="Copy scenario"
                                 >
                                   <ClipboardIcon className="h-4 w-4" />
                                   {copiedId === testCase.id && (
-                                    <span className="absolute top-0 right-0 px-2 py-1 text-xs text-white bg-green-500 rounded-md">
+                                    <span className="absolute -top-2 -right-2 px-2 py-1 text-xs text-white bg-green-500 rounded-md shadow-sm">
                                       Copied!
                                     </span>
                                   )}
                                 </button>
                               </div>
                             </div>
-                            <p className="mt-1 text-sm text-gray-600">{testCase.scenario}</p>
+                            <p className="mt-2 text-sm text-gray-600">{testCase.scenario}</p>
                           </div>
                         );
                       })}
@@ -423,7 +423,7 @@ export function TestCaseList({
               </div>
             )}
             {mode === 'detailed' && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {Object.entries(
                   localTestCases.reduce((acc: Record<string, TestCase[]>, testCase) => {
                     if (!isHighLevelTestCase(testCase)) {
@@ -433,17 +433,17 @@ export function TestCaseList({
                     return acc;
                   }, {})
                 ).map(([area, areaTestCases]) => (
-                  <div key={area} className="bg-white shadow rounded-lg p-4">
-                    <h3 className="text-lg font-medium text-gray-900 mb-3">{area}</h3>
-                    <div className="space-y-3">
+                  <div key={area} className="bg-white/70 backdrop-blur-sm rounded-xl shadow-lg p-6 transition-all duration-300 hover:shadow-xl border border-gray-100">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">{area}</h3>
+                    <div className="space-y-4">
                       {areaTestCases.map((testCase) => (
                         <motion.div
                           key={testCase.id}
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className="border border-gray-200 rounded-lg overflow-hidden"
+                          className="border border-gray-200 rounded-lg overflow-hidden bg-white/50 transition-all duration-200 hover:shadow-md"
                         >
-                          <div className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
+                          <div className="flex items-center justify-between px-4 py-3 hover:bg-gray-50/80">
                             <button
                               onClick={() => toggleExpanded(testCase.id)}
                               className="flex-1 flex items-center space-x-3 text-left"
@@ -458,10 +458,10 @@ export function TestCaseList({
                                 <ChevronDownIcon className="h-4 w-4 text-gray-400" />
                               )}
                             </button>
-                            <div className="flex space-x-1">
+                            <div className="flex space-x-2">
                               <button
                                 onClick={(e) => handleEdit(e, testCase)}
-                                className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+                                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
                                 title="Edit test case"
                               >
                                 <PencilIcon className="h-4 w-4" />
@@ -471,12 +471,12 @@ export function TestCaseList({
                                   e.stopPropagation();
                                   handleCopy(testCase);
                                 }}
-                                className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+                                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
                                 title="Copy test case"
                               >
                                 <ClipboardIcon className="h-4 w-4" />
                                 {copiedId === testCase.id && (
-                                  <span className="absolute top-0 right-0 px-2 py-1 text-xs text-white bg-green-500 rounded-md">
+                                  <span className="absolute -top-2 -right-2 px-2 py-1 text-xs text-white bg-green-500 rounded-md shadow-sm">
                                     Copied!
                                   </span>
                                 )}
@@ -541,16 +541,16 @@ export function TestCaseList({
           </div>
           {/* Converted Test Cases Section */}
           {convertedTestCases.length > 0 && (
-            <div className="mt-8">
-              <div className="flex items-center gap-3 mb-4">
-                <h2 className="text-xl font-semibold text-gray-900">
+            <div className="mt-12">
+              <div className="flex items-center gap-3 mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">
                   Converted Test Cases ({convertedTestCases.length})
                 </h2>
-                <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+                <span className="bg-green-100/80 backdrop-blur-sm text-green-800 text-sm px-3 py-1 rounded-full font-medium">
                   Detailed View
                 </span>
               </div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {Object.entries(
                   convertedTestCases.reduce((acc: Record<string, TestCase[]>, testCase) => {
                     const area = testCase.area || 'General';
@@ -558,17 +558,17 @@ export function TestCaseList({
                     return acc;
                   }, {})
                 ).map(([area, areaTestCases]) => (
-                  <div key={area} className="bg-white shadow rounded-lg p-4">
-                    <h3 className="text-lg font-medium text-gray-900 mb-3">{area}</h3>
-                    <div className="space-y-3">
+                  <div key={area} className="bg-white/70 backdrop-blur-sm rounded-xl shadow-lg p-6 transition-all duration-300 hover:shadow-xl border border-gray-100">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">{area}</h3>
+                    <div className="space-y-4">
                       {areaTestCases.map((testCase) => (
                         <motion.div
                           key={testCase.id}
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className="border border-gray-200 rounded-lg overflow-hidden"
+                          className="border border-gray-200 rounded-lg overflow-hidden bg-white/50 transition-all duration-200 hover:shadow-md"
                         >
-                          <div className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
+                          <div className="flex items-center justify-between px-4 py-3 hover:bg-gray-50/80">
                             <button
                               onClick={() => toggleExpanded(testCase.id)}
                               className="flex-1 flex items-center space-x-3 text-left"
@@ -583,10 +583,10 @@ export function TestCaseList({
                                 <ChevronDownIcon className="h-4 w-4 text-gray-400" />
                               )}
                             </button>
-                            <div className="flex space-x-1">
+                            <div className="flex space-x-2">
                               <button
                                 onClick={(e) => handleEdit(e, testCase)}
-                                className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+                                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
                                 title="Edit test case"
                               >
                                 <PencilIcon className="h-4 w-4" />
@@ -596,12 +596,12 @@ export function TestCaseList({
                                   e.stopPropagation();
                                   handleCopy(testCase);
                                 }}
-                                className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+                                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
                                 title="Copy test case"
                               >
                                 <ClipboardIcon className="h-4 w-4" />
                                 {copiedId === testCase.id && (
-                                  <span className="absolute top-0 right-0 px-2 py-1 text-xs text-white bg-green-500 rounded-md">
+                                  <span className="absolute -top-2 -right-2 px-2 py-1 text-xs text-white bg-green-500 rounded-md shadow-sm">
                                     Copied!
                                   </span>
                                 )}

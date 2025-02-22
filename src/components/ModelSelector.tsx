@@ -46,26 +46,42 @@ interface ModelSelectorProps {
 export const ModelSelector = ({ onModelSelect, selectedModel = 'Gemini' }: ModelSelectorProps) => {
   return (
     <div className="space-y-3">
-      <h2 className="text-lg font-semibold">Select Model</h2>
-      <div className="flex flex-wrap gap-3">
-        {models.map((model) => (
-          <button
-            key={model.id}
-            onClick={() => onModelSelect(model.id)}
-            className={cn(
-              'px-4 py-2 rounded-lg transition-colors flex items-center gap-2',
-              model.isAvailable
-                ? 'hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
-                : 'opacity-50 cursor-not-allowed',
-              selectedModel === model.id && 'bg-blue-100 text-blue-700 font-medium'
-            )}
-            disabled={!model.isAvailable}
-            title={model.description}
-          >
-            {model.logo}
-            <span>{model.name}</span>
-          </button>
-        ))}
+      <h2 className="text-lg font-semibold text-blue-100">Select Model</h2>
+      <div className="p-1 bg-white/5 backdrop-blur-lg rounded-2xl border border-white/10">
+        <div className="flex gap-1">
+          {models.map((model) => (
+            <button
+              key={model.id}
+              onClick={() => onModelSelect(model.id)}
+              className={cn(
+                'relative px-4 py-2.5 rounded-xl transition-all duration-300 flex items-center gap-2 group',
+                'focus:outline-none',
+                model.isAvailable
+                  ? selectedModel === model.id
+                    ? [
+                        'bg-gradient-to-r from-blue-500/20 to-purple-500/20 backdrop-blur-sm',
+                        'shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]',
+                        'border border-white/20',
+                        'text-white font-medium',
+                      ].join(' ')
+                    : [
+                        'hover:bg-white/5',
+                        'text-blue-200 hover:text-blue-100',
+                        'border border-transparent',
+                      ].join(' ')
+                  : 'opacity-50 cursor-not-allowed'
+              )}
+              disabled={!model.isAvailable}
+              title={model.description}
+            >
+              {model.logo}
+              <span>{model.name}</span>
+              {selectedModel === model.id && (
+                <div className="absolute inset-0 rounded-xl bg-blue-400/10 animate-pulse -z-10"></div>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

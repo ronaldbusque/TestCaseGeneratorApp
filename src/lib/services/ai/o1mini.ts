@@ -137,13 +137,23 @@ export class O1MiniService implements AIService {
       if (request.files?.length) {
         for (const file of request.files) {
           try {
-            const content = await file.text();
-            processedContents.push({
-              source: file.name,
-              text: content
-            });
+            if (file.type.startsWith('image/')) {
+              // Process image files using OCR
+              const result = await this.imageProcessor.processImage(file);
+              processedContents.push({
+                source: file.name,
+                text: `Image Analysis (${file.name}):\n${result.text}\n\nConfidence: ${result.confidence.toFixed(2)}%\nDimensions: ${result.metadata.width}x${result.metadata.height}`
+              });
+            } else {
+              // Process document files
+              const result = await parseDocument(file);
+              processedContents.push({
+                source: file.name,
+                text: result.content
+              });
+            }
           } catch (error) {
-            console.error(`Error reading file ${file.name}:`, error);
+            console.error(`Error processing file ${file.name}:`, error);
           }
         }
       }
@@ -154,19 +164,32 @@ export class O1MiniService implements AIService {
           request.selectedScenarios.map(s => `${s.title}:\n${s.scenario}`).join('\n\n');
       }
       
-      if (processedContents.length > 0) {
-        combinedContent += '\n\nAdditional Context from Files:\n\n' + 
-          processedContents.map(pc => `=== ${pc.source} ===\n${pc.text}`).join('\n\n');
+      // Filter out any processed content that's already in the requirements
+      const uniqueProcessedContents = processedContents.filter(pc => {
+        // Skip if the content is already in the requirements
+        if (combinedContent.includes(pc.text.trim())) {
+          this.log('Skipping duplicate content', {
+            source: pc.source,
+            reason: 'Content already exists in requirements'
+          });
+          return false;
+        }
+        return true;
+      });
+      
+      if (uniqueProcessedContents.length > 0) {
+        combinedContent += '\n\nAdditional Requirements and/or Context from Files:\n\n' + 
+          uniqueProcessedContents.map(pc => `=== ${pc.source} ===\n${pc.text}`).join('\n\n');
       }
 
       this.log('Combined content prepared', {
         totalLength: combinedContent.length,
-        sources: processedContents.map(pc => pc.source)
+        sources: uniqueProcessedContents.map(pc => pc.source)
       });
 
       // Prepare the prompt based on mode
       const basePrompt = request.mode === 'high-level'
-        ? `You are a seasoned QA engineer with a proven track record in uncovering critical bugs and breaking software. Your task is to generate a comprehensive set of test scenarios in JSON format based on the requirements provided below. These scenarios should explore all angles: standard functionality, edge cases, error conditions, security vulnerabilities, performance limits, and unexpected user behavior.
+        ? `You are a seasoned QA engineer with a proven track record in uncovering critical bugs and breaking software. Your task is to generate a comprehensive set of test scenarios in JSON format based on the requirements provided below. These scenarios should explore all angles: standard functionality, edge cases, error conditions, and unexpected user behavior.
 
 Each test scenario must be a concise, one-line statement that explains WHAT needs to be tested—do not include HOW to implement the test. Focus on provoking failures, ensuring robustness, and uncovering hidden issues in the software.
 
@@ -180,7 +203,7 @@ Return ONLY a JSON array of test scenarios. Each scenario should follow this str
   "scenario": "A one-line statement detailing what aspect or behavior to test, including potential edge or negative conditions"
 }`
         : request.selectedScenarios
-          ? `You are a QA automation expert. Your task is to convert the provided high-level test scenarios into detailed test cases. For each scenario, create a comprehensive test case that includes step-by-step instructions, preconditions, test data, and expected results.
+          ? `You are a meticulous software testing expert with years of experience in creating detailed, bulletproof test cases. Your task is to convert the provided high-level test scenarios into detailed test cases. For each scenario, create a comprehensive test case that includes step-by-step instructions, preconditions, test data, and expected results.
 
 Requirements:
 ${combinedContent}
@@ -205,26 +228,60 @@ Return ONLY a JSON array of detailed test cases. Each test case should follow th
 }
 
 IMPORTANT: Each converted test case must maintain the same functional area as its original scenario.`
-          : `You are a QA automation expert. Your task is to generate detailed test cases based on the requirements provided. Each test case should include step-by-step instructions, preconditions, test data, and expected results.
+          : `You are a meticulous software testing expert with years of experience in creating detailed, bulletproof test cases. Your mission is to generate comprehensive test cases that leave no stone unturned, ensuring thorough validation of functionality, edge cases, and potential failure points.
+
+Your test cases should be detailed enough that any QA engineer can execute them consistently and reliably. While high-level scenarios focus on WHAT to test, your detailed test cases must specify exactly HOW to test it, including precise steps, test data, and expected outcomes. Focus on creating test cases that:
+- Thoroughly validate core functionality
+- Handle edge cases and boundary conditions
+- Account for various user roles and permissions
+- Consider system states and data conditions
+- Verify error handling and recovery
+- Test integration points and data flow
 
 Requirements:
 ${combinedContent}
 
-Return ONLY a JSON array of detailed test cases. Each test case should follow this structure:
+Return ONLY a JSON array containing test cases. Each test case should have this structure:
 {
-  "title": "A descriptive title for the test case",
-  "area": "The functional area being tested",
-  "description": "A detailed description of what this test case verifies",
-  "preconditions": ["List of conditions that must be met before test execution"],
-  "testData": ["List of test data required for the test"],
+  "title": "Brief test case title",
+  "area": "Functional area or module (e.g., 'Login', 'User Management', 'Security')",
+  "description": "Detailed description of what is being tested",
+  "preconditions": ["List of required conditions"],
+  "testData": ["List of test data items in format 'field: value'"],
   "steps": [
     {
       "number": 1,
-      "description": "Step-by-step instruction"
+      "description": "Step description"
     }
   ],
-  "expectedResult": "The expected outcome after executing all steps"
-}`;
+  "expectedResult": "Expected outcome of the test"
+}
+
+Example:
+[
+  {
+    "title": "Login with Valid Credentials",
+    "area": "Authentication",
+    "description": "Verify that users can successfully log in with valid credentials",
+    "preconditions": ["User account exists", "User is not logged in"],
+    "testData": ["username: validUser", "password: validPass123"],
+    "steps": [
+      {
+        "number": 1,
+        "description": "Navigate to login page"
+      },
+      {
+        "number": 2,
+        "description": "Enter valid username and password"
+      },
+      {
+        "number": 3,
+        "description": "Click login button"
+      }
+    ],
+    "expectedResult": "User is successfully logged in and redirected to dashboard"
+  }
+]`;
 
       const modeSpecificInstructions = request.mode === 'high-level'
         ? `\n\nFor test scenarios:

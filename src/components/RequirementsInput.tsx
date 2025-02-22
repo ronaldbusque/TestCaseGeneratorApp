@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from './ui/Button';
-import { motion } from 'framer-motion';
-import { cn } from '@/lib/utils';
+import { ArrowRightIcon } from '@heroicons/react/24/outline';
 
 interface RequirementsInputProps {
   onSubmit: (requirements: string) => void;
@@ -13,73 +12,76 @@ interface RequirementsInputProps {
   hasUploadedFiles?: boolean;
 }
 
-export function RequirementsInput({ 
-  onSubmit, 
-  initialValue = '', 
-  placeholder = 'Enter your requirements here...',
-  isEnabled = false,
+export function RequirementsInput({
+  onSubmit,
+  initialValue = '',
+  placeholder = '',
+  isEnabled = true,
   hasUploadedFiles = false
 }: RequirementsInputProps) {
   const [requirements, setRequirements] = useState(initialValue);
-  const [isLoading, setIsLoading] = useState(false);
 
-  // Add effect to update requirements when initialValue changes
   useEffect(() => {
     setRequirements(initialValue);
   }, [initialValue]);
 
-  const handleSubmit = async () => {
-    if (!canSubmit()) return;
-    
-    setIsLoading(true);
-    try {
-      await onSubmit(requirements);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit(requirements.trim());
   };
 
   const canSubmit = () => {
-    return hasUploadedFiles || requirements.trim() !== '';
+    return isEnabled && (hasUploadedFiles || requirements.trim() !== '');
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-4"
-    >
-      <h2 className="text-lg font-semibold">Enter Requirements</h2>
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="space-y-2">
+        <label htmlFor="requirements" className="block text-lg font-semibold text-blue-100">
+          Test Requirements
+        </label>
+        {hasUploadedFiles && (
+          <p className="text-sm text-blue-200">
+            Add any additional requirements or context for the test cases.
+          </p>
+        )}
+      </div>
+      
       <textarea
+        id="requirements"
         value={requirements}
         onChange={(e) => setRequirements(e.target.value)}
         placeholder={placeholder}
-        className={cn(
-          'w-full rounded-lg border border-gray-300 p-4 text-gray-900',
-          'focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500',
-          'transition-colors duration-200'
-        )}
-        rows={8}
+        disabled={!isEnabled}
+        className={`
+          w-full min-h-[200px] p-4 rounded-xl
+          bg-white/5 backdrop-blur-sm
+          border border-white/20
+          text-blue-100 placeholder-blue-300
+          focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent
+          disabled:opacity-50 disabled:cursor-not-allowed
+          transition-all duration-200
+        `}
       />
-      <motion.div 
-        className="flex justify-end"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: canSubmit() ? 1 : 0.5 }}
-      >
+      
+      <div className="flex justify-end">
         <Button
-          onClick={handleSubmit}
-          isLoading={isLoading}
+          type="submit"
           disabled={!canSubmit()}
-          className="relative group"
+          className={`
+            group bg-blue-500/20 hover:bg-blue-500/30
+            border border-blue-400/20 hover:border-blue-400/30
+            text-blue-100
+            backdrop-blur-sm
+            transition-all duration-200
+            ${!canSubmit() ? 'opacity-50 cursor-not-allowed' : ''}
+            px-6 py-2.5 text-base
+          `}
         >
-          Generate Test Cases
-          {!canSubmit() && (
-            <span className="absolute -top-8 right-0 w-48 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity">
-              Add files or requirements first
-            </span>
-          )}
+          <span>Generate Test Cases</span>
+          <ArrowRightIcon className="h-5 w-5 ml-2 group-hover:translate-x-1 transition-transform" />
         </Button>
-      </motion.div>
-    </motion.div>
+      </div>
+    </form>
   );
 } 

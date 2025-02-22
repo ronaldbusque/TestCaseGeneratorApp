@@ -3,8 +3,9 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './ui/Button';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, ArrowUpTrayIcon, DocumentIcon } from '@heroicons/react/24/outline';
 import { cn } from '@/lib/utils';
+import { useDropzone } from 'react-dropzone';
 
 interface FileUploadProps {
   onFilesSelect: (files: File[]) => void;
@@ -26,220 +27,95 @@ const SUPPORTED_FILE_TYPES = {
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelect, shouldReset = false }) => {
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [previews, setPreviews] = useState<{ [key: string]: string }>({});
-  const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [files, setFiles] = useState<File[]>([]);
 
-  // Effect to handle resetting the component
   useEffect(() => {
     if (shouldReset) {
-      setSelectedFiles([]);
-      // Cleanup previews
-      Object.values(previews).forEach(URL.revokeObjectURL);
-      setPreviews({});
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      setFiles([]);
     }
   }, [shouldReset]);
 
-  const handleFileSelect = useCallback(async (files: FileList | null) => {
-    if (!files?.length) return;
-
-    const newFiles = Array.from(files);
-    const validFiles = newFiles.filter(file => 
-      file.type.startsWith('image/') || 
-      file.type === 'application/pdf' || 
-      file.type === 'text/plain' ||
-      file.type === 'application/msword' ||
-      file.type.includes('document')
-    );
-
-    if (validFiles.length !== newFiles.length) {
-      console.warn('Some files were skipped due to unsupported file types');
-    }
-
-    const updatedFiles = [...selectedFiles, ...validFiles];
-    setSelectedFiles(updatedFiles);
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    const updatedFiles = [...files, ...acceptedFiles];
+    setFiles(updatedFiles);
     onFilesSelect(updatedFiles);
+  }, [onFilesSelect, files]);
 
-    // Generate previews for new image files
-    const newPreviews: { [key: string]: string } = { ...previews };
-    for (const file of validFiles) {
-      if (file.type.startsWith('image/')) {
-        try {
-          const preview = URL.createObjectURL(file);
-          newPreviews[`${file.name}-${file.lastModified}`] = preview;
-        } catch (error) {
-          console.error('Failed to generate preview for:', file.name, error);
-        }
-      }
-    }
-    setPreviews(newPreviews);
-  }, [selectedFiles, previews, onFilesSelect]);
-
-  const handleRemoveFile = useCallback((fileToRemove: File) => {
-    console.log('Removing file:', fileToRemove.name);
-    console.log('Current files:', selectedFiles.map(f => f.name));
-    
-    const updatedFiles = selectedFiles.filter(file => 
-      `${file.name}-${file.lastModified}` !== `${fileToRemove.name}-${fileToRemove.lastModified}`
-    );
-    
-    console.log('Updated files:', updatedFiles.map(f => f.name));
-    setSelectedFiles(updatedFiles);
+  const removeFile = (fileToRemove: File) => {
+    const updatedFiles = files.filter(file => file !== fileToRemove);
+    setFiles(updatedFiles);
     onFilesSelect(updatedFiles);
+  };
 
-    // Clean up preview if it exists
-    const previewKey = `${fileToRemove.name}-${fileToRemove.lastModified}`;
-    if (previews[previewKey]) {
-      URL.revokeObjectURL(previews[previewKey]);
-      const { [previewKey]: removed, ...remainingPreviews } = previews;
-      setPreviews(remainingPreviews);
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'text/plain': ['.txt'],
+      'text/markdown': ['.md'],
+      'application/pdf': ['.pdf'],
+      'application/msword': ['.doc'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+      'image/*': ['.png', '.jpg', '.jpeg', '.gif'],
     }
-  }, [selectedFiles, previews, onFilesSelect]);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    handleFileSelect(e.dataTransfer.files);
-  }, [handleFileSelect]);
-
-  const handleClick = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
-
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    handleFileSelect(e.target.files);
-  }, [handleFileSelect]);
-
-  // Cleanup previews on unmount
-  React.useEffect(() => {
-    return () => {
-      Object.values(previews).forEach(URL.revokeObjectURL);
-    };
-  }, [previews]);
+  });
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Upload Files</h2>
-        {selectedFiles.length > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setSelectedFiles([]);
-              setPreviews({});
-              onFilesSelect([]);
-            }}
-            className="text-red-500"
-          >
-            <XMarkIcon className="h-4 w-4" />
-            <span className="ml-2">Remove All</span>
-          </Button>
-        )}
+      <div 
+        {...getRootProps()} 
+        className={`
+          p-8 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-200
+          ${isDragActive 
+            ? 'border-blue-400 bg-blue-400/10' 
+            : 'border-white/20 hover:border-blue-400/50 hover:bg-white/5'
+          }
+        `}
+      >
+        <input {...getInputProps()} />
+        <div className="flex flex-col items-center justify-center gap-4">
+          <div className={`p-4 rounded-full bg-white/10 transition-all duration-200 ${isDragActive ? 'bg-blue-400/20' : ''}`}>
+            <ArrowUpTrayIcon className={`h-8 w-8 transition-all duration-200 ${isDragActive ? 'text-blue-400' : 'text-blue-200'}`} />
+          </div>
+          <div className="text-center">
+            <p className="text-lg font-medium text-blue-100">
+              {isDragActive ? 'Drop files here' : 'Drag & drop files here'}
+            </p>
+            <p className="mt-1 text-sm text-blue-200">
+              or click to select files
+            </p>
+          </div>
+          <div className="text-xs text-blue-300 text-center">
+            Supported formats: TXT, MD, PDF, DOC, DOCX, PNG, JPG, JPEG, GIF
+          </div>
+        </div>
       </div>
 
-      <div className="w-full">
-        <label
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          className={cn(
-            'flex flex-col items-center justify-center w-full h-64',
-            'border-2 border-dashed rounded-lg',
-            'transition-colors duration-200',
-            isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:bg-gray-50',
-            selectedFiles.length === 0 ? 'cursor-pointer' : 'cursor-default'
-          )}
-          onClick={selectedFiles.length === 0 ? handleClick : undefined}
-        >
-          {selectedFiles.length > 0 ? (
-            <div className="w-full p-4 space-y-3 overflow-y-auto max-h-full">
-              {selectedFiles.map((file) => (
-                <div
-                  key={`${file.name}-${file.lastModified}`}
-                  className="flex items-center justify-between bg-white p-2 rounded-lg shadow-sm"
-                >
-                  <div className="flex items-center space-x-3">
-                    {previews[`${file.name}-${file.lastModified}`] ? (
-                      <img
-                        src={previews[`${file.name}-${file.lastModified}`]}
-                        alt={file.name}
-                        className="w-10 h-10 object-cover rounded"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center">
-                        <span className="text-xs font-medium">
-                          {SUPPORTED_FILE_TYPES[file.type as keyof typeof SUPPORTED_FILE_TYPES]}
-                        </span>
-                      </div>
-                    )}
-                    <span className="text-sm text-gray-500">{file.name}</span>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleRemoveFile(file);
-                    }}
-                    className="text-red-500"
-                  >
-                    <XMarkIcon className="h-4 w-4" />
-                  </Button>
+      {files.length > 0 && (
+        <div className="space-y-2">
+          {files.map((file, index) => (
+            <div 
+              key={`${file.name}-${index}`}
+              className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10 group hover:bg-white/10 transition-all duration-200"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-md bg-white/10">
+                  <DocumentIcon className="h-5 w-5 text-blue-200" />
                 </div>
-              ))}
-            </div>
-          ) : (
-            <>
-              <svg
-                className="w-10 h-10 mb-3 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
+                <div>
+                  <p className="text-sm font-medium text-blue-100">{file.name}</p>
+                  <p className="text-xs text-blue-300">{(file.size / 1024).toFixed(1)} KB</p>
+                </div>
+              </div>
+              <button
+                onClick={() => removeFile(file)}
+                className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-white/10 transition-all duration-200"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                ></path>
-              </svg>
-              <p className="mb-2 text-sm text-gray-500">
-                <span className="font-semibold">Click to upload</span> or drag and drop
-              </p>
-              <p className="text-xs text-gray-500">
-                Supported formats: PDF, DOC, DOCX, TXT, PNG, JPEG, JPG, GIF, WEBP (Max 10MB)
-              </p>
-            </>
-          )}
-          
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            multiple
-            accept="image/*,.pdf,.doc,.docx,.txt"
-            onChange={handleInputChange}
-          />
-        </label>
-      </div>
+                <XMarkIcon className="h-5 w-5 text-blue-200 hover:text-blue-100" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
