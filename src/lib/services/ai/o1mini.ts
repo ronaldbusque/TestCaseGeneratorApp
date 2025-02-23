@@ -15,6 +15,8 @@ export class O1MiniService implements AIService {
 
   constructor() {
     this.imageProcessor = new ImageProcessor();
+    // Test the JSON cleaning fix
+    this.testJsonCleaning();
   }
 
   private log(message: string, data?: any) {
@@ -38,13 +40,171 @@ export class O1MiniService implements AIService {
       });
     }
 
+    // Remove any BOM or invalid control characters
+    cleanContent = cleanContent
+      .replace(/^\uFEFF/, '') // Remove BOM
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+      .replace(/\r?\n/g, ' ') // Normalize line endings
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim();
+
+    // Replace dynamic string generation expressions with literal strings
+    cleanContent = cleanContent
+      // Handle any dynamic expressions combining literal strings with .repeat calls
+      .replace(/\"([^\"]+)\"\s*\+\s*(?:\")?([A-Za-z0-9]+)(?:\")?\.repeat\((\d+)\)/g, (match, prefix, char, count) => {
+        const repeatedStr = char.repeat(parseInt(count, 10));
+        return `"${prefix}${repeatedStr}"`;
+      })
+      // Handle string concatenations with @ symbol or other special characters
+      .replace(/\"([^\"]+)\"\s*\+\s*\"([^\"]+)\"/g, (match, part1, part2) => {
+        return `"${part1}${part2}"`;
+      })
+      // Handle other dynamic string concatenations in arrays or direct properties
+      .replace(/\"([^\"]+)\"\s*\+\s*([^,\]}\"]+)/g, (match, prefix, expr) => {
+        try {
+          // Skip if it's already been handled by previous replacements
+          if (match.includes('.repeat(') || (prefix && !expr)) {
+            return match;
+          }
+          const evalResult = eval(expr.trim());
+          return `"${prefix}${evalResult}"`;
+        } catch {
+          const defaultValue = "Dynamic content generation failed";
+          return `"${prefix}${defaultValue}"`;
+        }
+      });
+
+    // Log the content after string replacements for debugging
+    this.log('Content after string replacements', {
+      contentStart: cleanContent.substring(0, 100),
+      contentEnd: cleanContent.substring(cleanContent.length - 100)
+    });
+
     // Ensure the content starts with [ and ends with ]
-    const arrayMatch = cleanContent.match(/\[\s*{[\s\S]*}\s*\]/);
+    const arrayMatch = cleanContent.match(/^\s*\[[\s\S]*\]\s*$/);
     if (!arrayMatch) {
+      this.log('Invalid JSON array structure', {
+        startsWithBracket: cleanContent.trim().startsWith('['),
+        endsWithBracket: cleanContent.trim().endsWith(']'),
+        firstChar: cleanContent.trim()[0],
+        lastChar: cleanContent.trim()[cleanContent.length - 1],
+        contentPreview: cleanContent.substring(0, 200) + '...'
+      });
       throw new Error('Response does not contain a valid JSON array');
     }
 
+    // Validate JSON structure
+    try {
+      JSON.parse(cleanContent);
+    } catch (error: any) {
+      this.log('JSON parsing failed', { 
+        error: error.message, 
+        position: error.message.match(/position (\d+)/)?.[1] || 'unknown',
+        nearbyContent: error.message.includes('position') 
+          ? cleanContent.substring(
+              Math.max(0, parseInt(error.message.match(/position (\d+)/)[1]) - 50),
+              Math.min(cleanContent.length, parseInt(error.message.match(/position (\d+)/)[1]) + 50)
+            )
+          : 'position not found in error',
+        content: cleanContent 
+      });
+      throw new Error(`Invalid JSON structure: ${error.message}`);
+    }
+
     return cleanContent;
+  }
+
+  private cleanJsonString(jsonContent: string): string {
+    // This regex matches JSON string literals
+    const stringLiteralPattern = /"((?:\\.|[^"\\])*?)"/g;
+    
+    return jsonContent.replace(stringLiteralPattern, (match, capturedString) => {
+      try {
+        // First try to parse any existing escape sequences
+        const decoded = JSON.parse('"' + capturedString + '"');
+        // Re-encode to ensure proper escaping
+        return JSON.stringify(decoded);
+      } catch {
+        // If parsing fails, try to clean the string manually
+        const cleaned = capturedString
+          .replace(/\\/g, '\\\\')  // Escape backslashes first
+          .replace(/"/g, '\\"')    // Then escape quotes
+          .replace(/[\u0000-\u001F\u007F-\u009F]/g, ''); // Remove control chars
+        return `"${cleaned}"`;
+      }
+    });
+  }
+
+  private testJsonCleaning() {
+    // Test cases for different JSON cleaning scenarios
+    const testCases = [
+      // Original O1-Mini test cases
+      {
+        name: 'Repeating characters test',
+        input: `[{"title":"Create Task with Maximum Title Length","area":"Task Management","description":"Verify that the system accepts a task title up to the maximum allowed length.","preconditions":["User is logged in","User navigates to Task Management module"],"testData":["title: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","description: Max length title test.","due date: 2024-07-01","priority: Medium"],"steps":[{"number":1,"description":"Navigate to the Task Management module."}],"expectedResult":"Task is created successfully with the 255-character title."}]`
+      },
+      {
+        name: 'Email concatenation test',
+        input: `[{"title":"Boundary Condition: Maximum Allowed Email Length","area":"Registration","description":"Verify that the system accepts emails with maximum allowed length.","preconditions":["No existing user with the test email"],"testData":["email: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@example.com","password: Boundary1"],"steps":[{"number":1,"description":"Navigate to the registration page."}],"expectedResult":"Registration succeeds with maximum length email."}]`
+      },
+      {
+        name: 'Password repeat test',
+        input: `[{"title":"Boundary Condition: Password with Maximum Length","area":"Registration","description":"Test maximum password length.","preconditions":["System is ready"],"testData":["email: test@example.com","password: A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1"],"steps":[{"number":1,"description":"Enter test data."}],"expectedResult":"Password accepted."}]`
+      },
+      // Additional test cases from Gemini service
+      {
+        name: 'Special characters test',
+        input: `[{"title":"Test with Special Characters","area":"Task Management","description":"Test special characters handling","testData":["title: Task with special chars: !@#$%^&*()_+-=","description: Testing special chars"],"steps":[{"number":1,"description":"Enter special characters"}],"expectedResult":"Task created with special characters"}]`
+      },
+      {
+        name: 'Unescaped backslash test',
+        input: `[{"title":"Test with Unescaped Backslashes","area":"Input Validation","description":"Test backslash handling","testData":["path: C:\\\\Program Files\\\\App","regex: \\\\w+\\\\s+\\\\d+"],"steps":[{"number":1,"description":"Enter path with backslashes"}],"expectedResult":"Path accepted"}]`
+      },
+      {
+        name: 'Nested quotes test',
+        input: `[{"title":"Test with Nested Quotes","area":"Validation","description":"Test nested quote handling","testData":["input: \\"quoted text\\"","description: 'single quoted'"],"steps":[{"number":1,"description":"Enter quoted text"}],"expectedResult":"Text with quotes accepted"}]`
+      },
+      {
+        name: 'Backslash escaping test',
+        input: `[{"title":"Test with Backslashes","area":"Input Validation","description":"Test backslash handling","testData":["path: C:\\\\Program Files\\\\App","regex: \\\\w+\\\\s+\\\\d+"],"steps":[{"number":1,"description":"Enter path with backslashes"}],"expectedResult":"Path accepted with proper escaping"}]`
+      },
+      // New test case for complex string literals
+      {
+        name: 'Complex string literals test',
+        input: `[{"title":"Test with Complex Characters","area":"String Handling","description":"Test complex string literal handling","testData":["path: C:\\\\Complex\\\\Path\\\\Here","input: Task with !@#$%^&*()_+-=\\u0060~[]\\\\{}|;':\\",./<>? chars","regex: \\\\w+\\\\s+\\\\d+"],"steps":[{"number":1,"description":"Enter 'C:\\\\Program Files\\\\App' in path"}],"expectedResult":"All characters handled correctly"}]`
+      }
+    ];
+
+    let allTestsPassed = true;
+    
+    for (const testCase of testCases) {
+      try {
+        const cleaned = this.cleanJsonString(
+          testCase.input
+            .replace(/^\uFEFF/, '') // Remove BOM
+            .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+            .replace(/\r?\n/g, ' ') // Normalize line endings
+            .replace(/\s+/g, ' ') // Normalize whitespace
+            .trim()
+        );
+        const parsed = JSON.parse(cleaned);
+        this.log(`Test successful - ${testCase.name}`, {
+          cleaned,
+          parsed: parsed[0].testData
+        });
+      } catch (error: any) {
+        this.log(`Test failed - ${testCase.name}`, {
+          error: error.message,
+          problematicPart: testCase.input.substring(
+            Math.max(0, error.message.indexOf('position') - 50),
+            Math.min(testCase.input.length, error.message.indexOf('position') + 50)
+          )
+        });
+        allTestsPassed = false;
+      }
+    }
+
+    return allTestsPassed;
   }
 
   private async callO1MiniAPI(prompt: string): Promise<string> {
@@ -176,6 +336,9 @@ export class O1MiniService implements AIService {
         }
         return true;
       });
+      
+      // Remove any "Image Files for Testing:" section from requirements
+      combinedContent = combinedContent.replace(/\nImage Files for Testing:[\s\S]*?(?=\n\n|$)/, '');
       
       if (uniqueProcessedContents.length > 0) {
         combinedContent += '\n\nAdditional Requirements and/or Context from Files:\n\n' + 

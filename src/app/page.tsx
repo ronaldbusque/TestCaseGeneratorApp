@@ -17,6 +17,7 @@ import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { TestCaseModeToggle } from '@/components/TestCaseModeToggle';
 import { NetworkBackground } from '@/components/NetworkBackground';
 import { TestPriorityToggle } from '@/components/TestPriorityToggle';
+import { DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 
 const isHighLevelTestCase = (testCase: TestCase): testCase is HighLevelTestCase => {
   return 'scenario' in testCase && 'area' in testCase;
@@ -28,7 +29,8 @@ export default function Home() {
   const [testPriorityMode, setTestPriorityMode] = useState<TestPriorityMode>('comprehensive');
   const [requirements, setRequirements] = useState('');
   const [fileContent, setFileContent] = useState('');
-  const [testCases, setTestCases] = useState<TestCase[]>([]);
+  const [highLevelTestCases, setHighLevelTestCases] = useState<TestCase[]>([]);
+  const [detailedTestCases, setDetailedTestCases] = useState<TestCase[]>([]);
   const [convertedTestCases, setConvertedTestCases] = useState<TestCase[]>([]);
   const [selectedTestCases, setSelectedTestCases] = useState<Set<string>>(new Set());
   const [convertedScenarioIds, setConvertedScenarioIds] = useState<Set<string>>(new Set());
@@ -42,10 +44,21 @@ export default function Home() {
   const [confirmationType, setConfirmationType] = useState<'new_session' | 'model_change' | null>(null);
   const [shouldResetFiles, setShouldResetFiles] = useState(false);
 
+  // Helper to get current test cases based on mode
+  const getCurrentTestCases = () => testCaseMode === 'high-level' ? highLevelTestCases : detailedTestCases;
+  const setCurrentTestCases = (testCases: TestCase[]) => {
+    if (testCaseMode === 'high-level') {
+      setHighLevelTestCases(testCases);
+    } else {
+      setDetailedTestCases(testCases);
+    }
+  };
+
   const clearSession = () => {
     setRequirements('');
     setFileContent('');
-    setTestCases([]);
+    setHighLevelTestCases([]);
+    setDetailedTestCases([]);
     setConvertedTestCases([]);
     setSelectedTestCases(new Set());
     setConvertedScenarioIds(new Set());
@@ -94,7 +107,7 @@ export default function Home() {
   };
 
   const hasExistingData = () => {
-    return uploadedFiles.length > 0 || requirements.trim() !== '' || testCases.length > 0;
+    return uploadedFiles.length > 0 || requirements.trim() !== '' || getCurrentTestCases().length > 0;
   };
 
   const handleFilesSelect = async (files: File[]) => {
@@ -143,6 +156,12 @@ export default function Home() {
       setIsGenerating(true);
       setGenerationStep('generating');
 
+      // Only clear converted states when generating new high-level test cases
+      if (testCaseMode === 'high-level') {
+        setConvertedTestCases([]);
+        setConvertedScenarioIds(new Set());
+      }
+
       // Combine file content with manual requirements
       const combinedRequirements = [fileContent, manualRequirements]
         .filter(Boolean)
@@ -160,7 +179,7 @@ export default function Home() {
         throw new Error(result.error);
       }
 
-      setTestCases(result.testCases);
+      setCurrentTestCases(result.testCases);
       setGenerationStep('complete');
     } catch (error) {
       console.error('Generation error:', error);
@@ -180,7 +199,7 @@ export default function Home() {
   };
 
   const handleTestCaseUpdate = (updatedTestCases: TestCase[]) => {
-    setTestCases(updatedTestCases);
+    setCurrentTestCases(updatedTestCases);
   };
 
   const handleSelectTestCase = (id: string, selected: boolean) => {
@@ -202,7 +221,7 @@ export default function Home() {
     // Get all existing IDs from both converted test cases and original test cases
     const allIds = [
       ...convertedTestCases.map(tc => tc.id),
-      ...testCases.map(tc => tc.id)
+      ...getCurrentTestCases().map(tc => tc.id)
     ];
     
     let maxNumber = 0;
@@ -226,7 +245,7 @@ export default function Home() {
     setGenerationStep('generating');
     
     try {
-      const selectedScenarios = testCases
+      const selectedScenarios = getCurrentTestCases()
         .filter((tc): tc is HighLevelTestCase => 
           isHighLevelTestCase(tc) && selectedTestCases.has(tc.id)
         );
@@ -245,7 +264,7 @@ export default function Home() {
         // First, prepare all the IDs we'll need
         const existingIds: Set<string> = new Set([
           ...convertedTestCases.map(tc => tc.id),
-          ...testCases.map(tc => tc.id)
+          ...getCurrentTestCases().map(tc => tc.id)
         ]);
 
         // Generate IDs for all new test cases first
@@ -292,6 +311,18 @@ export default function Home() {
     }
   };
 
+  const handleExportCSV = (testCases: TestCase[]) => {
+    // Implementation of handleExportCSV function
+  };
+
+  const handleExportXLSX = (testCases: TestCase[]) => {
+    // Implementation of handleExportXLSX function
+  };
+
+  const handleExportDOCX = (testCases: TestCase[]) => {
+    // Implementation of handleExportDOCX function
+  };
+
   return (
     <main className="min-h-screen">
       <NetworkBackground />
@@ -320,7 +351,7 @@ export default function Home() {
                       <ArrowPathIcon className="h-4 w-4 group-hover:rotate-180 transition-transform duration-300" />
                       <span className="relative">
                         New Session
-                        {testCases.length > 0 && (
+                        {getCurrentTestCases().length > 0 && (
                           <span className="absolute -top-1 -right-2 flex h-2 w-2">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
@@ -434,23 +465,10 @@ export default function Home() {
               )}
             </AnimatePresence>
 
-            {generationStep === 'complete' && testCases.length > 0 && (
+            {generationStep === 'complete' && getCurrentTestCases().length > 0 && (
               <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-8 border border-white/20 animate-fade-in">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <h2 className="text-2xl font-bold text-blue-100">
-                      ✨ Test Cases Generated Successfully!
-                    </h2>
-                    <span className="bg-blue-500/20 backdrop-blur-sm text-blue-200 text-sm px-3 py-1 rounded-full font-medium border border-blue-500/20">
-                      {testCaseMode === 'high-level' ? 'High-level' : 'Detailed'}
-                    </span>
-                  </div>
-                  <span className="bg-emerald-500/20 backdrop-blur-sm text-emerald-200 text-sm font-medium px-4 py-2 rounded-full border border-emerald-500/20">
-                    {testCases.length} Tests
-                  </span>
-                </div>
                 <TestCaseList
-                  testCases={testCases}
+                  testCases={getCurrentTestCases()}
                   onRegenerate={handleRegenerate}
                   onUpdate={handleTestCaseUpdate}
                   mode={testCaseMode}

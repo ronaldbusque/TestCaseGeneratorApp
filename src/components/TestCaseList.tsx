@@ -29,20 +29,13 @@ const isHighLevelTestCase = (testCase: TestCase): testCase is HighLevelTestCase 
 };
 
 const extractAreaFromTestCase = (testCase: DetailedTestCase): string => {
-  // Try to extract area from title first (e.g., "[Login] Valid credentials" -> "Login")
-  const titleMatch = testCase.title.match(/^\[(.*?)\]/);
-  if (titleMatch) {
-    return titleMatch[1];
+  // Use the area provided by the LLM
+  if (testCase.area) {
+    return testCase.area;
   }
 
-  // Try to find common area keywords in the title
-  const areaKeywords = ['Authentication', 'Login', 'Registration', 'User Management', 'Security', 'Profile', 'Settings', 'Dashboard', 'Reports', 'Admin'];
-  const foundKeyword = areaKeywords.find(keyword => 
-    testCase.title.toLowerCase().includes(keyword.toLowerCase()) ||
-    testCase.description.toLowerCase().includes(keyword.toLowerCase())
-  );
-  
-  return foundKeyword || 'General';
+  // Fallback to 'Functional' if no area is provided
+  return 'Functional';
 };
 
 export function TestCaseList({ 
@@ -546,7 +539,7 @@ export function TestCaseList({
             )}
           </div>
           {/* Converted Test Cases Section */}
-          {convertedTestCases.length > 0 && (
+          {mode === 'high-level' && convertedTestCases.length > 0 && (
             <div className="mt-12">
               <div className="flex items-center gap-3 mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">

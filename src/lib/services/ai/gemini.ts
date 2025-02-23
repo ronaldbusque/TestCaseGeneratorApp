@@ -34,10 +34,121 @@ export class GeminiService implements AIService {
       this.genAI = new GoogleGenerativeAI(apiKey);
       this.model = this.genAI.getGenerativeModel({ model: "gemini-2.0-flash-thinking-exp-01-21" });
       this.log('GeminiService initialized successfully');
+      this.testJsonCleaning();
     } catch (error) {
       this.logError('Failed to initialize GeminiService', error);
       throw error;
     }
+  }
+
+  private cleanJsonString(jsonContent: string): string {
+    // This regex matches JSON string literals
+    const stringLiteralPattern = /"((?:\\.|[^"\\])*?)"/g;
+    
+    return jsonContent.replace(stringLiteralPattern, (match, capturedString) => {
+      try {
+        // First try to parse any existing escape sequences
+        const decoded = JSON.parse('"' + capturedString + '"');
+        // Re-encode to ensure proper escaping
+        return JSON.stringify(decoded);
+      } catch {
+        // If parsing fails, try to clean the string manually
+        const cleaned = capturedString
+          .replace(/\\/g, '\\\\')  // Escape backslashes first
+          .replace(/"/g, '\\"')    // Then escape quotes
+          .replace(/[\u0000-\u001F\u007F-\u009F]/g, ''); // Remove control chars
+        return `"${cleaned}"`;
+      }
+    });
+  }
+
+  private testJsonCleaning() {
+    const testCases = [
+      // Original O1-Mini test cases
+      {
+        name: 'Repeating characters test',
+        input: `[{"title":"Create Task with Maximum Title Length","area":"Task Management","description":"Verify that the system accepts a task title up to the maximum allowed length.","preconditions":["User is logged in","User navigates to Task Management module"],"testData":["title: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","description: Max length title test.","due date: 2024-07-01","priority: Medium"],"steps":[{"number":1,"description":"Navigate to the Task Management module."}],"expectedResult":"Task is created successfully with the 255-character title."}]`
+      },
+      {
+        name: 'Email concatenation test',
+        input: `[{"title":"Boundary Condition: Maximum Allowed Email Length","area":"Registration","description":"Verify that the system accepts emails with maximum allowed length.","preconditions":["No existing user with the test email"],"testData":["email: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@example.com","password: Boundary1"],"steps":[{"number":1,"description":"Navigate to the registration page."}],"expectedResult":"Registration succeeds with maximum length email."}]`
+      },
+      {
+        name: 'Password repeat test',
+        input: `[{"title":"Boundary Condition: Password with Maximum Length","area":"Registration","description":"Test maximum password length.","preconditions":["System is ready"],"testData":["email: test@example.com","password: A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1"],"steps":[{"number":1,"description":"Enter test data."}],"expectedResult":"Password accepted."}]`
+      },
+      // Existing Gemini test cases
+      {
+        name: 'Special characters test',
+        input: `[{"title":"Test with Special Characters","area":"Task Management","description":"Test special characters handling","testData":["title: Task with special chars: !@#$%^&*()_+-=","description: Testing special chars"],"steps":[{"number":1,"description":"Enter special characters"}],"expectedResult":"Task created with special characters"}]`
+      },
+      {
+        name: 'Unescaped backslash test',
+        input: `[{"title":"Test with Unescaped Backslashes","area":"Input Validation","description":"Test backslash handling","testData":["path: C:\\\\Program Files\\\\App","regex: \\\\w+\\\\s+\\\\d+"],"steps":[{"number":1,"description":"Enter path with backslashes"}],"expectedResult":"Path accepted"}]`
+      },
+      {
+        name: 'Nested quotes test',
+        input: `[{"title":"Test with Nested Quotes","area":"Validation","description":"Test nested quote handling","testData":["input: \\"quoted text\\"","description: 'single quoted'"],"steps":[{"number":1,"description":"Enter quoted text"}],"expectedResult":"Text with quotes accepted"}]`
+      },
+      {
+        name: 'Backslash escaping test',
+        input: `[{"title":"Test with Backslashes","area":"Input Validation","description":"Test backslash handling","testData":["path: C:\\\\Program Files\\\\App","regex: \\\\w+\\\\s+\\\\d+"],"steps":[{"number":1,"description":"Enter path with backslashes"}],"expectedResult":"Path accepted with proper escaping"}]`
+      },
+      // New test case for complex string literals
+      {
+        name: 'Complex string literals test',
+        input: `[{"title":"Test with Complex Characters","area":"String Handling","description":"Test complex string literal handling","testData":["path: C:\\\\Complex\\\\Path\\\\Here","input: Task with !@#$%^&*()_+-=\\u0060~[]\\\\{}|;':\\",./<>? chars","regex: \\\\w+\\\\s+\\\\d+"],"steps":[{"number":1,"description":"Enter 'C:\\\\Program Files\\\\App' in path"}],"expectedResult":"All characters handled correctly"}]`
+      }
+    ];
+
+    let allTestsPassed = true;
+    
+    for (const testCase of testCases) {
+      try {
+        // Try to parse the input directly first to ensure it's valid JSON
+        const initialParsed = JSON.parse(testCase.input);
+        
+        // Extract JSON and clean it
+        const jsonMatch = testCase.input.match(/\[\s*{[\s\S]*}\s*\]/);
+        const jsonContent = jsonMatch ? jsonMatch[0] : testCase.input;
+        
+        // Apply cleaning rules including the new string literal cleaning
+        const cleanedContent = this.cleanJsonString(
+          jsonContent
+            .replace(/^\uFEFF/, '') // Remove BOM
+            .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+            .replace(/\r?\n/g, ' ') // Normalize line endings
+            .replace(/\s+/g, ' ') // Normalize whitespace
+            .trim()
+        );
+
+        // Try to parse the cleaned content
+        const parsed = JSON.parse(cleanedContent);
+        
+        this.log(`Test successful - ${testCase.name}`, {
+          original: testCase.input,
+          cleaned: cleanedContent,
+          parsed: parsed[0].testData
+        });
+      } catch (error: any) {
+        this.log(`Test failed - ${testCase.name}`, {
+          error: error.message,
+          problematicPart: testCase.input.substring(
+            Math.max(0, error.message.indexOf('position') - 50),
+            Math.min(testCase.input.length, error.message.indexOf('position') + 50)
+          )
+        });
+        allTestsPassed = false;
+      }
+    }
+
+    if (allTestsPassed) {
+      this.log('All JSON cleaning tests passed successfully');
+    } else {
+      this.log('Some JSON cleaning tests failed');
+    }
+    
+    return allTestsPassed;
   }
 
   private async fileToGenerativePart(file: File): Promise<Part> {
@@ -279,7 +390,14 @@ Return ONLY a JSON array containing test cases. Each test case should have this 
             .replace(/\n/g, ' ')  // Remove newlines
             .replace(/\s+/g, ' ') // Normalize spaces
             .replace(/,\s*]/g, ']') // Remove trailing commas
-            .replace(/,\s*}/g, '}'); // Remove trailing commas in objects
+            .replace(/,\s*}/g, '}') // Remove trailing commas in objects
+            // Escape special characters in strings
+            .replace(/(?<!\\)(["\[\]{}|;':<>])/g, '\\$1')
+            // Fix escaped quotes and backslashes
+            .replace(/\\+"/g, '\\"')
+            .replace(/\\+\\/g, '\\\\')
+            // Clean up any double-escaped characters
+            .replace(/\\\\(["\\/bfnrt])/g, '\\$1');
           
           try {
             parsedTestCases = JSON.parse(cleanedContent);
