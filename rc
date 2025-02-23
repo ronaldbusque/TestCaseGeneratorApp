@@ -1,0 +1,5 @@
+[33mcommit 795209e1d780cb306f9f1946e752a636b71325d0[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mtemp-branch[m[33m)[m
+Author: kenshin007 <ronald.busque@yahoo.com>
+Date:   Sun Feb 23 11:35:51 2025 +1300
+
+    fix: update mammoth library usage and image detection
