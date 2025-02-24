@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ModelSelector } from '@/components/ModelSelector';
 import { FileUpload } from '../components/FileUpload';
 import { RequirementsInput } from '@/components/RequirementsInput';
@@ -43,6 +43,13 @@ export default function Home() {
   const [pendingModelChange, setPendingModelChange] = useState<AIModel | null>(null);
   const [confirmationType, setConfirmationType] = useState<'new_session' | 'model_change' | null>(null);
   const [shouldResetFiles, setShouldResetFiles] = useState(false);
+
+  // Add effect to clear fileContent when no files are present
+  useEffect(() => {
+    if (uploadedFiles.length === 0) {
+      setFileContent('');
+    }
+  }, [uploadedFiles]);
 
   // Helper to get current test cases based on mode
   const getCurrentTestCases = () => testCaseMode === 'high-level' ? highLevelTestCases : detailedTestCases;
@@ -112,8 +119,16 @@ export default function Home() {
 
   const handleFilesSelect = async (files: File[]) => {
     setShouldResetFiles(false); // Reset the flag when new files are selected
+    setUploadedFiles(files); // Update uploadedFiles first
+    
+    // If no files, clear content and return early
+    if (files.length === 0) {
+      setFileContent('');
+      setGenerationStep('idle');
+      return;
+    }
+
     try {
-      setUploadedFiles(files);
       setGenerationStep('analyzing');
       
       const extractedRequirements = await Promise.all(
@@ -289,7 +304,7 @@ export default function Home() {
             ...tc,
             id: newIds[index],
             area: originalScenario?.area || tc.area || 'General',
-            originalScenarioId: originalScenario?.id || ''
+            originalScenarioId: originalScenario?.id
           };
         });
 
