@@ -54,7 +54,7 @@ export const ModelSelector = ({ onModelSelect, selectedModel = 'Gemini' }: Model
               key={model.id}
               onClick={() => onModelSelect(model.id)}
               className={cn(
-                'relative px-4 py-2.5 rounded-xl transition-all duration-300 flex items-center gap-2 group',
+                'relative w-[180px] px-4 py-2.5 rounded-xl transition-all duration-300',
                 'focus:outline-none',
                 model.isAvailable
                   ? selectedModel === model.id
@@ -74,8 +74,10 @@ export const ModelSelector = ({ onModelSelect, selectedModel = 'Gemini' }: Model
               disabled={!model.isAvailable}
               title={model.description}
             >
-              {model.logo}
-              <span>{model.name}</span>
+              <div className="flex items-center justify-center gap-2 w-full">
+                {model.logo}
+                <span className="whitespace-nowrap">{model.name}</span>
+              </div>
               {selectedModel === model.id && (
                 <div className="absolute inset-0 rounded-xl bg-blue-400/10 animate-pulse -z-10"></div>
               )}

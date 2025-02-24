@@ -131,6 +131,15 @@ export default function Home() {
     try {
       setGenerationStep('analyzing');
       
+      // Skip file parsing for Gemini model as it handles files natively
+      if (selectedModel === 'Gemini') {
+        // For Gemini, just show a list of uploaded files
+        const fileList = files.map(file => file.name).join('\n');
+        setFileContent(`Uploaded Files:\n${fileList}`);
+        setGenerationStep('idle');
+        return;
+      }
+
       const extractedRequirements = await Promise.all(
         files.map(file => parseDocument(file))
       );
@@ -389,6 +398,7 @@ export default function Home() {
                     <TestPriorityToggle
                       priorityMode={testPriorityMode}
                       onPriorityChange={setTestPriorityMode}
+                      testCaseMode={testCaseMode}
                     />
                   </div>
                 </div>

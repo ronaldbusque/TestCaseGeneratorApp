@@ -1,21 +1,25 @@
 'use client';
 
 import { Switch } from '@headlessui/react';
-import { TestPriorityMode } from '@/lib/types';
+import { TestPriorityMode, TestCaseMode } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { InformationCircleIcon } from '@heroicons/react/24/outline';
 
 interface TestPriorityToggleProps {
   priorityMode: TestPriorityMode;
   onPriorityChange: (mode: TestPriorityMode) => void;
+  testCaseMode: TestCaseMode;
   className?: string;
 }
 
 export function TestPriorityToggle({
   priorityMode,
   onPriorityChange,
+  testCaseMode,
   className
 }: TestPriorityToggleProps) {
   const isComprehensive = priorityMode === 'comprehensive';
+  const isDetailedMode = testCaseMode === 'detailed';
 
   return (
     <div className={cn('space-y-3', className)}>
@@ -44,12 +48,22 @@ export function TestPriorityToggle({
             </span>
           </div>
         </div>
-        <p className="mt-2 text-xs text-blue-300 pl-14">
-          {isComprehensive 
-            ? 'Generate extensive test cases covering edge cases and all scenarios'
-            : 'Focus on essential functionality and critical path testing'
-          }
-        </p>
+        <div className="mt-2 space-y-2">
+          <p className="text-xs text-blue-300 pl-14">
+            {isComprehensive 
+              ? 'Generate extensive test cases covering edge cases and all scenarios'
+              : 'Focus on essential functionality and critical path testing'
+            }
+          </p>
+          {isDetailedMode && isComprehensive && (
+            <div className="flex items-start gap-2 p-2 rounded bg-yellow-500/10 border border-yellow-500/20">
+              <InformationCircleIcon className="h-4 w-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-yellow-200">
+                Note: When using detailed test generation, comprehensive coverage may be limited by token constraints. Consider using core functionality mode for more efficient token usage.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

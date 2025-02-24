@@ -1,7 +1,7 @@
 import mammoth from 'mammoth';
-import * as pdfjs from 'pdfjs-dist';
 import { HtmlToTextOptions, convert } from 'html-to-text';
 import TurndownService from 'turndown';
+import { pdfjs, initPdfWorker } from './pdfWorker';
 
 interface ParsingResult {
   content: string;
@@ -93,6 +93,8 @@ export async function parseDocument(file: File, options: Partial<ParsingOptions>
 }
 
 async function parsePdfDocument(file: File, options: ParsingOptions): Promise<ParsingResult> {
+  await initPdfWorker();
+  
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
   const maxPages = pdf.numPages;

@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TestCaseEditForm } from './TestCaseEditForm';
 import ReactMarkdown from 'react-markdown';
-import type { Document, Paragraph, TextRun, HeadingLevel, Packer, ISectionOptions } from 'docx';
+import { Document, Paragraph, TextRun, HeadingLevel, Packer } from 'docx';
 import { Workbook } from 'exceljs';
 
 interface TestCaseListProps {
@@ -165,43 +165,89 @@ export function TestCaseList({
   const handleExportXLSX = async (testCases: TestCase[]) => {
     try {
       const workbook = new Workbook();
-      const worksheet = workbook.addWorksheet('Test Scenarios');
+      
+      if (mode === 'high-level') {
+        // High-level test cases worksheet
+        const worksheet = workbook.addWorksheet('Test Scenarios');
+        worksheet.columns = [
+          { header: 'ID', key: 'id', width: 10 },
+          { header: 'Title', key: 'title', width: 30 },
+          { header: 'Area', key: 'area', width: 15 },
+          { header: 'Scenario', key: 'scenario', width: 50 }
+        ];
 
-      // Define columns
-      worksheet.columns = [
-        { header: 'ID', key: 'id', width: 10 },
-        { header: 'Title', key: 'title', width: 30 },
-        { header: 'Area', key: 'area', width: 15 },
-        { header: 'Scenario', key: 'scenario', width: 50 }
-      ];
+        const scenarioData = testCases
+          .filter(isHighLevelTestCase)
+          .map(tc => ({
+            id: tc.id,
+            title: tc.title,
+            area: tc.area,
+            scenario: tc.scenario
+          }));
 
-      // Add data
-      const scenarioData = testCases
-        .filter(isHighLevelTestCase)
-        .map(tc => ({
-          id: tc.id,
-          title: tc.title,
-          area: tc.area,
-          scenario: tc.scenario
-        }));
+        worksheet.addRows(scenarioData);
 
-      worksheet.addRows(scenarioData);
+        // Style the header row
+        const headerRow = worksheet.getRow(1);
+        headerRow.font = { bold: true };
+        headerRow.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFE0E0E0' }
+        };
 
-      // Style the header row
-      const headerRow = worksheet.getRow(1);
-      headerRow.font = { bold: true };
-      headerRow.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
-      };
+        // Auto-fit rows
+        worksheet.eachRow((row) => {
+          row.alignment = { wrapText: true, vertical: 'top' };
+        });
+      } else {
+        // Detailed test cases worksheet
+        const worksheet = workbook.addWorksheet('Test Cases');
+        worksheet.columns = [
+          { header: 'ID', key: 'id', width: 10 },
+          { header: 'Title', key: 'title', width: 30 },
+          { header: 'Description', key: 'description', width: 50 },
+          { header: 'Preconditions', key: 'preconditions', width: 40 },
+          { header: 'Test Data', key: 'testData', width: 40 },
+          { header: 'Steps', key: 'steps', width: 60 },
+          { header: 'Expected Result', key: 'expectedResult', width: 50 }
+        ];
+
+        const detailedData = testCases
+          .filter((tc): tc is DetailedTestCase => !isHighLevelTestCase(tc))
+          .map(tc => ({
+            id: tc.id,
+            title: tc.title,
+            description: tc.description,
+            preconditions: tc.preconditions?.join('\n'),
+            testData: tc.testData?.join('\n'),
+            steps: tc.steps.map(s => `${s.number}. ${s.description}`).join('\n'),
+            expectedResult: tc.expectedResult
+          }));
+
+        worksheet.addRows(detailedData);
+
+        // Style the header row
+        const headerRow = worksheet.getRow(1);
+        headerRow.font = { bold: true };
+        headerRow.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFE0E0E0' }
+        };
+
+        // Auto-fit rows
+        worksheet.eachRow((row) => {
+          row.alignment = { wrapText: true, vertical: 'top' };
+        });
+      }
 
       // Generate blob and download
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = 'test-scenarios.xlsx';
+      link.download = mode === 'high-level' ? 'test-scenarios.xlsx' : 'test-cases.xlsx';
       link.click();
     } catch (error) {
       console.error('Failed to export XLSX:', error);
@@ -211,60 +257,146 @@ export function TestCaseList({
 
   const handleExportDOCX = async (testCases: TestCase[]) => {
     try {
-      const { Document, Paragraph, TextRun, HeadingLevel, Packer } = await import('docx');
-      
-      const children = testCases
-        .filter(isHighLevelTestCase)
-        .reduce((acc: ISectionOptions['children'], tc) => {
-          return [
-            ...acc,
-            new Paragraph({
-              text: tc.title,
-              heading: HeadingLevel.HEADING_2,
-              spacing: { after: 200 }
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({ text: "ID: ", bold: true }),
-                new TextRun(tc.id),
-              ],
-              spacing: { after: 200 }
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({ text: "Area: ", bold: true }),
-                new TextRun(tc.area),
-              ],
-              spacing: { after: 200 }
-            }),
-            new Paragraph({
-              children: [
-                new TextRun({ text: "Scenario: ", bold: true }),
-                new TextRun(tc.scenario),
-              ],
-              spacing: { after: 400 }
-            }),
-          ];
-        }, []);
+      let children: Paragraph[] = [
+        new Paragraph({
+          text: mode === 'high-level' ? "Test Scenarios" : "Test Cases",
+          heading: HeadingLevel.HEADING_1,
+          spacing: { after: 400 }
+        })
+      ];
+
+      if (mode === 'high-level') {
+        // High-level test cases
+        const scenarioChildren = testCases
+          .filter(isHighLevelTestCase)
+          .reduce((acc: Paragraph[], tc) => {
+            return [
+              ...acc,
+              new Paragraph({
+                text: tc.title,
+                heading: HeadingLevel.HEADING_2,
+                spacing: { after: 200 }
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({ text: "ID: ", bold: true }),
+                  new TextRun(tc.id),
+                ],
+                spacing: { after: 200 }
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({ text: "Area: ", bold: true }),
+                  new TextRun(tc.area),
+                ],
+                spacing: { after: 200 }
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({ text: "Scenario: ", bold: true }),
+                  new TextRun(tc.scenario),
+                ],
+                spacing: { after: 400 }
+              }),
+            ];
+          }, []);
+        children = [...children, ...scenarioChildren];
+      } else {
+        // Detailed test cases
+        const detailedChildren = testCases
+          .filter((tc): tc is DetailedTestCase => !isHighLevelTestCase(tc))
+          .reduce((acc: Paragraph[], tc) => {
+            const sections: Paragraph[] = [
+              new Paragraph({
+                text: tc.title,
+                heading: HeadingLevel.HEADING_2,
+                spacing: { after: 200 }
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({ text: "ID: ", bold: true }),
+                  new TextRun(tc.id),
+                ],
+                spacing: { after: 200 }
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({ text: "Description\n", bold: true }),
+                  new TextRun(tc.description),
+                ],
+                spacing: { after: 200 }
+              })
+            ];
+
+            if (tc.preconditions?.length) {
+              sections.push(
+                new Paragraph({
+                  text: "Preconditions",
+                  heading: HeadingLevel.HEADING_3,
+                  spacing: { after: 200 }
+                }),
+                ...tc.preconditions.map(p => 
+                  new Paragraph({
+                    text: `• ${p}`,
+                    spacing: { after: 100 }
+                  })
+                )
+              );
+            }
+
+            if (tc.testData?.length) {
+              sections.push(
+                new Paragraph({
+                  text: "Test Data",
+                  heading: HeadingLevel.HEADING_3,
+                  spacing: { after: 200 }
+                }),
+                ...tc.testData.map(d => 
+                  new Paragraph({
+                    text: `• ${d}`,
+                    spacing: { after: 100 }
+                  })
+                )
+              );
+            }
+
+            sections.push(
+              new Paragraph({
+                text: "Steps",
+                heading: HeadingLevel.HEADING_3,
+                spacing: { after: 200 }
+              }),
+              ...tc.steps.map(s => 
+                new Paragraph({
+                  text: `${s.number}. ${s.description}`,
+                  spacing: { after: 100 }
+                })
+              ),
+              new Paragraph({
+                children: [
+                  new TextRun({ text: "Expected Result\n", bold: true }),
+                  new TextRun(tc.expectedResult),
+                ],
+                spacing: { after: 400 }
+              })
+            );
+
+            return [...acc, ...sections];
+          }, []);
+        children = [...children, ...detailedChildren];
+      }
 
       const doc = new Document({
         sections: [{
           properties: {},
-          children: [
-            new Paragraph({
-              text: "Test Scenarios",
-              heading: HeadingLevel.HEADING_1,
-              spacing: { after: 400 }
-            }),
-            ...children
-          ],
+          children
         }],
       });
 
       const blob = await Packer.toBlob(doc);
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = 'test-scenarios.docx';
+      link.download = mode === 'high-level' ? 'test-scenarios.docx' : 'test-cases.docx';
       link.click();
     } catch (error) {
       console.error('Failed to export DOCX:', error);
@@ -294,39 +426,42 @@ export function TestCaseList({
               )}
             </div>
             <div className="flex items-center gap-3">
-              {mode === 'high-level' && (
-                <div className="relative group">
-                  <Button
-                    variant="outline"
-                    className="group bg-white/80 backdrop-blur-sm hover:bg-white transition-all duration-200"
-                  >
-                    <DocumentArrowDownIcon className="h-4 w-4 mr-2" />
-                    Export
-                  </Button>
-                  <div className="absolute right-0 mt-1 w-48 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 border border-gray-100">
-                    <div className="py-1">
+              <div className="relative group">
+                <Button
+                  variant="outline"
+                  className="group bg-white/80 backdrop-blur-sm hover:bg-white transition-all duration-200"
+                >
+                  <DocumentArrowDownIcon className="h-4 w-4 mr-2" />
+                  Export
+                </Button>
+                <div className="absolute right-0 mt-1 w-48 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 border border-gray-100">
+                  <div className="py-1">
+                    {mode === 'high-level' && (
                       <button
                         onClick={() => handleExportCSV(testCases)}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors first:rounded-t-xl last:rounded-b-xl"
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors first:rounded-t-xl"
                       >
                         Export as CSV
                       </button>
-                      <button
-                        onClick={() => handleExportXLSX(testCases)}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                      >
-                        Export as Excel
-                      </button>
-                      <button
-                        onClick={() => handleExportDOCX(testCases)}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                      >
-                        Export as Word
-                      </button>
-                    </div>
+                    )}
+                    <button
+                      onClick={() => handleExportXLSX(testCases)}
+                      className={cn(
+                        "block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors",
+                        mode === 'detailed' ? "first:rounded-t-xl" : ""
+                      )}
+                    >
+                      Export as Excel
+                    </button>
+                    <button
+                      onClick={() => handleExportDOCX(testCases)}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors last:rounded-b-xl"
+                    >
+                      Export as Word
+                    </button>
                   </div>
                 </div>
-              )}
+              </div>
               {mode === 'high-level' && onConvertSelected && (
                 <Button
                   onClick={onConvertSelected}
