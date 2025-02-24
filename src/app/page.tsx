@@ -18,6 +18,7 @@ import { TestCaseModeToggle } from '@/components/TestCaseModeToggle';
 import { NetworkBackground } from '@/components/NetworkBackground';
 import { TestPriorityToggle } from '@/components/TestPriorityToggle';
 import { DocumentArrowDownIcon } from '@heroicons/react/24/outline';
+import { motion } from 'framer-motion';
 
 const isHighLevelTestCase = (testCase: TestCase): testCase is HighLevelTestCase => {
   return 'scenario' in testCase && 'area' in testCase;
@@ -36,7 +37,15 @@ export default function Home() {
   const [convertedScenarioIds, setConvertedScenarioIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generationStep, setGenerationStep] = useState<'idle' | 'analyzing' | 'generating' | 'complete'>('idle');
+  const [generationStep, setGenerationStep] = useState<
+    'idle' | 
+    'preprocessing' | 
+    'analyzing' | 
+    'parsing' | 
+    'generating' | 
+    'formatting' |
+    'complete'
+  >('idle');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [isFileContentVisible, setIsFileContentVisible] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
@@ -178,20 +187,34 @@ export default function Home() {
     try {
       setError(null);
       setIsGenerating(true);
-      setGenerationStep('generating');
-
+      
       // Only clear converted states when generating new high-level test cases
       if (testCaseMode === 'high-level') {
         setConvertedTestCases([]);
         setConvertedScenarioIds(new Set());
       }
 
+      // Start preprocessing
+      setGenerationStep('preprocessing');
+      await new Promise(resolve => setTimeout(resolve, 800)); // Add slight delay for visual feedback
+
       // Combine file content with manual requirements
       const combinedRequirements = [fileContent, manualRequirements]
         .filter(Boolean)
         .join('\n\n');
 
+      // Analyzing phase
+      setGenerationStep('analyzing');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Parsing phase
+      setGenerationStep('parsing');
+      await new Promise(resolve => setTimeout(resolve, 800));
+
       const aiService = createAIService(selectedModel);
+      
+      // Generation phase
+      setGenerationStep('generating');
       const result = await aiService.generateTestCases({
         requirements: combinedRequirements,
         files: uploadedFiles,
@@ -202,6 +225,10 @@ export default function Home() {
       if (result.error) {
         throw new Error(result.error);
       }
+
+      // Formatting phase
+      setGenerationStep('formatting');
+      await new Promise(resolve => setTimeout(resolve, 600));
 
       setCurrentTestCases(result.testCases);
       setGenerationStep('complete');
@@ -478,15 +505,15 @@ export default function Home() {
             )}
 
             <AnimatePresence>
-              {generationStep === 'analyzing' && (
-                <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-8 border border-white/20">
-                  <LoadingAnimation message="Analyzing uploaded files..." />
-                </div>
-              )}
-              {generationStep === 'generating' && (
-                <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-8 border border-white/20">
-                  <LoadingAnimation message="Generating test cases..." />
-                </div>
+              {generationStep !== 'idle' && generationStep !== 'complete' && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-8 border border-white/20"
+                >
+                  <LoadingAnimation message={`${generationStep.charAt(0).toUpperCase() + generationStep.slice(1)}...`} />
+                </motion.div>
               )}
             </AnimatePresence>
 
