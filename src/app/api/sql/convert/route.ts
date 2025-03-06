@@ -7,6 +7,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { query, sourceDialect, targetDialect } = body as SQLConversionRequest;
     
+    console.log("=== SQL CONVERSION API REQUEST ===");
+    console.log({ query, sourceDialect, targetDialect });
+    console.log("=================================");
+    
     if (!query || !sourceDialect || !targetDialect) {
       return NextResponse.json(
         { error: 'Missing required fields: query, sourceDialect, and targetDialect' },
@@ -16,6 +20,10 @@ export async function POST(request: NextRequest) {
     
     const sqlService = new SQLAIService();
     const result = await sqlService.convertSQLQuery({ query, sourceDialect, targetDialect });
+    
+    console.log("=== SQL CONVERSION API RESPONSE ===");
+    console.log(JSON.stringify(result, null, 2));
+    console.log("==================================");
     
     return NextResponse.json(result);
   } catch (error) {

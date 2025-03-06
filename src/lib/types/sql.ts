@@ -16,6 +16,7 @@ export interface SQLGenerationRequest {
 export interface SQLValidationRequest {
   query: string;
   dialect: SQLDialect;
+  schema?: string; // Optional database schema definition
 }
 
 export interface SQLConversionRequest {
@@ -35,6 +36,7 @@ export interface SQLResponse {
     cleanedContent?: string;
     parseError?: string;
     extractionError?: string;
+    cleaningError?: string;
   };
 }
 
@@ -44,7 +46,7 @@ export interface SQLValidationResponse extends SQLResponse {
 }
 
 export interface SQLIssue {
-  type: 'syntax' | 'performance' | 'security' | 'style' | 'other';
+  type: 'syntax' | 'performance' | 'security' | 'style' | 'schema' | 'other';
   description: string;
   location?: string; // Line/column information
   severity: 'info' | 'warning' | 'error';

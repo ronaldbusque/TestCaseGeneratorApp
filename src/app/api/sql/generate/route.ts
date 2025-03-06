@@ -7,6 +7,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { description, targetDialect, schema } = body as SQLGenerationRequest;
     
+    console.log("=== SQL GENERATION API REQUEST ===");
+    console.log({ description, targetDialect, schema: schema ? `${schema.substring(0, 100)}...` : undefined });
+    console.log("==================================");
+    
     if (!description || !targetDialect) {
       return NextResponse.json(
         { error: 'Missing required fields: description and targetDialect' },
@@ -22,6 +26,10 @@ export async function POST(request: NextRequest) {
     
     const sqlService = new SQLAIService();
     const result = await sqlService.generateSQLQuery({ description, targetDialect, schema });
+    
+    console.log("=== SQL GENERATION API RESPONSE ===");
+    console.log(JSON.stringify(result, null, 2));
+    console.log("===================================");
     
     if (result.error) {
       console.warn(`SQL generation encountered an issue: ${result.error}`);

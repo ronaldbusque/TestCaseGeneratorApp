@@ -5,7 +5,11 @@ import { SQLValidationRequest } from '@/lib/types';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { query, dialect } = body as SQLValidationRequest;
+    const { query, dialect, schema } = body as SQLValidationRequest;
+    
+    console.log("=== SQL VALIDATION API REQUEST ===");
+    console.log({ query, dialect, schema: schema ? `${schema.substring(0, 100)}...` : undefined });
+    console.log("=================================");
     
     if (!query || !dialect) {
       return NextResponse.json(
@@ -15,7 +19,11 @@ export async function POST(request: NextRequest) {
     }
     
     const sqlService = new SQLAIService();
-    const result = await sqlService.validateSQLQuery({ query, dialect });
+    const result = await sqlService.validateSQLQuery({ query, dialect, schema });
+    
+    console.log("=== SQL VALIDATION API RESPONSE ===");
+    console.log(JSON.stringify(result, null, 2));
+    console.log("==================================");
     
     return NextResponse.json(result);
   } catch (error) {

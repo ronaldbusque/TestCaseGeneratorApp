@@ -699,7 +699,11 @@ export default function SQLToolPage() {
           break;
         case 'validate':
           endpoint = '/api/sql/validate';
-          payload = { query, dialect: targetDialect };
+          payload = { 
+            query, 
+            dialect: targetDialect,
+            schema: showSchema ? schema : undefined
+          };
           break;
         case 'convert':
           endpoint = '/api/sql/convert';
@@ -738,6 +742,18 @@ export default function SQLToolPage() {
     setSchema('');
   };
   
+  // Handle mode change
+  const handleModeChange = (newMode: SQLToolMode) => {
+    setMode(newMode);
+    setResult(null);
+    setError(null);
+    
+    // Hide schema input when switching to convert mode
+    if (newMode === 'convert') {
+      setShowSchema(false);
+    }
+  };
+  
   return (
     <main className="min-h-screen bg-slate-900 text-white">
       <NetworkBackground />
@@ -748,9 +764,9 @@ export default function SQLToolPage() {
         
         {/* Tool Tabs */}
         <div className="flex space-x-2 mb-6">
-          <SQLToolTab mode="generate" activeMode={mode} setMode={setMode} />
-          <SQLToolTab mode="validate" activeMode={mode} setMode={setMode} />
-          <SQLToolTab mode="convert" activeMode={mode} setMode={setMode} />
+          <SQLToolTab mode="generate" activeMode={mode} setMode={handleModeChange} />
+          <SQLToolTab mode="validate" activeMode={mode} setMode={handleModeChange} />
+          <SQLToolTab mode="convert" activeMode={mode} setMode={handleModeChange} />
         </div>
         
         {/* Tool Content */}
@@ -814,14 +830,16 @@ export default function SQLToolPage() {
               </>
             )}
             
-            {/* Schema Input */}
-            <SchemaInput
-              schema={schema}
-              setSchema={setSchema}
-              showSchema={showSchema}
-              setShowSchema={setShowSchema}
-              dialect={targetDialect}
-            />
+            {/* Schema Input - only show for generate and validate modes */}
+            {mode !== 'convert' && (
+              <SchemaInput
+                schema={schema}
+                setSchema={setSchema}
+                showSchema={showSchema}
+                setShowSchema={setShowSchema}
+                dialect={targetDialect}
+              />
+            )}
             
             {/* Action Buttons */}
             <div className="flex space-x-4">
