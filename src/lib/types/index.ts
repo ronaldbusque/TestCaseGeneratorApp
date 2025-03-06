@@ -1,3 +1,6 @@
+// Export SQL types
+export * from './sql';
+
 export type AIModel = 'O1-Mini' | 'Gemini';
 
 export type ModelType = 
