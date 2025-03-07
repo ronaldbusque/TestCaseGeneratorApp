@@ -134,13 +134,15 @@ const SchemaInput = ({
   setSchema,
   showSchema,
   setShowSchema,
-  dialect
+  dialect,
+  mode
 }: {
   schema: string;
   setSchema: (value: string) => void;
   showSchema: boolean;
   setShowSchema: (value: boolean) => void;
   dialect: SQLDialect;
+  mode: SQLToolMode;
 }) => {
   const [isExtractionDialogOpen, setIsExtractionDialogOpen] = useState(false);
   const [schemaType, setSchemaType] = useState<'sql' | 'json'>('sql');
@@ -180,94 +182,104 @@ const SchemaInput = ({
     detectSchemaType(value);
   };
 
+  // Get the appropriate usage message based on the current mode
+  const getSchemaUsageMessage = () => {
+    switch (mode) {
+      case 'generate':
+        return 'The AI will generate SQL queries that work with this schema.';
+      case 'validate':
+        return 'The AI will validate your SQL query against this schema.';
+      case 'convert':
+        return 'The schema is optional but can help with accurate SQL dialect conversion.';
+      default:
+        return 'Provide your database schema for more accurate results.';
+    }
+  };
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => setShowSchema(!showSchema)}
-          className="flex items-center text-sm text-blue-400 hover:text-blue-300"
-        >
-          <DocumentTextIcon className="h-4 w-4 mr-1" />
-          {showSchema ? 'Hide Schema' : 'Show Schema'}
-        </button>
+        <div className="flex items-center">
+          <h3 className="text-sm font-medium text-blue-100">Database Schema <span className="text-blue-300/70">(Optional)</span></h3>
+          <div className="ml-2 text-xs text-blue-300/70 italic">
+            {getSchemaUsageMessage()}
+          </div>
+        </div>
         
-        {showSchema && (
+        <div className="flex space-x-2">
+          <button
+            type="button"
+            onClick={() => setIsExtractionDialogOpen(true)}
+            className="text-sm text-blue-400 hover:text-blue-300 flex items-center"
+          >
+            <InformationCircleIcon className="h-4 w-4 mr-1" />
+            Get Schema from Database
+          </button>
+          
+          <label className="text-sm text-blue-400 hover:text-blue-300 flex items-center cursor-pointer">
+            <DocumentTextIcon className="h-4 w-4 mr-1" />
+            Upload Schema File
+            <input
+              type="file"
+              accept=".sql,.json,.txt"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+          </label>
+        </div>
+      </div>
+      
+      <div className="space-y-2">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center">
+            <label className="text-sm font-medium text-blue-100">
+              Format: {schemaType === 'json' ? 'JSON' : 'SQL DDL'}
+            </label>
+          </div>
           <div className="flex space-x-2">
             <button
               type="button"
-              onClick={() => setIsExtractionDialogOpen(true)}
-              className="text-sm text-blue-400 hover:text-blue-300 flex items-center"
+              className={`text-xs px-2 py-1 rounded-md ${
+                schemaType === 'sql' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-white/5 text-blue-100 hover:bg-white/10 border border-white/10'
+              }`}
+              onClick={() => setSchemaType('sql')}
             >
-              <InformationCircleIcon className="h-4 w-4 mr-1" />
-              Get Schema from Database
+              SQL
             </button>
-            
-            <label className="text-sm text-blue-400 hover:text-blue-300 flex items-center cursor-pointer">
-              <DocumentTextIcon className="h-4 w-4 mr-1" />
-              Upload Schema File
-              <input
-                type="file"
-                accept=".sql,.json,.txt"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-            </label>
+            <button
+              type="button"
+              className={`text-xs px-2 py-1 rounded-md ${
+                schemaType === 'json' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-white/5 text-blue-100 hover:bg-white/10 border border-white/10'
+              }`}
+              onClick={() => setSchemaType('json')}
+            >
+              JSON
+            </button>
           </div>
-        )}
-      </div>
-      
-      {showSchema && (
-        <div className="space-y-2">
-          <div className="flex justify-between items-center">
-            <label className="text-sm font-medium text-blue-100">
-              Database Schema ({schemaType === 'json' ? 'JSON Format' : 'SQL DDL Format'})
-            </label>
-            <div className="flex space-x-2">
-              <button
-                type="button"
-                className={`text-xs px-2 py-1 rounded-md ${
-                  schemaType === 'sql' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-white/5 text-blue-100 hover:bg-white/10 border border-white/10'
-                }`}
-                onClick={() => setSchemaType('sql')}
-              >
-                SQL
-              </button>
-              <button
-                type="button"
-                className={`text-xs px-2 py-1 rounded-md ${
-                  schemaType === 'json' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-white/5 text-blue-100 hover:bg-white/10 border border-white/10'
-                }`}
-                onClick={() => setSchemaType('json')}
-              >
-                JSON
-              </button>
-            </div>
-          </div>
-          
-          <textarea
-            value={schema}
-            onChange={(e) => handleSchemaChange(e.target.value)}
-            placeholder={
-              schemaType === 'json'
-                ? '[\n  {\n    "Table": "users",\n    "Column": "id",\n    "Type": "int"\n  },\n  ...\n]'
-                : 'CREATE TABLE users (\n  id INT PRIMARY KEY,\n  name VARCHAR(255),\n  email VARCHAR(255)\n);\n\nCREATE TABLE orders (\n  id INT PRIMARY KEY,\n  user_id INT,\n  FOREIGN KEY (user_id) REFERENCES users(id)\n);'
-            }
-            className="w-full h-40 bg-slate-900/80 border border-white/10 text-blue-50 rounded-xl px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm placeholder:text-blue-200/30"
-          />
-          
-          <p className="text-xs text-blue-200">
-            {schemaType === 'json'
-              ? 'Provide your database schema in JSON format with Table, Column, and Type properties.'
-              : 'Provide your database schema as SQL DDL statements (CREATE TABLE, etc.).'
-            }
-          </p>
         </div>
-      )}
+        
+        <textarea
+          value={schema}
+          onChange={(e) => handleSchemaChange(e.target.value)}
+          placeholder={
+            schemaType === 'json'
+              ? '[\n  {\n    "Table": "users",\n    "Column": "id",\n    "Type": "int"\n  },\n  ...\n]'
+              : 'CREATE TABLE users (\n  id INT PRIMARY KEY,\n  name VARCHAR(255),\n  email VARCHAR(255)\n);\n\nCREATE TABLE orders (\n  id INT PRIMARY KEY,\n  user_id INT,\n  FOREIGN KEY (user_id) REFERENCES users(id)\n);'
+          }
+          className="w-full h-40 bg-slate-900/80 border border-white/10 text-blue-50 rounded-xl px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm placeholder:text-blue-200/30"
+        />
+        
+        <p className="text-xs text-blue-200">
+          {schemaType === 'json'
+            ? 'Provide your database schema in JSON format with Table, Column, and Type properties.'
+            : 'Provide your database schema as SQL DDL statements (CREATE TABLE, etc.).'
+          }
+        </p>
+      </div>
       
       {isExtractionDialogOpen && (
         <SchemaExtractionDialog
@@ -841,44 +853,6 @@ export default function SQLToolPage() {
     }
   };
   
-  // Reset form for current mode
-  const handleReset = () => {
-    switch (mode) {
-      case 'generate':
-        setGenerateState({
-          description: '',
-          targetDialect: 'MySQL',
-          showSchema: false,
-          schema: '',
-          result: null,
-          error: null,
-          isLoading: false
-        });
-        break;
-      case 'validate':
-        setValidateState({
-          query: '',
-          targetDialect: 'MySQL',
-          showSchema: false,
-          schema: '',
-          result: null,
-          error: null,
-          isLoading: false
-        });
-        break;
-      case 'convert':
-        setConvertState({
-          query: '',
-          sourceDialect: 'MySQL',
-          targetDialect: 'PostgreSQL',
-          result: null,
-          error: null,
-          isLoading: false
-        });
-        break;
-    }
-  };
-  
   // Handle mode change - just change the mode, don't reset state
   const handleModeChange = (newMode: SQLToolMode) => {
     setMode(newMode);
@@ -965,19 +939,20 @@ export default function SQLToolPage() {
               </>
             )}
             
-            {/* Schema Input - only show for generate and validate modes */}
+            {/* Schema Input - show for generate and validate modes only */}
             {mode !== 'convert' && (
               <SchemaInput
                 schema={schema}
                 setSchema={(value) => updateCurrentState({ schema: value })}
-                showSchema={showSchema}
+                showSchema={true}
                 setShowSchema={(value) => updateCurrentState({ showSchema: value })}
                 dialect={targetDialect}
+                mode={mode}
               />
             )}
             
-            {/* Action Buttons */}
-            <div className="flex space-x-4">
+            {/* Action Button - removed reset button */}
+            <div className="flex">
               <Button
                 onClick={handleSubmit}
                 disabled={isLoading}
@@ -986,13 +961,6 @@ export default function SQLToolPage() {
                 isLoading={isLoading}
               >
                 {mode.charAt(0).toUpperCase() + mode.slice(1)}
-              </Button>
-              <Button
-                onClick={handleReset}
-                variant="secondary"
-                size="md"
-              >
-                <ArrowPathIcon className="h-5 w-5" />
               </Button>
             </div>
             
