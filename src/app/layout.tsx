@@ -1,12 +1,17 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
+import { Inter } from 'next/font/google';
+import { Metadata } from 'next';
+import ClientLayout from '@/components/ClientLayout';
 
 const inter = Inter({ subsets: ['latin'] });
 
+// Metadata needs to be exported from a server component, so we define it outside the client component
 export const metadata: Metadata = {
-  title: 'AI Test Case Generator',
-  description: 'Generate comprehensive test cases using AI models',
+  title: 'QualityForge AI - Testing Tools Suite',
+  description: 'AI-powered tools for test case generation, SQL assistance, and more',
+  icons: {
+    icon: '/favicon.svg',
+  },
 };
 
 export default function RootLayout({
@@ -19,7 +24,11 @@ export default function RootLayout({
       <head>
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
       </head>
-      <body className="bg-slate-900">{children}</body>
+      <body className={`${inter.className} min-h-screen bg-slate-900`}>
+        <ClientLayout>
+          {children}
+        </ClientLayout>
+      </body>
     </html>
   );
 }
