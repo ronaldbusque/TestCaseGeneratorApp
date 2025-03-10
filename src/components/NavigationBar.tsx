@@ -48,11 +48,17 @@ export const NavigationBar = () => {
                 <CommandLineIcon className="h-5 w-5 mr-1" />
                 SQL Assistant
               </Link>
-              <div className="border-transparent text-gray-400 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium cursor-not-allowed">
+              <Link
+                href="/data-generator"
+                className={`${
+                  pathname === '/data-generator' 
+                    ? 'border-blue-500 text-white' 
+                    : 'border-transparent text-gray-300 hover:border-blue-300 hover:text-blue-300'
+                } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
+              >
                 <TableCellsIcon className="h-5 w-5 mr-1" />
                 Test Data Generator
-                <span className="ml-2 bg-blue-600/30 text-blue-200 text-xs px-2 py-0.5 rounded-full">Coming Soon</span>
-              </div>
+              </Link>
             </div>
           </div>
         </div>

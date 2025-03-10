@@ -1,10 +1,12 @@
-# AI Test Case Generator
+# QualityForge AI Suite
 
-A modern web application that leverages AI models to automatically generate comprehensive test cases from requirements and various input file formats.
+A comprehensive suite of AI-powered tools for quality assurance and testing professionals, including test case generation, SQL assistance, and test data generation.
 
-![AI Test Case Generator](public/app-screenshot.png)
+![QualityForge AI](public/app-screenshot.png)
 
 ## 🌟 Features
+
+### 🧪 Test Case Generator
 
 - 🤖 **Multiple AI Models**
   - Google Gemini Integration
@@ -37,13 +39,59 @@ A modern web application that leverages AI models to automatically generate comp
     - Test data suggestions
     - Visual verification steps for images
 
-- 🎨 **Modern User Interface**
-  - Responsive design
-  - Drag-and-drop file upload
-  - Real-time processing feedback
-  - Smooth animations
-  - Interactive test case management
-  - Smart grouping by functional areas
+### 💾 SQL Assistant
+
+- 🔄 **Multiple SQL Functions**
+  - **Generate**: Create SQL queries from natural language descriptions
+  - **Validate**: Check SQL queries for errors and optimize them
+  - **Convert**: Transform SQL between different dialects
+
+- 🛢️ **Multi-Dialect Support**
+  - MySQL
+  - PostgreSQL
+  - SQL Server
+  - Oracle
+  - SQLite
+
+- 📊 **Schema Understanding**
+  - Import database schemas for context-aware assistance
+  - Support for both SQL DDL and JSON schema formats
+  - Smart schema type detection
+
+- 🔍 **Error Detection & Optimization**
+  - Detailed SQL validation with error highlighting
+  - Performance optimization suggestions
+  - Query improvement recommendations
+
+### 📊 Test Data Generator
+
+- 🧩 **Flexible Schema Definition**
+  - Visual schema builder with field editor
+  - 50+ data types across multiple categories
+  - Customizable field options and constraints
+
+- 🤖 **AI-Enhanced Data Generation**
+  - Contextual data enhancement through AI
+  - Custom rules for more realistic test data
+  - Correlated field values generation
+
+- 📤 **Multiple Export Formats**
+  - CSV with custom delimiters
+  - JSON with formatting options
+  - SQL insert statements
+  - Excel spreadsheets
+
+- 🔄 **Preview and Iteration**
+  - Live data preview before export
+  - Table and raw format views
+  - Quick field adjustments
+  - One-click regeneration
+
+- 🔧 **Advanced Options**
+  - Custom line endings
+  - BOM inclusion options
+  - Header control for CSV exports
+  - Customizable data ranges and patterns
 
 ## 🚀 Getting Started
 
@@ -53,14 +101,14 @@ A modern web application that leverages AI models to automatically generate comp
 - npm or yarn package manager
 - API keys for AI services:
   - Google Gemini API key
-  - OpenAI API key
+  - OpenAI API key (optional)
 
 ### Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/test-case-generator.git
-cd test-case-generator
+git clone https://github.com/yourusername/qualityforge-suite.git
+cd qualityforge-suite
 ```
 
 2. Install dependencies:
@@ -98,6 +146,8 @@ yarn dev
   - tesseract.js (OCR)
   - html-to-text
   - turndown (HTML to Markdown)
+- **Data Generation**:
+  - Faker.js
 - **AI Integration**:
   - @google/generative-ai
   - OpenAI API
@@ -105,6 +155,8 @@ yarn dev
 - **Testing**: Jest
 
 ## 📖 Usage Guide
+
+### Test Case Generator
 
 1. **Select AI Model**
    - Choose between Google Gemini or OpenAI O1-Mini
@@ -130,6 +182,55 @@ yarn dev
    - Regenerate test cases if needed
    - Switch between high-level and detailed views
 
+### SQL Assistant
+
+1. **Choose SQL Function**
+   - Generate: Create new SQL from descriptions
+   - Validate: Check existing SQL for issues
+   - Convert: Transform between SQL dialects
+
+2. **Configure Dialects**
+   - Select source dialect (for Convert mode)
+   - Select target dialect
+   - Import schema if available
+
+3. **Input Requirements**
+   - Enter natural language description (for Generate)
+   - Enter SQL query (for Validate and Convert)
+   - Optionally provide schema context
+
+4. **Process Request**
+   - Click action button
+   - Review SQL output
+   - Check error messages or optimizations
+   - Copy results to clipboard
+
+### Test Data Generator
+
+1. **Define Schema**
+   - Add fields with the "Add Another Field" button
+   - Select data types from the type dropdown
+   - Configure field options
+
+2. **Set Export Options**
+   - Choose export format (CSV, JSON, SQL, Excel)
+   - Configure row count and format-specific options
+   - Set line endings and other preferences
+
+3. **Preview Data**
+   - Click "Preview" to see a sample of generated data
+   - Toggle between table view and raw format view
+
+4. **Enhance with AI**
+   - Enter instructions for AI enhancement
+   - Apply customizations to make data more realistic
+   - Preview enhanced data
+
+5. **Generate & Export**
+   - Click "Generate Data" to create and download the file
+   - Files are generated in the specified format
+   - No local storage of generated data
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
@@ -146,8 +247,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- Google Gemini AI for advanced test case generation
+- Google Gemini AI for advanced LLM capabilities
 - OpenAI for the O1-Mini model integration
+- Faker.js for powerful test data generation
 - The open-source community for the amazing libraries used in this project
 
 ## 📞 Support
