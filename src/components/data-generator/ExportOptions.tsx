@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { EyeIcon } from '@heroicons/react/24/outline';
+import { EyeIcon, LightBulbIcon } from '@heroicons/react/24/outline';
 
 interface ExportConfig {
   rowCount: number;
@@ -7,6 +7,8 @@ interface ExportConfig {
   lineEnding: 'Unix (LF)' | 'Windows (CRLF)';
   includeHeader: boolean;
   includeBOM: boolean;
+  applyAIEnhancement: boolean;
+  enhancementPrompt: string;
 }
 
 interface ExportOptionsProps {
@@ -52,6 +54,20 @@ export function ExportOptions({ config, onConfigChange, onExport, onPreview }: E
     onConfigChange({
       ...config,
       includeBOM: !config.includeBOM
+    });
+  };
+  
+  const handleToggleAIEnhancement = () => {
+    onConfigChange({
+      ...config,
+      applyAIEnhancement: !config.applyAIEnhancement
+    });
+  };
+  
+  const handleEnhancementPromptChange = (prompt: string) => {
+    onConfigChange({
+      ...config,
+      enhancementPrompt: prompt
     });
   };
   
@@ -149,6 +165,38 @@ export function ExportOptions({ config, onConfigChange, onExport, onPreview }: E
             Generate Data
           </button>
         </div>
+      </div>
+      
+      {/* AI Enhancement Section */}
+      <div className="mt-4 border-t border-slate-700 pt-4">
+        <div className="flex items-center mb-2">
+          <label className="inline-flex items-center">
+            <input
+              type="checkbox"
+              checked={config.applyAIEnhancement}
+              onChange={handleToggleAIEnhancement}
+              className="form-checkbox h-4 w-4 text-purple-600 bg-slate-700 border-slate-600 rounded"
+            />
+            <span className="ml-2 text-white text-sm font-medium flex items-center">
+              <LightBulbIcon className="h-4 w-4 mr-1 text-yellow-400" />
+              Apply AI Enhancement
+            </span>
+          </label>
+        </div>
+        
+        {config.applyAIEnhancement && (
+          <div className="mt-2">
+            <p className="text-slate-300 text-xs mb-2">
+              Describe how you want to enhance or customize your test data. The AI will transform the data according to your instructions.
+            </p>
+            <textarea
+              value={config.enhancementPrompt}
+              onChange={(e) => handleEnhancementPromptChange(e.target.value)}
+              placeholder="Examples: 'Make customer names sound more like sci-fi characters', 'Ensure all generated dates fall within fiscal year 2023', 'Create correlated data between income and education fields'"
+              className="w-full h-20 bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            />
+          </div>
+        )}
       </div>
     </div>
   );
