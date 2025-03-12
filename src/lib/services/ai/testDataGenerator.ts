@@ -6,11 +6,23 @@ import {
   GeneratedTestData
 } from '@/lib/types/testData';
 import { fakerTypeDefinitions } from '@/lib/data/faker-type-definitions';
+import { faker } from '@faker-js/faker';
+
+// Define the FieldDefinition interface
+interface FieldDefinition {
+  id: string;
+  name: string;
+  type: string;
+  options: Record<string, any>;
+}
 
 export class TestDataGeneratorService extends GeminiService {
+  private faker = faker;
+  private fakerTypeDefinitions = fakerTypeDefinitions;
+  
   async generateTestData(request: TestDataGenerationRequest): Promise<TestDataGenerationResponse> {
     try {
-      const { types, configuration, count = 10, aiEnhancement } = request;
+      const { types, configuration, count = 100, aiEnhancement } = request;
       
       // Generate raw data using faker
       const rawData = this.generateRawFakerData(types, configuration, count);
@@ -232,7 +244,7 @@ export class TestDataGeneratorService extends GeminiService {
           return faker.company.catchPhrase();
           
         case "Character Sequence":
-          return faker.string.alphanumeric(config.length || 10);
+          return this.generateCharacterSequence(config);
           
         case "City":
           return faker.location.city();
@@ -270,22 +282,42 @@ export class TestDataGeneratorService extends GeminiService {
     }
   }
   
-  async generateTestDataFromFields(request: { fields: Array<{name: string, type: string, options: Record<string, any>}>, count: number }): Promise<TestDataGenerationResponse> {
+  private generateCharacterSequence(options: Record<string, any>): string {
+    const prefix = options.prefix || '';
+    const length = options.length || 5;
+    const startAt = options.startAt || 1;
+    const padZeros = options.padZeros || false;
+    
+    // Calculate the current value
+    const currentValue = startAt;
+    
+    // Pad with zeros if requested
+    let sequenceNumber = currentValue.toString();
+    if (padZeros) {
+      sequenceNumber = sequenceNumber.padStart(length, '0');
+    }
+    
+    return `${prefix}${sequenceNumber}`;
+  }
+  
+  async generateTestDataFromFields(request: { 
+    fields: Array<{name: string, type: string, options: Record<string, any>}>, 
+    count: number,
+    aiEnhancement?: string
+  }): Promise<TestDataGenerationResponse> {
     try {
-      const { fields, count = 10 } = request;
+      const { fields, count = 100, aiEnhancement } = request;
       
-      // Generate data for each field
-      const result: Record<string, any>[] = [];
+      // Convert fields to FieldDefinition format
+      const fieldDefinitions: FieldDefinition[] = fields.map(field => ({
+        id: Math.random().toString(36).substring(2, 9), // Generate a random ID
+        name: field.name,
+        type: field.type,
+        options: field.options
+      }));
       
-      for (let i = 0; i < count; i++) {
-        const record: Record<string, any> = {};
-        
-        for (const field of fields) {
-          record[field.name] = this.generateValueForField(field.type, field.options);
-        }
-        
-        result.push(record);
-      }
+      // Use the new generateData method with aiEnhancement
+      const result = await this.generateData(fieldDefinitions, count, aiEnhancement);
       
       return {
         data: result,
@@ -301,143 +333,81 @@ export class TestDataGeneratorService extends GeminiService {
     }
   }
   
-  private generateValueForField(type: string, options: Record<string, any>): any {
+  private generateValueForField(type: string, options: Record<string, any> = {}): any {
     try {
-      // Dynamically import faker
-      const { faker } = require('@faker-js/faker');
-      
-      // Special handling for specific types that might be causing issues
-      if (type === 'Car Model Year') {
-        // Create a custom implementation since modelYear may not exist
-        const minYear = options.min || 1950;
-        const maxYear = options.max || new Date().getFullYear();
-        return Math.floor(Math.random() * (maxYear - minYear + 1)) + minYear;
+      // Handle special cases first
+      if (type === 'Character Sequence') {
+        return this.generateCharacterSequence(options);
       }
       
-      if (type === 'Buzzword') {
-        // Direct access to faker method
-        return faker.hacker.phrase();
+      if (type === 'AI-Generated') {
+        // Return a placeholder for AI-generated fields
+        return '[AI: Generating...]';
       }
       
-      // Basic numeric types
-      if (type === 'Number') {
-        const min = options.min !== undefined ? Number(options.min) : 1;
-        const max = options.max !== undefined ? Number(options.max) : 1000;
-        const precision = options.precision !== undefined ? Number(options.precision) : 0;
-        
-        if (precision > 0) {
-          return Number((Math.random() * (max - min) + min).toFixed(precision));
-        } else {
-          return Math.floor(Math.random() * (max - min + 1)) + min;
-        }
+      // Special case handlers for specific types
+      switch (type) {
+        case 'Airport Code':
+          // Generate a random 3-letter airport code
+          return this.faker.string.alpha({ length: 3, casing: 'upper' });
+          
+        case 'Animal Scientific Name':
+          // Generate a scientific-sounding animal name
+          const genus = this.faker.science.chemicalElement().name;
+          const species = this.faker.animal.type().toLowerCase();
+          return `${genus} ${species}`;
+          
+        case 'App Bundle ID':
+          // Generate an app bundle ID
+          const company = options.company || this.faker.company.name().toLowerCase().replace(/\W/g, '');
+          const product = this.faker.commerce.product().toLowerCase().replace(/\W/g, '');
+          const format = options.format || 'com.{company}.{product}';
+          return format
+            .replace('{company}', company)
+            .replace('{product}', product);
       }
       
-      if (type === 'Decimal Number') {
-        const min = options.min !== undefined ? Number(options.min) : 0;
-        const max = options.max !== undefined ? Number(options.max) : 100;
-        const precision = options.precision !== undefined ? Number(options.precision) : 2;
-        
-        return Number((Math.random() * (max - min) + min).toFixed(precision));
+      // Get the faker method from the type definitions
+      const typeDefinition = this.fakerTypeDefinitions[type];
+      if (!typeDefinition) {
+        console.warn(`No faker type definition found for: ${type}`);
+        return `[Unknown type: ${type}]`;
       }
       
-      // Date and time types
-      if (type === 'Date' || type === 'Past Date' || type === 'Future Date' || type === 'Date of Birth') {
-        let date;
+      const fakerMethod = typeDefinition.fakerMethod;
+      if (!fakerMethod) {
+        console.warn(`No faker method defined for type: ${type}`);
+        return `[No method for: ${type}]`;
+      }
+      
+      // Handle other faker methods using a safer approach
+      try {
+        // Use a dynamic approach with error handling
+        const parts = fakerMethod.split('.');
+        let result: any;
         
-        if (type === 'Date') {
-          // Generate date between fromDate and toDate
-          const fromDate = options.fromDate ? new Date(options.fromDate) : new Date(2020, 0, 1);
-          const toDate = options.toDate ? new Date(options.toDate) : new Date(2023, 11, 31);
-          date = faker.date.between({ from: fromDate, to: toDate });
-        } else if (type === 'Past Date') {
-          // Days ago
-          const days = options.days ? Number(options.days) : 365;
-          date = faker.date.past({ days });
-        } else if (type === 'Future Date') {
-          // Days from now
-          const days = options.days ? Number(options.days) : 365;
-          date = faker.date.future({ days });
-        } else if (type === 'Date of Birth') {
-          // Generate within age range
-          const minAge = options.minAge ? Number(options.minAge) : 18;
-          const maxAge = options.maxAge ? Number(options.maxAge) : 65;
-          date = faker.date.birthdate({ min: minAge, max: maxAge, mode: 'age' });
-        }
-        
-        // Format the date
-        const format = options.format || 'ISO';
-        
-        if (format === 'ISO') {
-          return date.toISOString();
-        } else if (format === 'MM/DD/YYYY') {
-          return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}/${date.getFullYear()}`;
-        } else if (format === 'DD/MM/YYYY') {
-          return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
-        } else if (format === 'YYYY-MM-DD') {
-          return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+        if (parts.length === 2) {
+          const [namespace, method] = parts;
+          // @ts-ignore - We're handling errors if the property doesn't exist
+          result = this.faker[namespace]?.[method]?.(options);
+        } else if (parts.length === 3) {
+          const [namespace, subnamespace, method] = parts;
+          // @ts-ignore - We're handling errors if the property doesn't exist
+          result = this.faker[namespace]?.[subnamespace]?.[method]?.(options);
         }
         
-        return date.toISOString();
-      }
-      
-      // Time type
-      if (type === 'Time') {
-        const now = new Date();
-        const format = options.format || 'HH:MM:SS';
-        
-        if (format === 'HH:MM') {
-          return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-        } else if (format === 'HH:MM:SS') {
-          return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-        } else if (format === 'hh:MM AM/PM') {
-          const hours = now.getHours();
-          const amPm = hours >= 12 ? 'PM' : 'AM';
-          const hour12 = hours % 12 || 12;
-          return `${hour12}:${now.getMinutes().toString().padStart(2, '0')} ${amPm}`;
+        if (result !== undefined) {
+          return result;
         }
         
-        return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+        console.warn(`Could not execute faker method: ${fakerMethod}`);
+        return `[Method not found: ${fakerMethod}]`;
+      } catch (error) {
+        console.warn(`Error executing faker method ${fakerMethod}:`, error);
+        return `[Error: ${fakerMethod}]`;
       }
-      
-      // Phone Number with formatting
-      if (type === 'Phone Number') {
-        const format = options.format || '';
-        if (format) {
-          return faker.phone.number(format);
-        }
-        return faker.phone.number();
-      }
-      
-      // Social Security Number
-      if (type === 'Social Security Number') {
-        const format = options.format || '###-##-####';
-        return faker.phone.number(format);
-      }
-      
-      // Address types
-      if (type === 'Address') {
-        const includeSecondary = options.includeSecondary || false;
-        return faker.location.streetAddress({ useFullAddress: includeSecondary });
-      }
-      
-      if (type === 'Zip Code') {
-        const format = options.format || '#####';
-        return faker.location.zipCode(format);
-      }
-      
-      // Custom List type
-      if (type === 'Custom List') {
-        const valuesList = options.values ? options.values.split(',').map((v: string) => v.trim()) : [];
-        if (valuesList.length === 0) {
-          return '';
-        }
-        return valuesList[Math.floor(Math.random() * valuesList.length)];
-      }
-      
-      // Use the main method
-      return this.generateDataByType(type, options);
     } catch (error) {
-      console.error(`Error generating value for field type "${type}":`, error);
+      console.error('Error generating value for field:', error);
       return `[Error: ${error instanceof Error ? error.message : String(error)}]`;
     }
   }
@@ -543,85 +513,99 @@ Format your response as a valid JSON object like this:
         // This bypasses the need to parse and execute the AI-generated code
         const enhancementFunction = (row: Record<string, any>, index: number): Record<string, any> => {
           try {
-            // Extract key portions from the response to implement our own enhancement
-            // Check if we can find specific patterns like "celebrities" or "list"
-            const celebrityListMatch = jsonStr.match(/const\s+celebrities\s*=\s*\[([\s\S]*?)\];/);
+            // Check if we have a valid function response from the AI
+            const functionMatch = jsonStr.match(/"function"\s*:\s*"([\s\S]+?)"/);
             
-            if (celebrityListMatch) {
-              // Found a celebrity list pattern, extract it and create our own implementation
-              console.log("Found celebrity list pattern in AI response");
+            if (functionMatch && functionMatch[1]) {
+              console.log("\n=== FOUND ENHANCEMENT FUNCTION ===");
+              // Safely unescape the function code
+              let functionCode = functionMatch[1]
+                .replace(/\\"/g, '"')     // Restore double quotes
+                .replace(/\\n/g, '\n')    // Restore newlines
+                .replace(/\\r/g, '\r')    // Restore carriage returns
+                .replace(/\\\\/g, '\\')   // Restore backslashes
+                .replace(/\\t/g, '\t');   // Restore tabs
               
-              // Define a safe implementation based on the general pattern
-              // This creates an array of { name, birthplace } objects for 30+ celebrities
-              const celebrities = [
-                { name: 'Tom Hanks', birthplace: 'Concord, California' },
-                { name: 'Meryl Streep', birthplace: 'Summit, New Jersey' },
-                { name: 'Leonardo DiCaprio', birthplace: 'Los Angeles, California' },
-                { name: 'Scarlett Johansson', birthplace: 'New York City, New York' },
-                { name: 'Dwayne Johnson', birthplace: 'Hayward, California' },
-                { name: 'Jennifer Aniston', birthplace: 'Sherman Oaks, Los Angeles, California' },
-                { name: 'Robert Downey Jr.', birthplace: 'New York City, New York' },
-                { name: 'Angelina Jolie', birthplace: 'Los Angeles, California' },
-                { name: 'Brad Pitt', birthplace: 'Shawnee, Oklahoma' },
-                { name: 'Julia Roberts', birthplace: 'Smyrna, Georgia' },
-                { name: 'George Clooney', birthplace: 'Lexington, Kentucky' },
-                { name: 'Oprah Winfrey', birthplace: 'Kosciusko, Mississippi' },
-                { name: 'Will Smith', birthplace: 'Philadelphia, Pennsylvania' },
-                { name: 'Beyoncé Knowles', birthplace: 'Houston, Texas' },
-                { name: 'Taylor Swift', birthplace: 'West Reading, Pennsylvania' },
-                { name: 'Lady Gaga', birthplace: 'New York City, New York' },
-                { name: 'Rihanna', birthplace: 'Saint Michael, Barbados' },
-                { name: 'Adele', birthplace: 'Tottenham, London, England' },
-                { name: 'Ed Sheeran', birthplace: 'Halifax, West Yorkshire, England' },
-                { name: 'Justin Bieber', birthplace: 'London, Ontario, Canada' },
-                { name: 'Selena Gomez', birthplace: 'Grand Prairie, Texas' },
-                { name: 'Ariana Grande', birthplace: 'Boca Raton, Florida' },
-                { name: 'Zendaya', birthplace: 'Oakland, California' },
-                { name: 'Chadwick Boseman', birthplace: 'Anderson, South Carolina' },
-                { name: 'Idris Elba', birthplace: 'Hackney, London, England' },
-                { name: 'Gal Gadot', birthplace: 'Petah Tikva, Israel' },
-                { name: 'Chris Hemsworth', birthplace: 'Melbourne, Australia' },
-                { name: 'Emma Watson', birthplace: 'Paris, France' },
-                { name: 'Ryan Reynolds', birthplace: 'Vancouver, Canada' },
-                { name: 'Hugh Jackman', birthplace: 'Sydney, Australia' },
-                { name: 'Sandra Bullock', birthplace: 'Arlington, Virginia' },
-                { name: 'Keanu Reeves', birthplace: 'Beirut, Lebanon' },
-                { name: 'Emma Stone', birthplace: 'Scottsdale, Arizona' },
-                { name: 'Chris Evans', birthplace: 'Boston, Massachusetts' },
-                { name: 'Jennifer Lawrence', birthplace: 'Louisville, Kentucky' },
-                { name: 'Tom Holland', birthplace: 'Kingston upon Thames, London, England' },
-                { name: 'Margot Robbie', birthplace: 'Dalby, Queensland, Australia' },
-                { name: 'Viola Davis', birthplace: 'St. Matthews, South Carolina' },
-                { name: 'Denzel Washington', birthplace: 'Mount Vernon, New York' },
-                { name: 'Halle Berry', birthplace: 'Cleveland, Ohio' }
-              ];
-              
-              // Get celebrity data based on the row index
-              const celebrityIndex = index % celebrities.length;
-              const celebrity = celebrities[celebrityIndex];
-              
-              // Create an enhanced row with celebrity data
-              return {
-                ...row, // Keep other properties like id, birthdate
-                name: celebrity.name,
-                birthplace: celebrity.birthplace
-              };
-            }
-            
-            // Fallback: Apply a generic enhancement if no specific pattern is found
-            // Adds a prefix to any string fields to indicate they've been enhanced
-            const enhancedRow = { ...row };
-            for (const key in enhancedRow) {
-              if (typeof enhancedRow[key] === 'string') {
-                enhancedRow[key] = `Enhanced: ${enhancedRow[key]}`;
+              // Create a safe function wrapper
+              // We use indirect eval and wrap everything in a closure for safety
+              try {
+                // Inject the row and index into a self-executing function
+                // This creates a completely isolated scope to prevent any issues
+                const resultString = new Function('rowData', 'rowIndex', `
+                  try {
+                    // Create a safety wrapper
+                    const safeRun = () => {
+                      ${functionCode}
+                      
+                      // Check if the function was defined and is callable
+                      if (typeof enhanceData === 'function') {
+                        return JSON.stringify(enhanceData(rowData, rowIndex));
+                      } else {
+                        throw new Error("enhanceData function not properly defined");
+                      }
+                    };
+                    
+                    // Run the function in the protected scope
+                    return safeRun();
+                  } catch (err) {
+                    console.error("Error in AI enhancement function:", err);
+                    return JSON.stringify(rowData);
+                  }
+                `)(row, index);
+                
+                // Parse the result string back to an object
+                const enhancedRow = JSON.parse(resultString);
+                return enhancedRow;
+              } catch (funcExecError) {
+                console.error("Error executing AI function:", funcExecError);
+                // Fallback to simple property enhancement
+                return applyGenericEnhancement(row, index);
               }
+            } else {
+              // No function found in response, apply generic enhancement
+              console.log("\n=== NO FUNCTION FOUND IN AI RESPONSE ===");
+              console.log("Applying generic enhancement instead");
+              console.log("=====================================\n");
+              return applyGenericEnhancement(row, index);
             }
-            return enhancedRow;
           } catch (error) {
             console.error(`Error enhancing row ${index}:`, error);
             // Return original row if enhancement fails
             return row;
           }
+        };
+        
+        // Helper function for generic enhancement
+        const applyGenericEnhancement = (row: Record<string, any>, index: number): Record<string, any> => {
+          // Create a copy to avoid modifying the original
+          const enhancedRow = { ...row };
+          
+          // Apply simple enhancements based on field types
+          Object.keys(enhancedRow).forEach(key => {
+            const value = enhancedRow[key];
+            
+            if (typeof value === 'string') {
+              // String enhancement
+              if (key.toLowerCase().includes('email')) {
+                enhancedRow[key] = `enhanced.${value}`;
+              } else if (key.toLowerCase().includes('name')) {
+                enhancedRow[key] = `Enhanced ${value}`;
+              } else {
+                enhancedRow[key] = value;
+              }
+            } else if (typeof value === 'number') {
+              // Number enhancement - add a small increment based on index
+              enhancedRow[key] = value + (index % 10);
+            } else if (value instanceof Date) {
+              // Date enhancement - add some days based on index
+              const newDate = new Date(value);
+              newDate.setDate(newDate.getDate() + (index % 30));
+              enhancedRow[key] = newDate;
+            }
+            // Leave other types unchanged
+          });
+          
+          return enhancedRow;
         };
         
         // Apply the enhancement function to each data row
@@ -695,5 +679,246 @@ Format your response as a valid JSON object like this:
         }
       };
     }
+  }
+
+  async generateData(fields: FieldDefinition[], count: number, aiEnhancement?: string): Promise<any[]> {
+    try {
+      // Separate regular fields from AI-generated fields
+      const regularFields = fields.filter(field => field.type !== 'AI-Generated');
+      const aiFields = fields.filter(field => field.type === 'AI-Generated');
+      
+      // Generate data for regular fields using faker
+      const data = Array.from({ length: count }, (_, rowIndex) => {
+        const row: Record<string, any> = {};
+        
+        // Process regular fields with faker
+        regularFields.forEach(field => {
+          if (!field.type) return;
+          
+          try {
+            row[field.name] = this.generateValueForField(field.type, field.options || {});
+          } catch (error) {
+            console.error(`Error generating value for field ${field.name}:`, error);
+            row[field.name] = `Error: ${field.type}`;
+          }
+        });
+        
+        // Initialize AI fields with placeholder values
+        // These will be replaced with AI-generated values later
+        aiFields.forEach(field => {
+          row[field.name] = `[AI: Generating...]`;
+        });
+        
+        return row;
+      });
+      
+      // If there are AI fields, enhance the data with AI-generated values
+      if (aiFields.length > 0) {
+        return await this.enhanceWithAIFields(data, aiFields, count, aiEnhancement);
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error generating test data:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Enhances data with AI-generated values for specific fields
+   */
+  async enhanceWithAIFields(
+    data: any[], 
+    aiFields: FieldDefinition[], 
+    totalCount: number, 
+    aiEnhancement?: string
+  ): Promise<any[]> {
+    try {
+      // Only process a sample of data if there's a lot to avoid token limitations
+      const sampleSize = Math.min(5, data.length);
+      const sampleData = data.slice(0, sampleSize);
+      
+      // Create a prompt for the AI to generate values for the specified fields
+      const fieldDescriptions = aiFields.map(field => {
+        const fieldName = field.name;
+        const examples = field.options?.examples ? `Examples: ${field.options.examples}` : '';
+        const constraints = field.options?.constraints ? `Constraints: ${field.options.constraints}` : '';
+        
+        return `Field: "${fieldName}"
+${examples}
+${constraints}`;
+      }).join('\n\n');
+      
+      // Calculate a slightly higher count to request from the LLM to account for potential shortfalls
+      const requestedCount = Math.ceil(totalCount * 1.15); // Request 15% more than needed
+      
+      const prompt = `You are a data generation expert. I need you to generate realistic data for specific fields in my dataset.
+
+${aiEnhancement ? `USER INSTRUCTIONS: ${aiEnhancement}\n\n` : ''}
+
+I have a dataset with ${totalCount} rows. For each row, I need you to generate values for the following fields:
+
+${fieldDescriptions}
+
+Here's a sample of the data structure (${sampleSize} out of ${totalCount} rows):
+${JSON.stringify(sampleData, null, 2)}
+
+CRITICAL REQUIREMENT: You MUST generate EXACTLY ${requestedCount} values for EACH field. No more, no less.
+
+Return your response as a valid JSON object with this structure:
+{
+  "values": {
+    "fieldName1": ["1|value1", "2|value2", "3|value3", ... ${requestedCount} total values],
+    "fieldName2": ["1|value1", "2|value2", "3|value3", ... ${requestedCount} total values],
+    ...
+  }
+}
+
+Important requirements:
+1. Generate EXACTLY ${requestedCount} values for each field - this is non-negotiable
+2. Make sure values are realistic and diverse
+3. Follow any constraints specified for each field
+4. Return ONLY the JSON object with no additional text
+5. Ensure high uniqueness and variety in the generated values
+6. DO NOT STOP GENERATING until you have EXACTLY ${requestedCount} values for each field
+7. Format each value with its number followed by a pipe character, like: "1|actual value", "2|another value", etc.
+8. The pipe character (|) must be used to separate the number from the actual value
+
+To help you keep track, number each value from 1 to ${requestedCount} using the format: "number|value".`;
+
+      console.log("\n=== AI FIELD GENERATION PROMPT ===");
+      console.log(prompt);
+      console.log("================================\n");
+      
+      // Call the AI to generate values
+      const response = await this.generateContent(prompt, 'gemini-2.0-flash-thinking-exp-01-21');
+      
+      console.log("\n=== AI FIELD GENERATION RESPONSE ===");
+      console.log(response);
+      console.log("===================================\n");
+      
+      try {
+        // Extract the JSON from the response
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          throw new Error("Could not extract valid JSON from AI response");
+        }
+        
+        const parsedResponse = JSON.parse(jsonMatch[0]);
+        
+        if (!parsedResponse.values) {
+          throw new Error("AI response does not contain 'values' property");
+        }
+        
+        // Ensure we have enough values for each field
+        const processedValues: Record<string, string[]> = {};
+        
+        aiFields.forEach(field => {
+          const fieldName = field.name;
+          let fieldValues = parsedResponse.values[fieldName] || [];
+          
+          // Log the count of values received for this field
+          console.log(`Received ${fieldValues.length} values for field "${fieldName}" (needed ${totalCount})`);
+          
+          // Clean up the values by removing the numbering prefix
+          fieldValues = fieldValues.map((value: any) => {
+            if (typeof value === 'string') {
+              // Extract the actual value after the pipe character (|)
+              const parts = value.split('|');
+              if (parts.length > 1) {
+                return parts.slice(1).join('|'); // Return everything after the first pipe
+              }
+              // If no pipe is found, return the original value
+              return value;
+            }
+            return value;
+          });
+          
+          if (fieldValues.length < totalCount) {
+            // If we don't have enough values, generate synthetic ones to fill the gap
+            console.log(`Generating ${totalCount - fieldValues.length} additional values for field "${fieldName}"`);
+            
+            // Use a pattern based on existing values to generate more
+            const additionalValues = this.generateAdditionalValues(
+              fieldName, 
+              fieldValues, 
+              totalCount - fieldValues.length
+            );
+            
+            fieldValues = [...fieldValues, ...additionalValues];
+          } else if (fieldValues.length > totalCount) {
+            // If we have too many values, trim the excess
+            fieldValues = fieldValues.slice(0, totalCount);
+          }
+          
+          // Store the processed values
+          processedValues[fieldName] = fieldValues;
+        });
+        
+        // Replace the placeholder values with the AI-generated values
+        const enhancedData = data.map((row, index) => {
+          const enhancedRow = { ...row };
+          
+          aiFields.forEach(field => {
+            const fieldName = field.name;
+            if (processedValues[fieldName] && processedValues[fieldName][index]) {
+              enhancedRow[fieldName] = processedValues[fieldName][index];
+            }
+          });
+          
+          return enhancedRow;
+        });
+        
+        return enhancedData;
+      } catch (error) {
+        console.error("Error processing AI field generation response:", error);
+        // Return the original data if there's an error
+        return data;
+      }
+    } catch (error) {
+      console.error("Error enhancing with AI fields:", error);
+      // Return the original data if there's an error
+      return data;
+    }
+  }
+  
+  /**
+   * Generates additional values based on patterns in existing values
+   */
+  private generateAdditionalValues(fieldName: string, existingValues: string[], count: number): string[] {
+    const additionalValues: string[] = [];
+    
+    // If we have no existing values, generate generic placeholders
+    if (existingValues.length === 0) {
+      for (let i = 0; i < count; i++) {
+        additionalValues.push(`[Generated ${fieldName} #${i+1}]`);
+      }
+      return additionalValues;
+    }
+    
+    // Analyze existing values to determine the type and pattern
+    const sampleValue = existingValues[0];
+    const isNumeric = !isNaN(Number(sampleValue));
+    const containsLetters = /[a-zA-Z]/.test(sampleValue);
+    
+    for (let i = 0; i < count; i++) {
+      // Use modulo to cycle through existing values as templates
+      const templateIndex = i % existingValues.length;
+      const template = existingValues[templateIndex];
+      
+      if (isNumeric) {
+        // For numeric values, increment by a small amount
+        const baseValue = Number(template);
+        additionalValues.push(String(baseValue + i + 1));
+      } else if (containsLetters) {
+        // For text values, append a suffix to ensure uniqueness
+        additionalValues.push(`${template} (variant ${i+1})`);
+      } else {
+        // For other types, use a simple approach
+        additionalValues.push(`${template}_${i+1}`);
+      }
+    }
+    
+    return additionalValues;
   }
 }

@@ -35,6 +35,25 @@ export const fakerTypeDefinitions: Record<string, FakerTypeDefinition> = {
     options: []
   },
   
+  // Add AI-Generated type
+  "AI-Generated": {
+    fakerMethod: "ai.generate", // This will be handled specially in the generator
+    options: [
+      {
+        name: "examples",
+        label: "Examples (optional)",
+        type: "text",
+        placeholder: "Provide a few examples to guide the AI"
+      },
+      {
+        name: "constraints",
+        label: "Constraints (optional)",
+        type: "text",
+        placeholder: "E.g., 'Must be unique', 'Between 5-10 words', etc."
+      }
+    ]
+  },
+  
   // Add Number type with range options
   "Number": {
     fakerMethod: "number.int",
@@ -249,7 +268,7 @@ export const fakerTypeDefinitions: Record<string, FakerTypeDefinition> = {
     options: []
   },
   "Airport Code": {
-    fakerMethod: "airline.airport.iataCode",
+    fakerMethod: "airline.iataCode",
     options: []
   },
   "Address": {
@@ -281,7 +300,7 @@ export const fakerTypeDefinitions: Record<string, FakerTypeDefinition> = {
   
   // IT types
   "App Bundle ID": {
-    fakerMethod: "system.commonFileExt",
+    fakerMethod: "system.fileName",
     options: [
       {
         name: "company",

@@ -53,8 +53,21 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
     
     const newFields = [...fields];
     newFields[activeFieldIndex].type = typeName;
-    // Reset options when type changes
-    newFields[activeFieldIndex].options = {};
+    
+    // Initialize options with default values from the type definition
+    const typeDefinition = fakerTypeDefinitions[typeName];
+    const defaultOptions: Record<string, any> = {};
+    
+    if (typeDefinition && typeDefinition.options) {
+      typeDefinition.options.forEach(option => {
+        if (option.default !== undefined) {
+          defaultOptions[option.name] = option.default;
+        }
+      });
+    }
+    
+    // Set the options with defaults
+    newFields[activeFieldIndex].options = defaultOptions;
     onChange(newFields);
   };
   
@@ -88,6 +101,25 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
                 return (
                   <div key={option.name} className="flex items-center shrink-0">
                     <span className="text-xs text-slate-300 mr-1">{option.name}:</span>
+                    <input
+                      type="number"
+                      value={options[option.name] ?? option.default ?? ''}
+                      onChange={(e) => 
+                        handleOptionChange(index, option.name, e.target.value === '' 
+                          ? '' 
+                          : Number(e.target.value)
+                        )
+                      }
+                      className="w-16 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-sm"
+                      min={option.min}
+                      max={option.max}
+                    />
+                  </div>
+                );
+              } else if (option.name === 'length') {
+                return (
+                  <div key={option.name} className="flex items-center shrink-0">
+                    <span className="text-xs text-slate-300 mr-1">{option.label}:</span>
                     <input
                       type="number"
                       value={options[option.name] ?? option.default ?? ''}

@@ -42,6 +42,7 @@ export interface TypeOption {
   min?: number;
   max?: number;
   options?: Array<{value: string, label: string}>;
+  placeholder?: string;
 }
 
 export interface FakerTypeDefinition {

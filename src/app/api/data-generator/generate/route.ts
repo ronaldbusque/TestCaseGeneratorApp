@@ -16,19 +16,21 @@ interface GenerateRequest {
     includeHeader: boolean;
     includeBOM: boolean;
   };
+  aiEnhancement?: string;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { fields, count = 10, format = 'JSON', options } = body as GenerateRequest;
+    const { fields, count = 100, format = 'JSON', options, aiEnhancement } = body as GenerateRequest;
     
     console.log("=== TEST DATA GENERATION API REQUEST ===");
     console.log({ 
       fields: fields.map(f => `${f.name} (${f.type})`),
       count, 
       format,
-      options
+      options,
+      hasAiEnhancement: !!aiEnhancement
     });
     console.log("=======================================");
     
@@ -42,7 +44,8 @@ export async function POST(request: NextRequest) {
     const dataGeneratorService = new TestDataGeneratorService();
     const result = await dataGeneratorService.generateTestDataFromFields({ 
       fields, 
-      count
+      count,
+      aiEnhancement
     });
     
     console.log("=== TEST DATA GENERATION API RESPONSE ===");

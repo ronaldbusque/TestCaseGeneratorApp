@@ -57,7 +57,7 @@ export default function TestDataGeneratorPage() {
   
   // Export configuration
   const [exportConfig, setExportConfig] = useState<ExportConfig>({
-    rowCount: 1000,
+    rowCount: 100,
     format: 'CSV',
     lineEnding: 'Unix (LF)',
     includeHeader: true,
@@ -105,11 +105,12 @@ export default function TestDataGeneratorPage() {
       return;
     }
     
-    // Check if AI enhancement is enabled but no prompt is provided
-    if (exportConfig.applyAIEnhancement && !exportConfig.enhancementPrompt.trim()) {
+    // Check if there are AI-Generated fields but no context is provided
+    const hasAIGeneratedFields = fields.some(field => field.type === 'AI-Generated');
+    if (hasAIGeneratedFields && !exportConfig.enhancementPrompt.trim()) {
       toast({
-        title: 'AI Enhancement Missing Prompt',
-        description: 'Please provide instructions for AI enhancement or disable it',
+        title: 'AI Context Missing',
+        description: 'You have AI-Generated fields but no context is provided. Please add context to help the AI generate appropriate values.',
         variant: 'destructive'
       });
       return;
@@ -132,7 +133,11 @@ export default function TestDataGeneratorPage() {
             lineEnding: exportConfig.lineEnding,
             includeHeader: exportConfig.includeHeader,
             includeBOM: exportConfig.includeBOM
-          }
+          },
+          // Include AI enhancement if there's a prompt
+          ...(exportConfig.enhancementPrompt.trim() 
+            ? { aiEnhancement: exportConfig.enhancementPrompt.trim() } 
+            : {})
         })
       });
       
@@ -142,42 +147,13 @@ export default function TestDataGeneratorPage() {
       
       let generatedData = await response.json();
       
-      // Apply AI enhancement if enabled
-      if (exportConfig.applyAIEnhancement && exportConfig.enhancementPrompt.trim() && generatedData.data.length > 0) {
-        const enhancementResponse = await fetch('/api/data-generator/enhance', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            data: generatedData.data,
-            prompt: exportConfig.enhancementPrompt,
-            fields: mapFieldsToAPI()
-          })
+      // Success toast for AI enhancement
+      if (exportConfig.enhancementPrompt.trim() && !generatedData.error && hasAIGeneratedFields) {
+        toast({
+          title: 'Data Generated with AI Enhancement',
+          description: 'Successfully generated data with AI-Generated fields',
+          variant: 'default'
         });
-        
-        if (!enhancementResponse.ok) {
-          throw new Error(`AI enhancement failed: ${enhancementResponse.statusText}`);
-        }
-        
-        const enhancedData = await enhancementResponse.json();
-        
-        if (enhancedData.error) {
-          toast({
-            title: 'Enhancement Warning',
-            description: enhancedData.error,
-            variant: 'destructive'
-          });
-        } else {
-          generatedData = enhancedData;
-          toast({
-            title: 'Data Enhanced',
-            description: enhancedData.aiExplanation 
-              ? `${enhancedData.aiExplanation.substring(0, 100)}${enhancedData.aiExplanation.length > 100 ? '...' : ''}`
-              : 'Successfully enhanced data with AI',
-            variant: 'default'
-          });
-        }
       }
       
       // Create a download based on the format
@@ -285,7 +261,7 @@ export default function TestDataGeneratorPage() {
     }
   };
   
-  // Function to preview data
+  // Function to generate preview
   const generatePreview = async () => {
     if (fields.length === 0) {
       toast({
@@ -307,11 +283,12 @@ export default function TestDataGeneratorPage() {
       return;
     }
     
-    // Check if AI enhancement is enabled but no prompt is provided
-    if (exportConfig.applyAIEnhancement && !exportConfig.enhancementPrompt.trim()) {
+    // Check if there are AI-Generated fields but no context is provided
+    const hasAIGeneratedFields = fields.some(field => field.type === 'AI-Generated');
+    if (hasAIGeneratedFields && !exportConfig.enhancementPrompt.trim()) {
       toast({
-        title: 'AI Enhancement Missing Prompt',
-        description: 'Please provide instructions for AI enhancement or disable it',
+        title: 'AI Context Missing',
+        description: 'You have AI-Generated fields but no context is provided. Please add context to help the AI generate appropriate values.',
         variant: 'destructive'
       });
       return;
@@ -336,7 +313,11 @@ export default function TestDataGeneratorPage() {
             lineEnding: exportConfig.lineEnding,
             includeHeader: exportConfig.includeHeader,
             includeBOM: exportConfig.includeBOM
-          }
+          },
+          // Include AI enhancement if there's a prompt
+          ...(exportConfig.enhancementPrompt.trim() 
+            ? { aiEnhancement: exportConfig.enhancementPrompt.trim() } 
+            : {})
         })
       });
       
@@ -351,66 +332,24 @@ export default function TestDataGeneratorPage() {
         return;
       }
       
-      let previewData = result.data;
-      
-      // Apply AI enhancement if enabled
-      if (exportConfig.applyAIEnhancement && exportConfig.enhancementPrompt.trim() && previewData.length > 0) {
-        setIsGenerating(true);
-        
-        try {
-          const enhancementResponse = await fetch('/api/data-generator/enhance', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              data: previewData,
-              prompt: exportConfig.enhancementPrompt,
-              fields: mapFieldsToAPI()
-            })
-          });
-          
-          if (!enhancementResponse.ok) {
-            throw new Error(`AI enhancement failed: ${enhancementResponse.statusText}`);
-          }
-          
-          const enhancedResult = await enhancementResponse.json();
-          
-          if (enhancedResult.error) {
-            toast({
-              title: 'Enhancement Warning',
-              description: enhancedResult.error,
-              variant: 'destructive'
-            });
-          } else {
-            previewData = enhancedResult.data;
-            toast({
-              title: 'Data Enhanced',
-              description: enhancedResult.aiExplanation 
-                ? `${enhancedResult.aiExplanation.substring(0, 100)}${enhancedResult.aiExplanation.length > 100 ? '...' : ''}`
-                : 'Successfully enhanced data with AI',
-              variant: 'default'
-            });
-          }
-        } catch (enhancementError) {
-          console.error('Error in AI enhancement:', enhancementError);
-          toast({
-            title: 'Enhancement Failed',
-            description: enhancementError instanceof Error ? enhancementError.message : 'Unknown error occurred',
-            variant: 'destructive'
-          });
-        }
-      }
-      
       // Set preview data and switch to preview mode
-      setPreviewDataRows(previewData);
+      setPreviewDataRows(result.data);
       setIsPreviewMode(true);
       
-      toast({
-        title: 'Preview Generated',
-        description: `Generated ${previewData.length} rows of data for preview.`,
-        variant: 'default'
-      });
+      // Success toast for AI enhancement
+      if (exportConfig.enhancementPrompt.trim() && !result.error && hasAIGeneratedFields) {
+        toast({
+          title: 'Data Generated with AI Enhancement',
+          description: 'Successfully generated data with AI-Generated fields',
+          variant: 'default'
+        });
+      } else {
+        toast({
+          title: 'Preview Generated',
+          description: `Generated ${result.data.length} rows of data for preview.`,
+          variant: 'default'
+        });
+      }
     } catch (error) {
       console.error('Error generating preview:', error);
       toast({
@@ -458,6 +397,7 @@ export default function TestDataGeneratorPage() {
             onConfigChange={setExportConfig}
             onExport={exportData}
             onPreview={generatePreview}
+            hasAIGeneratedFields={fields.some(field => field.type === 'AI-Generated')}
           />
         </div>
         

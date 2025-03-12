@@ -1,3 +1,6 @@
+// DEPRECATED: This endpoint is no longer used as AI enhancement has been integrated directly into the generate endpoint.
+// This file is kept for backward compatibility but will be removed in a future update.
+
 import { NextRequest, NextResponse } from 'next/server';
 import { TestDataGeneratorService } from '@/lib/services/ai/testDataGenerator';
 

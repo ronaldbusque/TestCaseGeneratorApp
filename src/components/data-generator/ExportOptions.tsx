@@ -16,9 +16,10 @@ interface ExportOptionsProps {
   onConfigChange: (config: ExportConfig) => void;
   onExport: () => void;
   onPreview: () => void;
+  hasAIGeneratedFields: boolean;
 }
 
-export function ExportOptions({ config, onConfigChange, onExport, onPreview }: ExportOptionsProps) {
+export function ExportOptions({ config, onConfigChange, onExport, onPreview, hasAIGeneratedFields }: ExportOptionsProps) {
   const handleRowCountChange = (value: string) => {
     const count = parseInt(value);
     if (!isNaN(count) && count > 0) {
@@ -67,7 +68,8 @@ export function ExportOptions({ config, onConfigChange, onExport, onPreview }: E
   const handleEnhancementPromptChange = (prompt: string) => {
     onConfigChange({
       ...config,
-      enhancementPrompt: prompt
+      enhancementPrompt: prompt,
+      applyAIEnhancement: prompt.trim().length > 0
     });
   };
   
@@ -167,37 +169,29 @@ export function ExportOptions({ config, onConfigChange, onExport, onPreview }: E
         </div>
       </div>
       
-      {/* AI Enhancement Section */}
-      <div className="mt-4 border-t border-slate-700 pt-4">
-        <div className="flex items-center mb-2">
-          <label className="inline-flex items-center">
-            <input
-              type="checkbox"
-              checked={config.applyAIEnhancement}
-              onChange={handleToggleAIEnhancement}
-              className="form-checkbox h-4 w-4 text-purple-600 bg-slate-700 border-slate-600 rounded"
-            />
-            <span className="ml-2 text-white text-sm font-medium flex items-center">
+      {/* AI Context Section - Only show if there are AI-Generated fields */}
+      {hasAIGeneratedFields && (
+        <div className="mt-4 border-t border-slate-700 pt-4">
+          <div className="flex items-center mb-2">
+            <span className="text-white text-sm font-medium flex items-center">
               <LightBulbIcon className="h-4 w-4 mr-1 text-yellow-400" />
-              Apply AI Enhancement
+              AI Context for Generated Fields
             </span>
-          </label>
-        </div>
-        
-        {config.applyAIEnhancement && (
+          </div>
+          
           <div className="mt-2">
             <p className="text-slate-300 text-xs mb-2">
-              Describe how you want to enhance or customize your test data. The AI will transform the data according to your instructions.
+              Provide context and instructions for AI-Generated fields. This helps the AI understand how to generate values for fields with the "AI-Generated" type.
             </p>
             <textarea
               value={config.enhancementPrompt}
               onChange={(e) => handleEnhancementPromptChange(e.target.value)}
-              placeholder="Examples: 'Make customer names sound more like sci-fi characters', 'Ensure all generated dates fall within fiscal year 2023', 'Create correlated data between income and education fields'"
+              placeholder="Examples: 'Generate sci-fi character names', 'Create realistic product descriptions for a tech company', 'Generate addresses in the Boston area'"
               className="w-full h-20 bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 } 
