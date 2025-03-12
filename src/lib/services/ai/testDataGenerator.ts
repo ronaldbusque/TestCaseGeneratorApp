@@ -347,6 +347,20 @@ export class TestDataGeneratorService extends GeminiService {
       
       // Special case handlers for specific types
       switch (type) {
+        case 'Number':
+          // Handle Number type - simple random integer between min and max
+          const min = options.min !== undefined ? Number(options.min) : 1;
+          const max = options.max !== undefined ? Number(options.max) : 1000;
+          return Math.floor(Math.random() * (max - min + 1)) + min;
+          
+        case 'Decimal Number':
+          // Handle Decimal Number type with multipleOf parameter
+          return this.faker.number.float({
+            min: options.min !== undefined ? Number(options.min) : 0,
+            max: options.max !== undefined ? Number(options.max) : 100,
+            multipleOf: options.multipleOf !== undefined ? Number(options.multipleOf) : 0.01
+          } as any); // Type assertion to avoid TypeScript errors
+          
         case 'Airport Code':
           // Generate a random 3-letter airport code
           return this.faker.string.alpha({ length: 3, casing: 'upper' });

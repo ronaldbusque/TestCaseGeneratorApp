@@ -73,14 +73,6 @@ export const fakerTypeDefinitions: Record<string, FakerTypeDefinition> = {
         default: 1000,
         min: -1000000,
         max: 1000000
-      },
-      {
-        name: "precision",
-        label: "Decimal Places",
-        type: "number",
-        default: 0,
-        min: 0,
-        max: 10
       }
     ]
   },
@@ -106,12 +98,12 @@ export const fakerTypeDefinitions: Record<string, FakerTypeDefinition> = {
         max: 1000000
       },
       {
-        name: "precision",
-        label: "Decimal Places",
+        name: "multipleOf",
+        label: "Multiple Of",
         type: "number",
-        default: 2,
-        min: 1,
-        max: 10
+        default: 0.01,
+        min: 0.0001,
+        max: 0.1
       }
     ]
   },

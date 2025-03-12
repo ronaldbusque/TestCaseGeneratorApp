@@ -135,10 +135,10 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
                     />
                   </div>
                 );
-              } else if (option.name === 'decimals' || option.name === 'precision') {
+              } else if (option.name === 'decimals' || option.name === 'precision' || option.name === 'multipleOf') {
                 return (
                   <div key={option.name} className="flex items-center shrink-0">
-                    <span className="text-xs text-slate-300 mr-1">{option.name}:</span>
+                    <span className="text-xs text-slate-300 mr-1">{option.label || option.name}:</span>
                     <input
                       type="number"
                       value={options[option.name] ?? option.default ?? ''}
@@ -148,8 +148,10 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
                           : Number(e.target.value)
                         )
                       }
-                      className="w-12 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-sm"
-                      min={0}
+                      className="w-20 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-sm"
+                      min={option.min}
+                      max={option.max}
+                      step={field.type === 'Number' && option.name === 'multipleOf' ? 1 : option.name === 'multipleOf' ? 0.001 : 1}
                     />
                   </div>
                 );
