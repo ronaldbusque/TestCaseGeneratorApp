@@ -81,7 +81,7 @@ export interface TestCaseGenerationResponse {
 
 export interface AIService {
   generateTestCases(request: TestCaseGenerationRequest): Promise<TestCaseGenerationResponse>;
-  generateContent?(prompt: string, model: ModelType): Promise<string>;
+  generateContent(prompt: string, model?: ModelType): Promise<string>;
 }
 
 export interface TestCaseResponse {

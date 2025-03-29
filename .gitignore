@@ -35,3 +35,7 @@ next-env.d.ts
 #task logs
 .cline/
 task-logs.md
+
+#others
+plan.md
+.eslintrc.json

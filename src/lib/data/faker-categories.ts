@@ -156,3 +156,27 @@ fakerCategories[0].types = fakerCategories
       category: category.name
     }))
   ); 
+
+// This list identifies all the types in categories that are missing in the type definitions
+// Will be logged in the console when imported/used
+// HELPER SECTION - Keep this commented out as it's just for reference
+/*
+const getMissingTypes = () => {
+  // Import the type definitions to compare
+  const { fakerTypeDefinitions } from './faker-type-definitions';
+  
+  // Extract all types from categories (excluding the All category)
+  const allCategoryTypes = fakerCategories
+    .slice(1)
+    .flatMap(category => category.types.map(type => type.name));
+  
+  // Get all defined types
+  const definedTypes = Object.keys(fakerTypeDefinitions);
+  
+  // Find types that are in categories but not in definitions
+  return allCategoryTypes.filter(type => !definedTypes.includes(type));
+};
+
+// Uncomment to debug if needed:
+// console.log('Missing types:', getMissingTypes());
+*/ 

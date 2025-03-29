@@ -132,15 +132,11 @@ const SQLInput = ({
 const SchemaInput = ({
   schema,
   setSchema,
-  showSchema,
-  setShowSchema,
   dialect,
   mode
 }: {
   schema: string;
   setSchema: (value: string) => void;
-  showSchema: boolean;
-  setShowSchema: (value: boolean) => void;
   dialect: SQLDialect;
   mode: SQLToolMode;
 }) => {
@@ -703,7 +699,6 @@ export default function SQLToolPage() {
   interface GenerateState {
     description: string;
     targetDialect: SQLDialect;
-    showSchema: boolean;
     schema: string;
     result: any;
     error: string | null;
@@ -713,7 +708,6 @@ export default function SQLToolPage() {
   interface ValidateState {
     query: string;
     targetDialect: SQLDialect;
-    showSchema: boolean;
     schema: string;
     result: any;
     error: string | null;
@@ -736,7 +730,6 @@ export default function SQLToolPage() {
   const [generateState, setGenerateState] = useState<GenerateState>({
     description: '',
     targetDialect: 'MySQL',
-    showSchema: false,
     schema: '',
     result: null,
     error: null,
@@ -746,7 +739,6 @@ export default function SQLToolPage() {
   const [validateState, setValidateState] = useState<ValidateState>({
     query: '',
     targetDialect: 'MySQL',
-    showSchema: false,
     schema: '',
     result: null,
     error: null,
@@ -780,7 +772,6 @@ export default function SQLToolPage() {
   const query = 'query' in currentState ? currentState.query : '';
   const sourceDialect = 'sourceDialect' in currentState ? currentState.sourceDialect : 'MySQL';
   const targetDialect = currentState.targetDialect;
-  const showSchema = 'showSchema' in currentState ? currentState.showSchema : false;
   const schema = 'schema' in currentState ? currentState.schema : '';
   const result = currentState.result;
   const error = currentState.error;
@@ -815,7 +806,7 @@ export default function SQLToolPage() {
           payload = { 
             description, 
             targetDialect,
-            schema: showSchema ? schema : undefined
+            schema: schema && schema.trim() ? schema : undefined
           };
           break;
         case 'validate':
@@ -823,7 +814,7 @@ export default function SQLToolPage() {
           payload = { 
             query, 
             dialect: targetDialect,
-            schema: showSchema ? schema : undefined
+            schema: schema && schema.trim() ? schema : undefined
           };
           break;
         case 'convert':
@@ -944,8 +935,6 @@ export default function SQLToolPage() {
               <SchemaInput
                 schema={schema}
                 setSchema={(value) => updateCurrentState({ schema: value })}
-                showSchema={true}
-                setShowSchema={(value) => updateCurrentState({ showSchema: value })}
                 dialect={targetDialect}
                 mode={mode}
               />

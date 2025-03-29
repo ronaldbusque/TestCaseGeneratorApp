@@ -28,7 +28,7 @@
     "framer-motion": "^11.0.3",
     "html-to-text": "^9.0.5",
     "mammoth": "^1.6.0",
-    "next": "^14.2.24",
+    "next": "^14.2.25",
     "pdfjs-dist": "^4.0.379",
     "postcss": "8.4.35",
     "react": "18.2.0",

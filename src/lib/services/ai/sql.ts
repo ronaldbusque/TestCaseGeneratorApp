@@ -1,4 +1,4 @@
-import { GeminiService } from './gemini';
+import { AIService } from '@/lib/types';
 import { 
   SQLDialect, 
   SQLGenerationRequest, 
@@ -10,9 +10,18 @@ import {
   SQLIssue
 } from '@/lib/types';
 
-export class SQLAIService extends GeminiService {
+export class SQLAIService {
+  private aiService: AIService; // Add private member for the core AI service
+
+  // Inject AIService via constructor
+  constructor(aiService: AIService) {
+    this.aiService = aiService;
+    console.log('[SQLAIService] initialized with underlying AI Service:', { serviceType: aiService.constructor.name });
+  }
+
   async generateSQLQuery(request: SQLGenerationRequest): Promise<SQLResponse> {
     const { description, targetDialect, schema } = request;
+    console.log('[SQLAIService] Generating SQL Query', { targetDialect, descriptionLength: description.length, schemaProvided: !!schema });
     
     try {
       // Process schema if available
@@ -105,7 +114,7 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
       console.log(prompt);
       console.log("============================");
 
-      const response = await this.generateContent(prompt, 'gemini-2.0-flash-thinking-exp-01-21');
+      const response = await this.aiService.generateContent(prompt, 'gemini-2.0-flash-thinking-exp-01-21');
       
       console.log("=== SQL GENERATION RAW RESPONSE ===");
       console.log(response);
@@ -197,6 +206,7 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
 
   async validateSQLQuery(request: SQLValidationRequest): Promise<SQLValidationResponse> {
     const { query, dialect, schema } = request;
+    console.log('[SQLAIService] Validating SQL Query', { dialect, queryLength: query.length, schemaProvided: !!schema });
     
     try {
       // Process schema if available
@@ -275,7 +285,6 @@ ${processedSchema ? `Database Schema (for reference only - do NOT critique the s
 \`\`\`
 ${processedSchema}
 \`\`\`
-
 ${schemaFormat === 'json' ? 'This schema was derived from database metadata in JSON format and converted to table definitions for your reference.' : ''}` : ''}
 
 Please identify any issues with the SQL QUERY ONLY (not the schema) related to:
@@ -285,7 +294,7 @@ Please identify any issues with the SQL QUERY ONLY (not the schema) related to:
 4. Style/best practices
 ${processedSchema ? '5. Schema compatibility (check if tables and columns referenced in the query exist in the provided schema)' : ''}
 
-IMPORTANT: 
+IMPORTANT:
 - Do NOT critique or suggest improvements to the schema itself
 - Only validate the SQL query against the schema (if provided)
 - Assume the schema is correct and properly designed
@@ -314,7 +323,7 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
       console.log(prompt);
       console.log("============================");
 
-      const response = await this.generateContent(prompt, 'gemini-2.0-flash-thinking-exp-01-21');
+      const response = await this.aiService.generateContent(prompt, 'gemini-2.0-flash-thinking-exp-01-21');
       
       console.log("=== SQL VALIDATION RAW RESPONSE ===");
       console.log(response);
@@ -433,16 +442,14 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
       return {
         isValid: false,
         query,
-        error: "Failed to validate SQL query",
-        debug: {
-          parseError: error instanceof Error ? error.message : String(error)
-        }
+        error: `Failed to validate SQL query: ${error instanceof Error ? error.message : String(error)}`,
       };
     }
   }
 
   async convertSQLQuery(request: SQLConversionRequest): Promise<SQLConversionResponse> {
     const { query, sourceDialect, targetDialect } = request;
+    console.log('[SQLAIService] Converting SQL Query', { sourceDialect, targetDialect, queryLength: query.length });
     
     try {
       const prompt = `
@@ -475,7 +482,7 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
       console.log(prompt);
       console.log("============================");
 
-      const response = await this.generateContent(prompt, 'gemini-2.0-flash-thinking-exp-01-21');
+      const response = await this.aiService.generateContent(prompt, 'gemini-2.0-flash-thinking-exp-01-21');
       
       console.log("=== SQL CONVERSION RAW RESPONSE ===");
       console.log(response);
@@ -555,10 +562,7 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
         query: "",
         originalQuery: query,
         convertedQuery: "",
-        error: "Failed to convert SQL query",
-        debug: {
-          parseError: error instanceof Error ? error.message : String(error)
-        }
+        error: `Failed to convert SQL query: ${error instanceof Error ? error.message : String(error)}`,
       };
     }
   }

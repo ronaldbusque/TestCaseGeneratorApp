@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SQLAIService } from '@/lib/services/ai/sql';
-import { SQLConversionRequest } from '@/lib/types';
+import { createAIService } from '@/lib/services/ai/factory';
+import { SQLConversionRequest, AIModel } from '@/lib/types';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { query, sourceDialect, targetDialect } = body as SQLConversionRequest;
+    const { query, sourceDialect, targetDialect, model = 'Gemini' } = body as SQLConversionRequest & { model?: AIModel };
     
     console.log("=== SQL CONVERSION API REQUEST ===");
-    console.log({ query, sourceDialect, targetDialect });
+    console.log({ query, sourceDialect, targetDialect, model });
     console.log("=================================");
     
     if (!query || !sourceDialect || !targetDialect) {
@@ -18,7 +19,12 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const sqlService = new SQLAIService();
+    const coreAIService = createAIService(model);
+    console.log(`Core AI Service created: ${coreAIService.constructor.name}`);
+    
+    const sqlService = new SQLAIService(coreAIService);
+    console.log('SQLAIService instantiated with the core AI service');
+    
     const result = await sqlService.convertSQLQuery({ query, sourceDialect, targetDialect });
     
     console.log("=== SQL CONVERSION API RESPONSE ===");

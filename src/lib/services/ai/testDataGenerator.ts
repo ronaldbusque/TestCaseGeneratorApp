@@ -1,4 +1,4 @@
-import { GeminiService } from './gemini';
+import { AIService } from '@/lib/types';
 import { 
   TestDataGenerationRequest, 
   TestDataGenerationResponse, 
@@ -16,9 +16,16 @@ interface FieldDefinition {
   options: Record<string, any>;
 }
 
-export class TestDataGeneratorService extends GeminiService {
+export class TestDataGeneratorService {
+  private aiService: AIService; // Add private member for the core AI service
   private faker = faker;
   private fakerTypeDefinitions = fakerTypeDefinitions;
+  
+  // Inject AIService via constructor
+  constructor(aiService: AIService) {
+    this.aiService = aiService;
+    console.log('[TestDataGeneratorService] initialized with underlying AI Service:', { serviceType: aiService.constructor.name });
+  }
   
   async generateTestData(request: TestDataGenerationRequest): Promise<TestDataGenerationResponse> {
     try {
@@ -172,7 +179,8 @@ export class TestDataGeneratorService extends GeminiService {
       // Dynamic import of faker to avoid build errors
       const { faker } = require('@faker-js/faker');
       
-      switch (typeName) {
+      // Handle custom types that require special logic
+      switch (typeName.toLowerCase()) {
         // Vehicle related
         case "Car Model Year":
           // Custom implementation for model year
@@ -181,6 +189,12 @@ export class TestDataGeneratorService extends GeminiService {
           const minYear = config.min ? Number(config.min) : 1950;
           const maxYear = config.max ? Number(config.max) : currentYear;
           return Math.floor(Math.random() * (maxYear - minYear + 1)) + minYear;
+          
+        // Health related
+        // case "Blood Type":
+        //   // Return a random blood type
+        //   const bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+        //   return bloodTypes[Math.floor(Math.random() * bloodTypes.length)];
           
         // Airport related
         case "Airport Name":
@@ -437,7 +451,6 @@ export class TestDataGeneratorService extends GeminiService {
       
       // Check if the enhancement request includes uniqueness requirements
       const uniquenessRequested = aiEnhancement.toLowerCase().includes('unique') || 
-                               aiEnhancement.toLowerCase().includes('different') ||
                                aiEnhancement.toLowerCase().includes('distinct') ||
                                aiEnhancement.toLowerCase().includes('no duplicate') ||
                                aiEnhancement.toLowerCase().includes('variety');
@@ -490,18 +503,16 @@ Format your response as a valid JSON object like this:
 }
 `;
 
-      // Log the raw prompt
       console.log("\n=== AI ENHANCEMENT PROMPT ===");
       console.log(prompt);
-      console.log("============================\n");
+      console.log("==============================\n");
       
-      // Call Gemini API
-      const response = await this.generateContent(prompt, 'gemini-2.0-flash-thinking-exp-01-21');
+      // Call the AI service with the prompt
+      const response = await this.aiService.generateContent(prompt, 'gemini-2.0-flash-thinking-exp-01-21');
       
-      // Log the raw response
       console.log("\n=== AI ENHANCEMENT RAW RESPONSE ===");
       console.log(response);
-      console.log("==================================\n");
+      console.log("===================================\n");
       
       try {
         // Clean response and extract JSON
@@ -802,10 +813,10 @@ To help you keep track, number each value from 1 to ${requestedCount} using the 
 
       console.log("\n=== AI FIELD GENERATION PROMPT ===");
       console.log(prompt);
-      console.log("================================\n");
+      console.log("=================================\n");
       
-      // Call the AI to generate values
-      const response = await this.generateContent(prompt, 'gemini-2.0-flash-thinking-exp-01-21');
+      // Call the AI service with the prompt
+      const response = await this.aiService.generateContent(prompt, 'gemini-2.0-flash-thinking-exp-01-21');
       
       console.log("\n=== AI FIELD GENERATION RESPONSE ===");
       console.log(response);

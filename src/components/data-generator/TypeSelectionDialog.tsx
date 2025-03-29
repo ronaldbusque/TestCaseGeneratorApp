@@ -2,6 +2,7 @@ import { useState, useEffect, Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { fakerCategories } from '@/lib/data/faker-categories';
+import { fakerTypeDefinitions } from '@/lib/data/faker-type-definitions';
 
 // Define type for a faker type with category information
 interface TypeWithCategory {
@@ -40,13 +41,20 @@ export function TypeSelectionDialog({
     // Create a Set to track unique type names and avoid duplicates
     const addedTypes = new Set<string>();
     
+    // Get the list of defined types from fakerTypeDefinitions
+    const definedTypes = Object.keys(fakerTypeDefinitions);
+    
     // Process categories based on selected category or search
     if (activeCategory === 'All') {
       // Skip the first "All" category since it's just a container
       fakerCategories.slice(1).forEach(category => {
         category.types.forEach(type => {
-          // Only add if it passes search filter and not already added
+          // Only add if:
+          // 1. It passes search filter
+          // 2. It's not already added
+          // 3. It exists in fakerTypeDefinitions
           if (!addedTypes.has(type.name) && 
+              definedTypes.includes(type.name) &&
               (!searchTerm.trim() || 
                type.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                (type.description && type.description.toLowerCase().includes(searchTerm.toLowerCase())))) {
@@ -63,10 +71,11 @@ export function TypeSelectionDialog({
       const category = fakerCategories.find(c => c.name === activeCategory);
       if (category) {
         category.types.forEach(type => {
-          // Only add if it passes search filter
-          if (!searchTerm.trim() || 
+          // Only add if it passes search filter and exists in fakerTypeDefinitions
+          if (definedTypes.includes(type.name) &&
+              (!searchTerm.trim() || 
               type.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-              (type.description && type.description.toLowerCase().includes(searchTerm.toLowerCase()))) {
+              (type.description && type.description.toLowerCase().includes(searchTerm.toLowerCase())))) {
             results.push({
               ...type,
               category: category.name
@@ -81,6 +90,28 @@ export function TypeSelectionDialog({
   };
   
   const filteredTypes = getFilteredTypes();
+  
+  // Count the number of valid types per category (those that exist in fakerTypeDefinitions)
+  const getCategoryTypeCounts = () => {
+    const definedTypes = Object.keys(fakerTypeDefinitions);
+    const counts: Record<string, number> = {};
+    
+    fakerCategories.forEach(category => {
+      if (category.name === 'All') {
+        // For the "All" category, count all valid types
+        counts[category.name] = definedTypes.length;
+      } else {
+        // For other categories, count types that have definitions
+        counts[category.name] = category.types.filter(type => 
+          definedTypes.includes(type.name)
+        ).length;
+      }
+    });
+    
+    return counts;
+  };
+  
+  const typeCounts = getCategoryTypeCounts();
   
   return (
     <Transition appear show={isOpen} as={Fragment}>
@@ -137,7 +168,9 @@ export function TypeSelectionDialog({
                 <div className="flex h-[500px] overflow-hidden">
                   {/* Left Sidebar - Categories */}
                   <div className="w-48 min-w-48 overflow-y-auto border-r border-slate-700 bg-slate-800">
-                    {fakerCategories.map(category => (
+                    {fakerCategories.filter(category => 
+                      category.name === 'All' || typeCounts[category.name] > 0
+                    ).map(category => (
                       <button
                         key={category.name}
                         className={`w-full px-4 py-2 text-left text-sm transition-colors ${
@@ -147,7 +180,7 @@ export function TypeSelectionDialog({
                         }`}
                         onClick={() => setActiveCategory(category.name)}
                       >
-                        {category.name} {category.types.length > 0 && `(${category.types.length})`}
+                        {category.name} {typeCounts[category.name] > 0 && `(${typeCounts[category.name]})`}
                       </button>
                     ))}
                   </div>
