@@ -10,7 +10,7 @@ interface ProcessedContent {
   metadata: Record<string, any>;
 }
 
-export class O1MiniService implements AIService {
+export class O3MiniService implements AIService {
   private imageProcessor: ImageProcessor;
   private debugLog: string[] = [];
 
@@ -24,13 +24,13 @@ export class O1MiniService implements AIService {
     logInfo(message, data);
   }
 
-  private async callO1MiniAPI(prompt: string): Promise<string> {
+  private async callO3MiniAPI(prompt: string): Promise<string> {
     const apiUrl = process.env.NEXT_PUBLIC_OPENAI_API_URL;
     const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
-    const model = 'o1-mini';
+    const model = 'o3-mini';
 
     if (!apiUrl || !apiKey) {
-      const error = new Error('O1-Mini API configuration is missing');
+      const error = new Error('o3-mini API configuration is missing');
       logError('API configuration error', error);
       throw error;
     }
@@ -274,7 +274,7 @@ Return ONLY a JSON array containing test cases. Each test case should have this 
 3. Follow the exact structure shown above
 ${request.priorityMode === 'core-functionality' ? '4. Remember to focus only on core functionality and critical paths, avoiding edge cases and complex scenarios' : ''}`;
 
-      this.log('Sending request to O1-Mini API', {
+      this.log('Sending request to o3-mini API', {
         promptLength: prompt.length,
         mode: request.mode,
         priorityMode: request.priorityMode || 'comprehensive'
@@ -289,7 +289,7 @@ ${request.priorityMode === 'core-functionality' ? '4. Remember to focus only on 
         priorityMode: request.priorityMode || 'comprehensive'
       });
 
-      const response = await this.callO1MiniAPI(prompt);
+      const response = await this.callO3MiniAPI(prompt);
 
       try {
         const parsedTestCases = JSON.parse(response);
@@ -363,7 +363,7 @@ ${request.priorityMode === 'core-functionality' ? '4. Remember to focus only on 
     });
 
     try {
-      const response = await this.callO1MiniAPI(prompt);
+      const response = await this.callO3MiniAPI(prompt);
       this.log('Content generation completed', {
         responseLength: response.length
       });

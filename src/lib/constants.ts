@@ -2,8 +2,8 @@ import { AIModelConfig } from './types';
 
 export const AI_MODELS: AIModelConfig[] = [
   {
-    id: 'O1-Mini',
-    name: 'O1-Mini',
+    id: 'O3-Mini',
+    name: 'o3-mini',
     description: 'Lightweight and efficient model',
     isAvailable: true
   },

@@ -22,9 +22,9 @@ const models = [
     ),
   },
   {
-    id: 'O1-Mini' as AIModel,
-    name: 'OpenAI O1-Mini',
-    description: 'Using o1-mini model',
+    id: 'O3-Mini' as AIModel,
+    name: 'OpenAI o3-mini',
+    description: 'Using o3-mini model',
     isAvailable: true,
     logo: (
       <Image

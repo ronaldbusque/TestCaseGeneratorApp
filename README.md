@@ -10,7 +10,7 @@ A comprehensive suite of AI-powered tools for quality assurance and testing prof
 
 - 🤖 **Multiple AI Models**
   - Google Gemini Integration
-  - OpenAI O1-Mini Integration
+  - OpenAI o3-mini Integration
   - Smart model switching with session management
 
 - 📄 **Multi-Format Document Support**
@@ -150,7 +150,7 @@ yarn dev
   - Faker.js
 - **AI Integration**:
   - @google/generative-ai
-  - OpenAI API
+  - OpenAI for the o3-mini model integration
 - **Type Safety**: TypeScript
 - **Testing**: Jest
 
@@ -159,7 +159,7 @@ yarn dev
 ### Test Case Generator
 
 1. **Select AI Model**
-   - Choose between Google Gemini or OpenAI O1-Mini
+   - Choose between Google Gemini or OpenAI o3-mini
    - Each model has its own strengths for different types of requirements
 
 2. **Choose Generation Type**
@@ -248,7 +248,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - Google Gemini AI for advanced LLM capabilities
-- OpenAI for the O1-Mini model integration
+- OpenAI for the o3-mini model integration
 - Faker.js for powerful test data generation
 - The open-source community for the amazing libraries used in this project
 
