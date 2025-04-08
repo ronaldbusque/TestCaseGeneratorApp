@@ -779,7 +779,7 @@ ${constraints}`;
       
       const prompt = `You are a data generation expert. I need you to generate realistic data for specific fields in my dataset.
 
-${aiEnhancement ? `USER INSTRUCTIONS: ${aiEnhancement}\n\n` : ''}
+${aiEnhancement ? `IMPORTANT CONTEXT FOR ALL AI-GENERATED FIELDS: ${aiEnhancement}\n\n` : ''}
 
 I have a dataset with ${totalCount} rows. For each row, I need you to generate values for the following fields:
 
@@ -801,13 +801,14 @@ Return your response as a valid JSON object with this structure:
 
 Important requirements:
 1. Generate EXACTLY ${requestedCount} values for each field - this is non-negotiable
-2. Make sure values are realistic and diverse
-3. Follow any constraints specified for each field
-4. Return ONLY the JSON object with no additional text
-5. Ensure high uniqueness and variety in the generated values
-6. DO NOT STOP GENERATING until you have EXACTLY ${requestedCount} values for each field
-7. Format each value with its number followed by a pipe character, like: "1|actual value", "2|another value", etc.
-8. The pipe character (|) must be used to separate the number from the actual value
+2. Make sure values follow the context provided: "${aiEnhancement}"
+3. Make sure values are realistic and diverse
+4. Follow any constraints specified for each field
+5. Return ONLY the JSON object with no additional text
+6. Ensure high uniqueness and variety in the generated values
+7. DO NOT STOP GENERATING until you have EXACTLY ${requestedCount} values for each field
+8. Format each value with its number followed by a pipe character, like: "1|actual value", "2|another value", etc.
+9. The pipe character (|) must be used to separate the number from the actual value
 
 To help you keep track, number each value from 1 to ${requestedCount} using the format: "number|value".`;
 

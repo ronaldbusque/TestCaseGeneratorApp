@@ -26,7 +26,7 @@ export class O3MiniService implements AIService {
 
   private async callO3MiniAPI(prompt: string): Promise<string> {
     const apiUrl = process.env.NEXT_PUBLIC_OPENAI_API_URL;
-    const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     const model = 'o3-mini';
 
     if (!apiUrl || !apiKey) {

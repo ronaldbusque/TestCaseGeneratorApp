@@ -2,15 +2,37 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { 
   BeakerIcon, 
   DocumentCheckIcon, 
   CommandLineIcon, 
   TableCellsIcon 
 } from '@heroicons/react/24/outline';
+import { Button } from '@/components/ui/Button';
 
 export const NavigationBar = () => {
   const pathname = usePathname();
+  const [accessTokenInput, setAccessTokenInput] = useState('');
+  const [savedAccessToken, setSavedAccessToken] = useState<string | null>(null);
+  
+  useEffect(() => {
+    const storedToken = localStorage.getItem('appAccessToken');
+    if (storedToken) {
+      setAccessTokenInput(storedToken);
+      setSavedAccessToken(storedToken);
+      console.log('Access token found in localStorage.');
+    }
+  }, []);
+  
+  const handleSaveToken = () => {
+    if (!accessTokenInput) return; // Don't save empty token
+    localStorage.setItem('appAccessToken', accessTokenInput);
+    setSavedAccessToken(accessTokenInput);
+    // Provide feedback to the user
+    alert('Access Token saved successfully!');
+    console.log('Access token saved to localStorage. Token length:', accessTokenInput.length);
+  };
   
   return (
     <nav className="bg-slate-900/80 backdrop-blur-lg border-b border-white/10 sticky top-0 z-50">
@@ -60,6 +82,27 @@ export const NavigationBar = () => {
                 Test Data Generator
               </Link>
             </div>
+          </div>
+          
+          {/* Access Token Input */}
+          <div className="flex items-center ml-auto pl-4">
+            <input
+              type="password"
+              placeholder="Access Token"
+              value={accessTokenInput}
+              onChange={(e) => setAccessTokenInput(e.target.value)}
+              className="px-2 py-1 text-sm bg-slate-700 border border-slate-600 text-white rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 w-48"
+              aria-label="Access Token Input"
+            />
+            <Button
+              size="sm"
+              variant="secondary"
+              className="ml-2 bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-500"
+              onClick={handleSaveToken}
+              disabled={!accessTokenInput || accessTokenInput === savedAccessToken}
+            >
+              {savedAccessToken ? 'Update Token' : 'Save Token'}
+            </Button>
           </div>
         </div>
       </div>

@@ -21,6 +21,7 @@ import { DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { NavigationBar } from '@/components/NavigationBar';
+import { fetchApi } from '@/lib/utils/apiClient';
 
 const isHighLevelTestCase = (testCase: TestCase): testCase is HighLevelTestCase => {
   return 'scenario' in testCase && 'area' in testCase;
@@ -200,28 +201,28 @@ export default function Home() {
       setGenerationStep('preprocessing');
       await new Promise(resolve => setTimeout(resolve, 800)); // Add slight delay for visual feedback
 
-      // Combine file content with manual requirements
-      const combinedRequirements = [fileContent, manualRequirements]
-        .filter(Boolean)
-        .join('\n\n');
-
-      // Analyzing phase
+      // Generation phase
       setGenerationStep('analyzing');
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Parsing phase
       setGenerationStep('parsing');
       await new Promise(resolve => setTimeout(resolve, 800));
-
-      const aiService = createAIService(selectedModel);
       
       // Generation phase
       setGenerationStep('generating');
-      const result = await aiService.generateTestCases({
-        requirements: combinedRequirements,
-        files: uploadedFiles,
-        mode: testCaseMode,
-        priorityMode: testPriorityMode
+      
+      // Call the protected API endpoint instead of using the AI service directly
+      console.log(`[Client] Calling test case generation API - Mode: ${testCaseMode}, Model: ${selectedModel}`);
+      const result = await fetchApi('/api/generate', {
+        method: 'POST',
+        body: JSON.stringify({
+          requirements: manualRequirements,
+          fileContent: fileContent, // Pass the file content separately
+          mode: testCaseMode,
+          priorityMode: testPriorityMode,
+          model: selectedModel
+        })
       });
 
       if (result.error) {
@@ -302,13 +303,17 @@ export default function Home() {
         .filter((tc): tc is HighLevelTestCase => 
           isHighLevelTestCase(tc) && selectedTestCases.has(tc.id)
         );
-      const aiService = createAIService(selectedModel);
       
-      const result = await aiService.generateTestCases({
-        requirements,
-        files: uploadedFiles,
-        mode: 'detailed',
-        selectedScenarios
+      // Call the protected API endpoint instead of using the AI service directly
+      console.log(`[Client] Calling test case conversion API - Selected scenarios: ${selectedScenarios.length}, Model: ${selectedModel}`);
+      const result = await fetchApi('/api/generate', {
+        method: 'POST',
+        body: JSON.stringify({
+          requirements,
+          mode: 'detailed',
+          selectedScenarios,
+          model: selectedModel
+        })
       });
 
       if (result.error) {
@@ -321,7 +326,7 @@ export default function Home() {
         ]);
 
         // Generate IDs for all new test cases first
-        const newIds: string[] = result.testCases.map((_, index) => {
+        const newIds: string[] = result.testCases.map((_: any, index: number) => {
           const originalScenario = selectedScenarios[index];
           const baseId = originalScenario?.id || '';
           const matchNumber = baseId.split('-')[1];
@@ -336,7 +341,7 @@ export default function Home() {
         });
 
         // Now create the test cases with their unique IDs
-        const newTestCases: TestCase[] = result.testCases.map((tc, index) => {
+        const newTestCases: TestCase[] = result.testCases.map((tc: any, index: number) => {
           const originalScenario = selectedScenarios[index];
           return {
             ...tc,

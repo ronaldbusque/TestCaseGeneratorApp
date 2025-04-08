@@ -10,6 +10,7 @@ import { RawDataPreview } from '@/components/data-generator/RawDataPreview';
 import { Tab } from '@headlessui/react';
 import { TableCellsIcon, CodeBracketIcon } from '@heroicons/react/24/outline';
 import { DataGeneratorLoading } from '@/components/data-generator/DataGeneratorLoading';
+import { fetchApi } from '@/lib/utils/apiClient';
 
 interface FieldDefinition {
   id: string;
@@ -83,7 +84,7 @@ export default function TestDataGeneratorPage() {
     }));
   };
   
-  // Function to generate and export data
+  // Function to export data
   const exportData = async () => {
     if (fields.length === 0) {
       toast({
@@ -119,12 +120,9 @@ export default function TestDataGeneratorPage() {
     setIsGenerating(true);
     
     try {
-      // Generate the data
-      const response = await fetch('/api/data-generator/generate', {
+      // Generate the data using the fetchApi utility
+      const generatedData = await fetchApi('/api/data-generator/generate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({
           fields: mapFieldsToAPI(),
           count: exportConfig.rowCount,
@@ -140,12 +138,6 @@ export default function TestDataGeneratorPage() {
             : {})
         })
       });
-      
-      if (!response.ok) {
-        throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
-      }
-      
-      let generatedData = await response.json();
       
       // Success toast for AI enhancement
       if (exportConfig.enhancementPrompt.trim() && !generatedData.error && hasAIGeneratedFields) {
@@ -207,19 +199,12 @@ export default function TestDataGeneratorPage() {
         fileType = 'text/plain';
       } else if (exportConfig.format === 'Excel') {
         // For Excel, we need to redirect to a server endpoint that will generate the Excel file
-        const excelResponse = await fetch('/api/data-generator/export-excel', {
+        const blob = await fetchApi<Blob>('/api/data-generator/export-excel', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ data: generatedData.data })
-        });
+          body: JSON.stringify({ data: generatedData.data }),
+          headers: { 'Accept': 'application/octet-stream' }
+        }, true); // Pass true to get binary response
         
-        if (!excelResponse.ok) {
-          throw new Error(`Excel generation failed: ${excelResponse.statusText}`);
-        }
-        
-        const blob = await excelResponse.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -249,11 +234,11 @@ export default function TestDataGeneratorPage() {
         description: `Generated ${generatedData.data.length} rows of data.`,
         variant: 'default'
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating data:', error);
       toast({
         title: 'Generation Failed',
-        description: error instanceof Error ? error.message : 'Unknown error occurred',
+        description: error.message || 'Unknown error occurred',
         variant: 'destructive'
       });
     } finally {
@@ -297,23 +282,13 @@ export default function TestDataGeneratorPage() {
     setIsGenerating(true);
     
     try {
-      // Use a smaller count for preview (max 100)
-      const previewCount = Math.min(100, exportConfig.rowCount);
-      
-      const response = await fetch('/api/data-generator/generate', {
+      // Generate the data using fetchApi utility
+      const result = await fetchApi('/api/data-generator/generate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({
           fields: mapFieldsToAPI(),
-          count: previewCount,
-          format: exportConfig.format,
-          options: {
-            lineEnding: exportConfig.lineEnding,
-            includeHeader: exportConfig.includeHeader,
-            includeBOM: exportConfig.includeBOM
-          },
+          count: 10, // Just generate 10 rows for preview
+          format: 'JSON',
           // Include AI enhancement if there's a prompt
           ...(exportConfig.enhancementPrompt.trim() 
             ? { aiEnhancement: exportConfig.enhancementPrompt.trim() } 
@@ -321,40 +296,26 @@ export default function TestDataGeneratorPage() {
         })
       });
       
-      const result = await response.json();
-      
-      if (result.error) {
+      if (result.data && result.data.length > 0) {
+        setPreviewDataRows(result.data);
+        setIsPreviewMode(true);
         toast({
-          title: 'Generation Error',
-          description: result.error,
-          variant: 'destructive'
-        });
-        return;
-      }
-      
-      // Set preview data and switch to preview mode
-      setPreviewDataRows(result.data);
-      setIsPreviewMode(true);
-      
-      // Success toast for AI enhancement
-      if (exportConfig.enhancementPrompt.trim() && !result.error && hasAIGeneratedFields) {
-        toast({
-          title: 'Data Generated with AI Enhancement',
-          description: 'Successfully generated data with AI-Generated fields',
+          title: 'Data Generated',
+          description: `Successfully generated ${result.data.length} records`,
           variant: 'default'
         });
       } else {
         toast({
-          title: 'Preview Generated',
-          description: `Generated ${result.data.length} rows of data for preview.`,
-          variant: 'default'
+          title: 'No Data Generated',
+          description: 'The generation process did not produce any data',
+          variant: 'destructive'
         });
       }
-    } catch (error) {
-      console.error('Error generating preview:', error);
+    } catch (error: any) {
+      console.error('Error generating data:', error);
       toast({
-        title: 'Preview Failed',
-        description: error instanceof Error ? error.message : 'Unknown error occurred',
+        title: 'Generation Failed',
+        description: error.message || 'Unknown error occurred',
         variant: 'destructive'
       });
     } finally {

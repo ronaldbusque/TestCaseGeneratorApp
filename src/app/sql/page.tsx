@@ -23,6 +23,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/Button';
 import { NavigationBar } from '@/components/NavigationBar';
+import { fetchApi } from '@/lib/utils/apiClient';
 
 // SQL Tool Modes
 type SQLToolMode = 'generate' | 'validate' | 'convert';
@@ -794,7 +795,7 @@ export default function SQLToolPage() {
   
   // Handle form submission
   const handleSubmit = async () => {
-    updateCurrentState({ isLoading: true, error: null });
+    updateCurrentState({ isLoading: true, error: null, result: null });
     
     try {
       let endpoint = '';
@@ -823,22 +824,16 @@ export default function SQLToolPage() {
           break;
       }
       
-      const response = await fetch(endpoint, {
+      // Use the fetchApi utility instead of direct fetch
+      const data = await fetchApi(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       
-      const data = await response.json();
-      
-      if (response.ok) {
-        updateCurrentState({ result: data });
-      } else {
-        updateCurrentState({ error: data.error || 'An error occurred' });
-      }
-    } catch (err) {
-      updateCurrentState({ error: 'Failed to process request' });
-      console.error('Error:', err);
+      updateCurrentState({ result: data });
+    } catch (err: any) {
+      console.error('API Request Error:', err);
+      updateCurrentState({ error: err.message || 'Failed to process request', isLoading: false });
     } finally {
       updateCurrentState({ isLoading: false });
     }

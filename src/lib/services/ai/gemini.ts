@@ -2,6 +2,28 @@ import { GoogleGenerativeAI, GenerativeModel, Part } from "@google/generative-ai
 import { AIService, TestCaseGenerationRequest, TestCaseGenerationResponse, ModelType } from '@/lib/types';
 import { JsonCleaner } from '@/lib/utils/jsonCleaner';
 
+// Define the interface that was imported from missing module
+interface IFile extends File {
+  id?: string;
+  preview?: string;
+}
+
+// Define the interface that was imported from missing module
+interface FileResult {
+  content: string;
+  type: string;
+  name: string;
+}
+
+// Add window interface extension for environment variables
+declare global {
+  interface Window {
+    env?: {
+      GEMINI_API_KEY?: string;
+    };
+  }
+}
+
 export class GeminiService implements AIService {
   private genAI: GoogleGenerativeAI;
   private model: GenerativeModel;
@@ -26,10 +48,13 @@ export class GeminiService implements AIService {
 
   constructor() {
     this.log('Initializing GeminiService');
-    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    const apiKey = typeof window !== 'undefined' 
+      ? window.env?.GEMINI_API_KEY || process.env.GEMINI_API_KEY
+      : process.env.GEMINI_API_KEY;
+      
     if (!apiKey) {
-      this.logError('API Key Missing', new Error('NEXT_PUBLIC_GEMINI_API_KEY is not configured'));
-      throw new Error('NEXT_PUBLIC_GEMINI_API_KEY is not configured');
+      this.logError('API Key Missing', new Error('GEMINI_API_KEY is not configured'));
+      throw new Error('GEMINI_API_KEY is not configured');
     }
     try {
       this.genAI = new GoogleGenerativeAI(apiKey);
