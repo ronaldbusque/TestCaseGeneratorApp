@@ -7,9 +7,9 @@ import { useProviderSettings } from '@/lib/context/ProviderSettingsContext';
 import { QuickSelection } from '@/lib/types/providers';
 
 const DOMAIN_LABELS: Record<'testCases' | 'sql' | 'data', string> = {
-  testCases: 'Test Case Generator',
-  sql: 'SQL Assistant',
-  data: 'Test Data Generator',
+  testCases: 'Select AI Model',
+  sql: 'Select AI Model',
+  data: 'Select AI Model',
 };
 
 interface QuickModelSwitcherProps {
