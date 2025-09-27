@@ -27,7 +27,8 @@ export class GeminiService implements AIService {
     try {
       const prompt = buildTestCasePrompt(request);
       const parts = this.buildParts(prompt, request);
-      const modelToUse = request.model ?? DEFAULT_MODEL;
+      const requestedModel = request.model ?? DEFAULT_MODEL;
+      const modelToUse = this.normalizeModelId(requestedModel);
       const modelInstance = this.getModel(modelToUse);
 
       const result = await modelInstance.generateContent({
@@ -94,7 +95,8 @@ export class GeminiService implements AIService {
   }
 
   async generateContent(prompt: string, model?: ModelType): Promise<string> {
-    const modelToUse = typeof model === 'string' ? model : DEFAULT_MODEL;
+    const requestedModel = typeof model === 'string' ? model : DEFAULT_MODEL;
+    const modelToUse = this.normalizeModelId(requestedModel);
     const result = await this.getModel(modelToUse).generateContent({
       contents: [
         {
@@ -121,12 +123,18 @@ export class GeminiService implements AIService {
     return this.client.getGenerativeModel({ model: model ?? DEFAULT_MODEL });
   }
 
+  private normalizeModelId(id: string): string {
+    return id.startsWith('models/') ? id.slice('models/'.length) : id;
+  }
+
   private buildParts(prompt: string, request: TestCaseGenerationRequest): Part[] {
     const parts: Part[] = [];
 
     if (request.files?.length) {
       request.files.forEach((file) => {
-        if (file.data) {
+        const supportsInlineData = this.supportsInlineAttachment(file.type);
+
+        if (supportsInlineData && file.data) {
           parts.push({
             inlineData: {
               data: file.data,
@@ -143,5 +151,20 @@ export class GeminiService implements AIService {
 
     parts.push({ text: prompt });
     return parts;
+  }
+
+  private supportsInlineAttachment(mimeType?: string): boolean {
+    if (!mimeType) {
+      return false;
+    }
+
+    const normalized = mimeType.toLowerCase();
+    if (normalized.startsWith('image/')) {
+      // Gemini accepts common web image formats for inline analysis
+      return ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'].includes(normalized);
+    }
+
+    // Other document formats (pdf, docx, etc.) are not reliably supported as inline data
+    return false;
   }
 }

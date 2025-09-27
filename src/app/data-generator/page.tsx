@@ -12,6 +12,7 @@ import { TableCellsIcon, CodeBracketIcon } from '@heroicons/react/24/outline';
 import { DataGeneratorLoading } from '@/components/data-generator/DataGeneratorLoading';
 import { fetchApi } from '@/lib/utils/apiClient';
 import { useProviderSettings } from '@/lib/context/ProviderSettingsContext';
+import { QuickModelSwitcher } from '@/components/QuickModelSwitcher';
 
 interface FieldDefinition {
   id: string;
@@ -344,6 +345,10 @@ export default function TestDataGeneratorPage() {
         <p className="mt-4 text-lg text-blue-100 sm:text-xl max-w-3xl mx-auto">
           Create realistic test data with AI-powered enhancement capabilities
         </p>
+      </div>
+
+      <div className="mb-6 flex justify-center sm:justify-end">
+        <QuickModelSwitcher domain="data" />
       </div>
       
       <div className="space-y-6">

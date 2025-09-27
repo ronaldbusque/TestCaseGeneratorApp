@@ -2,14 +2,16 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Button } from './ui/Button';
 import { XMarkIcon, ArrowUpTrayIcon, DocumentIcon } from '@heroicons/react/24/outline';
-import { cn } from '@/lib/utils';
 import { useDropzone } from 'react-dropzone';
+import { FileTokenSummary } from '@/lib/types';
 
 interface FileUploadProps {
   onFilesSelect: (files: File[]) => void;
   shouldReset?: boolean;
+  tokenSummary?: FileTokenSummary | null;
+  tokenStatus?: 'idle' | 'loading' | 'ready' | 'error';
+  tokenError?: string | null;
 }
 
 const SUPPORTED_FILE_TYPES = {
@@ -27,7 +29,13 @@ const SUPPORTED_FILE_TYPES = {
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB
 
-export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelect, shouldReset = false }) => {
+export const FileUpload: React.FC<FileUploadProps> = ({
+  onFilesSelect,
+  shouldReset = false,
+  tokenSummary,
+  tokenStatus = 'idle',
+  tokenError,
+}) => {
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -183,6 +191,41 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelect, shouldRes
           <div className="text-xs text-blue-300 pt-2">
             Total size: {(totalSize / (1024 * 1024)).toFixed(2)}MB
           </div>
+          {(tokenStatus !== 'idle' || tokenSummary || tokenError) && (
+            <div className="mt-3 rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-blue-200 space-y-1">
+              {tokenStatus === 'loading' && <p>Estimating token usage…</p>}
+              {tokenError && <p className="text-red-300">{tokenError}</p>}
+              {tokenStatus === 'ready' && tokenSummary && (
+                <div className="space-y-1">
+                  <p className="text-blue-100 font-medium">Estimated prompt tokens</p>
+                  <p>Files: {tokenSummary.totals.fileTokens.toLocaleString()}</p>
+                  {tokenSummary.totals.requirementsTokens > 0 && (
+                    <p>Requirements: {tokenSummary.totals.requirementsTokens.toLocaleString()}</p>
+                  )}
+                  <p>
+                    Total: {tokenSummary.totals.combinedTokens.toLocaleString()}
+                    {tokenSummary.totals.contextLimit
+                      ? ` of ~${tokenSummary.totals.contextLimit.toLocaleString()} token limit`
+                      : ''}
+                  </p>
+                  {tokenSummary.files.length > 0 && (
+                    <div className="pt-1 space-y-0.5 text-blue-300">
+                      {tokenSummary.files.map((file, index) => (
+                        <p key={`${file.name ?? 'file'}-${index}`}>
+                          {file.name ?? 'File'}: {file.tokens.toLocaleString()} tokens
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {tokenSummary.totals.contextLimit && tokenSummary.totals.combinedTokens > tokenSummary.totals.contextLimit && (
+                    <p className="text-amber-300 font-medium">
+                      Warning: this likely exceeds the model&apos;s input window. Consider trimming content.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

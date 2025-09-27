@@ -17,6 +17,10 @@ const STATUS_CACHE_TTL = 2 * 60 * 1000; // two minutes keeps UI fresh without sp
 const modelCache = new Map<LLMProvider, CacheEntry<ProviderModelInfo[]>>();
 const statusCache = new Map<LLMProvider, CacheEntry<ProviderStatusSummary | null>>();
 
+function normalizeGeminiModelId(id: string): string {
+  return id.replace(/^models\//i, '');
+}
+
 const STATIC_MODEL_CATALOG: Record<LLMProvider, ProviderModelInfo[]> = {
   openai: FALLBACK_MODELS.openai
     ? [
@@ -32,13 +36,19 @@ const STATIC_MODEL_CATALOG: Record<LLMProvider, ProviderModelInfo[]> = {
       ]
     : [],
   gemini: [
-    { id: 'gemini-2.0-flash-exp' },
-    { id: 'gemini-2.0-pro-exp' },
-    { id: 'gemini-1.5-pro-latest' },
-    { id: 'gemini-1.5-flash-latest' },
-    { id: 'gemini-2.5-flash-latest' },
-    { id: 'gemini-2.5-pro' },
-  ],
+    'gemini-flash-latest',
+    'gemini-flash-lite-latest',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-2.5-pro',
+    'gemini-2.0-flash',
+    'gemini-2.0-pro-exp',
+    'gemini-1.5-pro-latest',
+    'gemini-1.5-flash-latest',
+  ].map((id) => {
+    const normalized = normalizeGeminiModelId(id);
+    return { id: normalized, label: formatLabel(normalized) };
+  }),
   openrouter: [
     { id: 'openrouter/auto' },
     { id: 'openai/gpt-4o-mini' },
@@ -130,6 +140,7 @@ async function fetchGeminiModels(): Promise<ProviderModelInfo[]> {
     const models: ProviderModelInfo[] = (payload?.models ?? [])
       .map((raw: any) => raw?.name as string | undefined)
       .filter((id: string | undefined): id is string => typeof id === 'string')
+      .map((id: string) => normalizeGeminiModelId(id))
       .map((id: string) => ({ id, label: formatLabel(id) }))
       .sort((a: ProviderModelInfo, b: ProviderModelInfo) => a.id.localeCompare(b.id));
 

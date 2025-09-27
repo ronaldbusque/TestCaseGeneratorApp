@@ -10,6 +10,7 @@ interface RequirementsInputProps {
   placeholder?: string;
   isEnabled?: boolean;
   hasUploadedFiles?: boolean;
+  onChange?: (value: string) => void;
 }
 
 export function RequirementsInput({
@@ -17,7 +18,8 @@ export function RequirementsInput({
   initialValue = '',
   placeholder = '',
   isEnabled = true,
-  hasUploadedFiles = false
+  hasUploadedFiles = false,
+  onChange,
 }: RequirementsInputProps) {
   const [requirements, setRequirements] = useState(initialValue);
 
@@ -50,7 +52,11 @@ export function RequirementsInput({
       <textarea
         id="requirements"
         value={requirements}
-        onChange={(e) => setRequirements(e.target.value)}
+        onChange={(e) => {
+          const value = e.target.value;
+          setRequirements(value);
+          onChange?.(value);
+        }}
         placeholder={placeholder || "Enter additional requirements or specifications here..."}
         disabled={!isEnabled}
         className={`

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAIService } from '@/lib/services/ai/factory';
+import { extractFullTextFromFiles } from '@/lib/server/fileTextExtraction';
 import { TestCaseGenerationRequest, UploadedFilePayload } from '@/lib/types';
 
 export async function POST(request: NextRequest) {
@@ -28,27 +29,31 @@ export async function POST(request: NextRequest) {
     // Log safely without exposing the entire content of requirements or fileContent
     console.log(`[API] Request details - Mode: ${mode}, Provider: ${provider ?? 'openai'}, Model: ${model ?? 'default'}, Requirements: ${requirements ? `${requirements.substring(0, 50)}...` : 'None'}, File content: ${fileContent ? 'Provided' : 'None'}, Files: ${files.length}`);
     
-    if (!requirements && !selectedScenarios?.length) {
+    const hasFiles = Array.isArray(files) && files.length > 0;
+
+    if (!requirements && !fileContent && !hasFiles && !selectedScenarios?.length) {
       return NextResponse.json(
         { error: 'Missing requirements or scenarios' },
         { status: 400 }
       );
     }
-    
+
+    const { enrichedFiles, combinedText } = await extractFullTextFromFiles(files);
+
     const aiService = createAIService(provider);
     console.log(`[API] Created AI service: ${aiService.constructor.name}`);
 
-    // Combine file content and requirements if both are present
-    const combinedRequirements = [fileContent, requirements]
-      .filter(Boolean)
+    // Combine file content, extracted text, and requirements if present
+    const combinedRequirements = [fileContent, combinedText, requirements]
+      .filter((segment): segment is string => Boolean(segment && segment.trim()))
       .join('\n\n');
 
     const result = await aiService.generateTestCases({
-      requirements: combinedRequirements,
+      requirements: combinedRequirements || requirements,
       mode,
       priorityMode,
       selectedScenarios,
-      files,
+      files: enrichedFiles,
       provider,
       model,
     });

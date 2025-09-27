@@ -5,10 +5,18 @@ export interface ProviderSelection {
   model: string;
 }
 
+export interface QuickSelection {
+  id: string;
+  label?: string;
+  provider: LLMProvider;
+  model: string;
+}
+
 export type ProviderSettings = {
   testCases: ProviderSelection;
   sql: ProviderSelection;
   data: ProviderSelection;
+  quickSelections: QuickSelection[];
 };
 
 export interface ProviderModelInfo {

@@ -54,6 +54,26 @@ export interface UploadedFilePayload {
   size?: number;
 }
 
+export interface FileTokenBreakdown {
+  name?: string;
+  type?: string;
+  size?: number;
+  tokens: number;
+  characters: number;
+}
+
+export interface FileTokenSummary {
+  files: FileTokenBreakdown[];
+  totals: {
+    fileTokens: number;
+    requirementsTokens: number;
+    combinedTokens: number;
+    contextLimit: number | null;
+  };
+  provider: LLMProvider;
+  model?: string;
+}
+
 export interface TestCaseGenerationRequest {
   requirements: string;
   files?: UploadedFilePayload[];

@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/Button';
 import { NavigationBar } from '@/components/NavigationBar';
 import { fetchApi } from '@/lib/utils/apiClient';
 import { useProviderSettings } from '@/lib/context/ProviderSettingsContext';
+import { QuickModelSwitcher } from '@/components/QuickModelSwitcher';
 
 // SQL Tool Modes
 type SQLToolMode = 'generate' | 'validate' | 'convert';
@@ -862,7 +863,11 @@ export default function SQLToolPage() {
             Generate, validate, and convert SQL queries using AI
           </p>
         </div>
-        
+
+        <div className="mb-6 flex justify-center sm:justify-end">
+          <QuickModelSwitcher domain="sql" />
+        </div>
+
         {/* Tool Tabs */}
         <div className="flex justify-center space-x-2 mb-6">
           <SQLToolTab mode="generate" activeMode={mode} setMode={handleModeChange} />

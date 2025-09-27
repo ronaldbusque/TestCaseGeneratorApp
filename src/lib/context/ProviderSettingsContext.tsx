@@ -6,6 +6,7 @@ import {
   LLMProvider,
   ProviderDescriptor,
   ProviderSettings,
+  QuickSelection,
 } from '@/lib/types/providers';
 import {
   DEFAULT_SETTINGS,
@@ -14,12 +15,22 @@ import {
   ensureSettingsFallback,
 } from '@/lib/providerSettings';
 
+type DomainKey = 'testCases' | 'sql' | 'data';
+
+const isValidProviderId = (value: any): value is LLMProvider =>
+  value === 'openai' || value === 'gemini' || value === 'openrouter';
+
 interface ProviderSettingsContextValue {
   settings: ProviderSettings;
   availableProviders: ProviderDescriptor[];
-  updateProvider: (domain: keyof ProviderSettings, provider: LLMProvider) => void;
-  updateModel: (domain: keyof ProviderSettings, model: string) => void;
+  quickSelections: QuickSelection[];
+  updateProvider: (domain: DomainKey, provider: LLMProvider) => void;
+  updateModel: (domain: DomainKey, model: string) => void;
   resetSettings: () => void;
+  addQuickSelection: () => void;
+  updateQuickSelection: (id: string, updates: Partial<QuickSelection>) => void;
+  removeQuickSelection: (id: string) => void;
+  applyQuickSelection: (domain: DomainKey, selectionId: string) => void;
   loading: boolean;
   providerError: string | null;
 }
@@ -99,23 +110,26 @@ export function ProviderSettingsProvider({ children }: { children: React.ReactNo
     setSettings((prev) => ensureSettingsFallback(prev, availableProviders));
   }, [availableProviders, hasLoadedSettings]);
 
+  const resolveDefaultModel = useCallback((providerId: LLMProvider): string => {
+    const descriptor = availableProviders.find((p) => p.id === providerId);
+    return descriptor?.defaultModel
+      ?? descriptor?.models?.[0]?.id
+      ?? FALLBACK_MODELS[providerId];
+  }, [availableProviders]);
+
   const updateProvider = useCallback(
-    (domain: keyof ProviderSettings, providerId: LLMProvider) => {
+    (domain: DomainKey, providerId: LLMProvider) => {
       setSettings((prev) => {
-        const descriptor = availableProviders.find((p) => p.id === providerId);
-        const defaultModel = descriptor?.defaultModel
-          ?? descriptor?.models?.[0]?.id
-          ?? FALLBACK_MODELS[providerId];
         return {
           ...prev,
-          [domain]: { provider: providerId, model: defaultModel },
+          [domain]: { provider: providerId, model: resolveDefaultModel(providerId) },
         };
       });
     },
-    [availableProviders]
+    [resolveDefaultModel]
   );
 
-  const updateModel = useCallback((domain: keyof ProviderSettings, model: string) => {
+  const updateModel = useCallback((domain: DomainKey, model: string) => {
     setSettings((prev) => ({
       ...prev,
       [domain]: {
@@ -125,13 +139,132 @@ export function ProviderSettingsProvider({ children }: { children: React.ReactNo
     }));
   }, []);
 
+  const addQuickSelection = useCallback(() => {
+    setSettings((prev) => {
+      const fallbackProviderId: LLMProvider = availableProviders[0]?.id ?? 'openai';
+      const model = resolveDefaultModel(fallbackProviderId);
+
+      const newSelection: QuickSelection = {
+        id: `qs-${Date.now()}`,
+        label: 'New Quick Selection',
+        provider: fallbackProviderId,
+        model,
+      };
+
+      return {
+        ...prev,
+        quickSelections: [...prev.quickSelections, newSelection],
+      };
+    });
+  }, [availableProviders, resolveDefaultModel]);
+
+  const updateQuickSelection = useCallback((id: string, updates: Partial<QuickSelection>) => {
+    setSettings((prev) => {
+      const nextSelections = prev.quickSelections.map((selection) => {
+        if (selection.id !== id) {
+          return selection;
+        }
+
+        let provider = selection.provider;
+        let model = selection.model;
+
+        if (updates.provider && isValidProviderId(updates.provider)) {
+          provider = updates.provider;
+          model = resolveDefaultModel(provider);
+        }
+
+        if (typeof updates.model === 'string') {
+          const trimmedModel = updates.model.trim();
+          model = trimmedModel || resolveDefaultModel(provider);
+        }
+
+        const label = typeof updates.label === 'string'
+          ? (updates.label.trim() || undefined)
+          : selection.label;
+
+        return {
+          ...selection,
+          ...updates,
+          id: selection.id,
+          label,
+          provider,
+          model,
+        } satisfies QuickSelection;
+      });
+
+      return {
+        ...prev,
+        quickSelections: nextSelections,
+      };
+    });
+  }, [resolveDefaultModel]);
+
+  const removeQuickSelection = useCallback((id: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      quickSelections: prev.quickSelections.filter((selection) => selection.id !== id),
+    }));
+  }, []);
+
+  const applyQuickSelection = useCallback((domain: DomainKey, selectionId: string) => {
+    setSettings((prev) => {
+      const selection = prev.quickSelections.find((item) => item.id === selectionId);
+      if (!selection) {
+        return prev;
+      }
+
+      const providerDescriptor = availableProviders.find((p) => p.id === selection.provider);
+      const providerId = providerDescriptor ? selection.provider : (availableProviders[0]?.id ?? prev[domain].provider);
+      const model = providerDescriptor
+        ? (selection.model?.trim() || resolveDefaultModel(providerId))
+        : resolveDefaultModel(providerId);
+
+      if (prev[domain].provider === providerId && prev[domain].model === model) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [domain]: {
+          provider: providerId,
+          model,
+        },
+      };
+    });
+  }, [availableProviders, resolveDefaultModel]);
+
   const resetSettings = useCallback(() => {
     setSettings(buildDefaultSettings(availableProviders));
   }, [availableProviders]);
 
   const value = useMemo<ProviderSettingsContextValue>(
-    () => ({ settings, availableProviders, updateProvider, updateModel, resetSettings, loading, providerError }),
-    [settings, availableProviders, updateProvider, updateModel, resetSettings, loading, providerError]
+    () => ({
+      settings,
+      availableProviders,
+      quickSelections: settings.quickSelections,
+      updateProvider,
+      updateModel,
+      resetSettings,
+      addQuickSelection,
+      updateQuickSelection,
+      removeQuickSelection,
+      applyQuickSelection,
+      loading,
+      providerError,
+    }),
+    [
+      settings,
+      availableProviders,
+      updateProvider,
+      updateModel,
+      resetSettings,
+      addQuickSelection,
+      updateQuickSelection,
+      removeQuickSelection,
+      applyQuickSelection,
+      loading,
+      providerError,
+    ]
   );
 
   return (

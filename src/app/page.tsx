@@ -1,17 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FileUpload } from '../components/FileUpload';
 import { RequirementsInput } from '@/components/RequirementsInput';
 import { TestCaseList } from '@/components/TestCaseList';
 import { createAIService } from '@/lib/services/ai/factory';
-import { TestCase, TestCaseMode, HighLevelTestCase, TestPriorityMode, UploadedFilePayload } from '@/lib/types';
+import { TestCase, TestCaseMode, HighLevelTestCase, TestPriorityMode, UploadedFilePayload, FileTokenSummary } from '@/lib/types';
 import { AnimatePresence } from 'framer-motion';
 import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { LoadingAnimation } from '@/components/LoadingAnimation';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
-import { ArrowPathIcon, ArrowsRightLeftIcon } from '@heroicons/react/24/outline';
+import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { TestCaseModeToggle } from '@/components/TestCaseModeToggle';
 import { NetworkBackground } from '@/components/NetworkBackground';
 import { TestPriorityToggle } from '@/components/TestPriorityToggle';
@@ -21,6 +21,7 @@ import Link from 'next/link';
 import { NavigationBar } from '@/components/NavigationBar';
 import { fetchApi } from '@/lib/utils/apiClient';
 import { useProviderSettings } from '@/lib/context/ProviderSettingsContext';
+import { QuickModelSwitcher } from '@/components/QuickModelSwitcher';
 
 const isHighLevelTestCase = (testCase: TestCase): testCase is HighLevelTestCase => {
   return 'scenario' in testCase && 'area' in testCase;
@@ -31,7 +32,6 @@ const MAX_FILE_PREVIEW_LENGTH = 500;
 
 export default function Home() {
   const { settings, availableProviders } = useProviderSettings();
-  const testCaseProviderInfo = availableProviders.find((provider) => provider.id === settings.testCases.provider);
   const [testCaseMode, setTestCaseMode] = useState<TestCaseMode>('high-level');
   const [testPriorityMode, setTestPriorityMode] = useState<TestPriorityMode>('comprehensive');
   const [requirements, setRequirements] = useState('');
@@ -53,6 +53,10 @@ export default function Home() {
     'complete'
   >('idle');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [preparedFilePayloads, setPreparedFilePayloads] = useState<UploadedFilePayload[]>([]);
+  const [fileTokenSummary, setFileTokenSummary] = useState<FileTokenSummary | null>(null);
+  const [fileTokenStatus, setFileTokenStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [fileTokenError, setFileTokenError] = useState<string | null>(null);
   const [isFileContentVisible, setIsFileContentVisible] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [confirmationType, setConfirmationType] = useState<'new_session' | null>(null);
@@ -85,6 +89,10 @@ export default function Home() {
     setConvertedScenarioIds(new Set());
     setError(null);
     setUploadedFiles([]);
+    setPreparedFilePayloads([]);
+    setFileTokenSummary(null);
+    setFileTokenStatus('idle');
+    setFileTokenError(null);
     setIsFileContentVisible(false);
     setGenerationStep('idle');
     setShouldResetFiles(true);
@@ -173,48 +181,97 @@ export default function Home() {
     return payloads.filter(({ name }) => Boolean(name));
   };
 
+  const fetchFileTokenSummary = useCallback(async (
+    payloads: UploadedFilePayload[],
+    currentRequirements: string
+  ): Promise<FileTokenSummary | null> => {
+    if (!payloads.length) {
+      return null;
+    }
+
+    return fetchApi<FileTokenSummary>('/api/files/analyze', {
+      method: 'POST',
+      body: JSON.stringify({
+        files: payloads,
+        provider: settings.testCases.provider,
+        model: settings.testCases.model,
+        requirements: currentRequirements,
+      }),
+    });
+  }, [settings.testCases.model, settings.testCases.provider]);
+
+  useEffect(() => {
+    if (!preparedFilePayloads.length) {
+      setFileTokenSummary(null);
+      setFileTokenStatus('idle');
+      setFileTokenError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setFileTokenStatus('loading');
+    setFileTokenError(null);
+
+    const timeoutId = setTimeout(() => {
+      fetchFileTokenSummary(preparedFilePayloads, requirements)
+        .then((summary) => {
+          if (cancelled) {
+            return;
+          }
+          setFileTokenSummary(summary ?? null);
+          setFileTokenStatus('ready');
+        })
+        .catch((err) => {
+          if (cancelled) {
+            return;
+          }
+          const message = err instanceof Error ? err.message : 'Failed to estimate tokens';
+          setFileTokenError(message);
+          setFileTokenStatus('error');
+        });
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [preparedFilePayloads, requirements, fetchFileTokenSummary]);
+
   const handleFilesSelect = async (files: File[]) => {
-    setShouldResetFiles(false); // Reset the flag when new files are selected
-    setUploadedFiles(files); // Update uploadedFiles first
-    
-    // If no files, clear content and return early
+    setShouldResetFiles(false);
+    setUploadedFiles(files);
+
     if (files.length === 0) {
+      setPreparedFilePayloads([]);
       setFileContent('');
+      setFileTokenSummary(null);
+      setFileTokenStatus('idle');
+      setFileTokenError(null);
       setGenerationStep('idle');
       return;
     }
 
     try {
       setGenerationStep('analyzing');
+      const payloads = await buildFilePayloads(files);
+      setPreparedFilePayloads(payloads);
 
-      const previews = await Promise.all(
-        files.map(async (file) => {
-          const content = await extractReadableContent(file);
-          const preview = content.slice(0, MAX_FILE_PREVIEW_LENGTH);
-          const truncated = content.length > MAX_FILE_PREVIEW_LENGTH;
-
-          return {
-            name: file.name,
-            type: file.type,
-            preview: preview ? `${preview}${truncated ? '...' : ''}` : '',
-          };
-        })
-      );
-
-      const summary = previews
+      const summary = payloads
         .map(({ name, type, preview }) => {
           if (!preview) {
             return `• ${name} (${type || 'unknown'})`;
           }
-          return `=== ${name} (${type || 'unknown'}) ===\n${preview}`;
+          const truncatedPreview = preview.slice(0, MAX_FILE_PREVIEW_LENGTH);
+          const needsEllipsis = preview.length > MAX_FILE_PREVIEW_LENGTH;
+          return `=== ${name} (${type || 'unknown'}) ===\n${truncatedPreview}${needsEllipsis ? '...' : ''}`;
         })
         .join('\n\n');
 
       setFileContent(summary || `Uploaded files:\n${files.map(file => `• ${file.name}`).join('\n')}`);
-      setGenerationStep('idle');
     } catch (error) {
       console.error('File processing error:', error);
       setError(error instanceof Error ? error.message : 'Failed to process files');
+    } finally {
       setGenerationStep('idle');
     }
   };
@@ -245,7 +302,9 @@ export default function Home() {
       // Generation phase
       setGenerationStep('generating');
 
-      const filePayloads = await buildFilePayloads(uploadedFiles);
+      const filePayloads = preparedFilePayloads.length === uploadedFiles.length
+        ? preparedFilePayloads
+        : await buildFilePayloads(uploadedFiles);
 
       // Call the protected API endpoint instead of using the AI service directly
       console.log(`[Client] Calling test case generation API - Mode: ${testCaseMode}`);
@@ -282,6 +341,7 @@ export default function Home() {
   };
 
   const handleRequirementsSubmit = (manualRequirements: string) => {
+    setRequirements(manualRequirements);
     generateTestCases(manualRequirements);
   };
 
@@ -343,7 +403,9 @@ export default function Home() {
       
       // Call the protected API endpoint instead of using the AI service directly
       console.log(`[Client] Calling test case conversion API - Selected scenarios: ${selectedScenarios.length}`);
-      const filePayloads = await buildFilePayloads(uploadedFiles);
+      const filePayloads = preparedFilePayloads.length === uploadedFiles.length
+        ? preparedFilePayloads
+        : await buildFilePayloads(uploadedFiles);
       const result = await fetchApi('/api/generate', {
         method: 'POST',
         body: JSON.stringify({
@@ -457,13 +519,7 @@ export default function Home() {
             <div className="flex flex-col space-y-6">
               {/* Top row with agent info and new session button */}
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3 rounded-xl bg-white/5 px-4 py-2 border border-white/10 text-blue-100">
-                  <ArrowsRightLeftIcon className="h-5 w-5 text-blue-200" />
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-blue-100">Provider: {testCaseProviderInfo?.label ?? settings.testCases.provider}</p>
-                    <p className="text-xs text-blue-200">Model: {settings.testCases.model}</p>
-                  </div>
-                </div>
+                <QuickModelSwitcher domain="testCases" />
                 {hasExistingData() && (
                   <Button
                     onClick={handleNewSession}
@@ -508,6 +564,9 @@ export default function Home() {
                 <FileUpload 
                   onFilesSelect={handleFilesSelect}
                   shouldReset={shouldResetFiles}
+                  tokenSummary={fileTokenSummary}
+                  tokenStatus={fileTokenStatus}
+                  tokenError={fileTokenError}
                 />
                 {uploadedFiles.length > 0 && (
                   <div className="flex items-center text-sm text-blue-100 mt-4">
@@ -536,6 +595,7 @@ export default function Home() {
                   placeholder="Enter additional requirements or specifications here..."
                   isEnabled={true}
                   hasUploadedFiles={uploadedFiles.length > 0}
+                  onChange={(value) => setRequirements(value)}
                 />
               </div>
             </div>

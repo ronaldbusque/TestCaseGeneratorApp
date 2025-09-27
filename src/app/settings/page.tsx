@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { useProviderSettings } from '@/lib/context/ProviderSettingsContext';
 import { LLMProvider } from '@/lib/types/providers';
 import { Button } from '@/components/ui/Button';
+import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 
 const DOMAIN_LABELS = {
   testCases: 'Test Case Generator',
@@ -19,9 +20,13 @@ export default function SettingsPage() {
   const {
     settings,
     availableProviders,
+    quickSelections,
     updateProvider,
     updateModel,
     resetSettings,
+    addQuickSelection,
+    updateQuickSelection,
+    removeQuickSelection,
     loading,
     providerError,
   } = useProviderSettings();
@@ -168,6 +173,106 @@ export default function SettingsPage() {
             })
           )}
         </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-lg p-6"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-blue-50">Quick model selections</h2>
+              <p className="text-sm text-blue-200/80">
+                Pick your go-to models for fast switching across the generator, SQL assistant, and data tools.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={addQuickSelection}
+              className="flex items-center gap-2 border border-white/10 bg-white/10 text-blue-50 hover:bg-white/20"
+            >
+              <PlusIcon className="h-4 w-4" />
+              Add quick selection
+            </Button>
+          </div>
+
+          <div className="mt-6 space-y-5">
+            {quickSelections.length === 0 ? (
+              <p className="text-sm text-blue-200/80">
+                No quick selections configured yet. Use the button above to add models you want to swap to with a single click.
+              </p>
+            ) : (
+              quickSelections.map((selection) => {
+                const providerOption = providerMap.get(selection.provider);
+                const datalistId = `quick-model-options-${selection.id}`;
+
+                return (
+                  <div key={selection.id} className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-end md:gap-6">
+                      <div className="flex-1">
+                        <label className="text-xs uppercase tracking-wide text-blue-200/60">Display label</label>
+                        <input
+                          type="text"
+                          value={selection.label ?? ''}
+                          onChange={(event) => updateQuickSelection(selection.id, { label: event.target.value })}
+                          placeholder={`${providerOption?.label ?? selection.provider} · ${selection.model}`}
+                          className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="w-full md:w-40">
+                        <label className="text-xs uppercase tracking-wide text-blue-200/60">Provider</label>
+                        <select
+                          value={selection.provider}
+                          onChange={(event) => updateQuickSelection(selection.id, { provider: event.target.value as LLMProvider })}
+                          className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm"
+                        >
+                          {providerOptions.map((option) => (
+                            <option key={option.value} value={option.value} className="bg-slate-900 text-blue-50">
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex-1">
+                        {providerOption && (
+                          <datalist id={datalistId}>
+                            {providerOption.models?.map((model) => (
+                              <option key={model.id} value={model.id}>
+                                {model.label ?? model.id}
+                              </option>
+                            ))}
+                          </datalist>
+                        )}
+                        <label className="text-xs uppercase tracking-wide text-blue-200/60">Model</label>
+                        <input
+                          type="text"
+                          list={providerOption ? datalistId : undefined}
+                          value={selection.model}
+                          onChange={(event) => updateQuickSelection(selection.id, { model: event.target.value })}
+                          placeholder={providerOption?.defaultModel || providerOption?.models?.[0]?.id || 'Enter model ID'}
+                          className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm"
+                        />
+                      </div>
+                      <div className="flex items-end">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => removeQuickSelection(selection.id)}
+                          className="flex items-center gap-1 bg-white/10 text-blue-200 hover:text-rose-200 hover:bg-white/20"
+                        >
+                          <TrashIcon className="h-4 w-4" />
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </motion.div>
 
         <div className="flex items-center justify-between">
           <div className="text-xs text-blue-200/70">
