@@ -187,13 +187,15 @@ function ensureSettingsFallback(
       ? selection.provider
       : fallbackProvider.id;
     const descriptor = providerMap.get(providerId) ?? fallbackProvider;
-    const model = selection.model?.trim()
-      ? selection.model.trim()
-      : descriptor.defaultModel ?? FALLBACK_MODELS[providerId] ?? FALLBACK_MODELS.openai;
+    const defaultModel = descriptor.defaultModel ?? FALLBACK_MODELS[providerId] ?? FALLBACK_MODELS.openai;
+    const providerChanged = selection.provider !== providerId;
+    const normalizedModel = providerChanged
+      ? defaultModel
+      : (selection.model?.trim() || defaultModel);
 
     return {
       provider: providerId,
-      model,
+      model: normalizedModel,
     };
   };
 
