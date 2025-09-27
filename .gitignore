@@ -41,4 +41,5 @@ plan.md
 .eslintrc.json
 logs/
 !src/app/logs/
+!src/app/api/logs/
 data/

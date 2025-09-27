@@ -96,9 +96,9 @@ async function fetchOpenAIModels(): Promise<ProviderModelInfo[]> {
     const payload: any = await response.json();
     const models: ProviderModelInfo[] = (payload?.data ?? [])
       .map((raw: any) => raw?.id as string | undefined)
-      .filter((id: string | undefined): id is string => Boolean(id) && isModelVisible(id))
-      .map((id) => ({ id, label: formatLabel(id) }))
-      .sort((a, b) => a.id.localeCompare(b.id));
+      .filter((id: string | undefined): id is string => typeof id === 'string' && isModelVisible(id))
+      .map((id: string) => ({ id, label: formatLabel(id) }))
+      .sort((a: ProviderModelInfo, b: ProviderModelInfo) => a.id.localeCompare(b.id));
 
     return models.length ? models : STATIC_MODEL_CATALOG.openai;
   } catch (error) {
@@ -125,9 +125,9 @@ async function fetchGeminiModels(): Promise<ProviderModelInfo[]> {
     const payload: any = await response.json();
     const models: ProviderModelInfo[] = (payload?.models ?? [])
       .map((raw: any) => raw?.name as string | undefined)
-      .filter((id: string | undefined): id is string => Boolean(id))
-      .map((id) => ({ id, label: formatLabel(id) }))
-      .sort((a, b) => a.id.localeCompare(b.id));
+      .filter((id: string | undefined): id is string => typeof id === 'string')
+      .map((id: string) => ({ id, label: formatLabel(id) }))
+      .sort((a: ProviderModelInfo, b: ProviderModelInfo) => a.id.localeCompare(b.id));
 
     return models.length ? models : STATIC_MODEL_CATALOG.gemini;
   } catch (error) {
@@ -158,9 +158,9 @@ async function fetchOpenRouterModels(): Promise<ProviderModelInfo[]> {
     const payload: any = await response.json();
     const models: ProviderModelInfo[] = (payload?.data ?? [])
       .map((raw: any) => raw?.id as string | undefined)
-      .filter((id: string | undefined): id is string => Boolean(id))
-      .map((id) => ({ id, label: formatLabel(id) }))
-      .sort((a, b) => a.id.localeCompare(b.id));
+      .filter((id: string | undefined): id is string => typeof id === 'string')
+      .map((id: string) => ({ id, label: formatLabel(id) }))
+      .sort((a: ProviderModelInfo, b: ProviderModelInfo) => a.id.localeCompare(b.id));
 
     return models.length ? models : STATIC_MODEL_CATALOG.openrouter;
   } catch (error) {
