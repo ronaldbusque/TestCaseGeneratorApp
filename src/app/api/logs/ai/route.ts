@@ -28,24 +28,26 @@ export async function GET(request: NextRequest) {
     const entries: LogEntry[] = [];
     for (const line of lines) {
       if (entries.length >= limit) break;
-      let parsed: LogEntry | null = null;
+      let parsed: unknown;
       try {
         parsed = JSON.parse(line);
       } catch (error) {
         continue;
       }
 
-      if (!parsed) {
+      if (!parsed || typeof parsed !== 'object') {
         continue;
       }
 
-      if (providerFilter && parsed.provider !== providerFilter) {
+      const entry = parsed as LogEntry;
+
+      if (providerFilter && entry.provider !== providerFilter) {
         continue;
       }
-      if (modelFilter && parsed.model !== modelFilter) {
+      if (modelFilter && entry.model !== modelFilter) {
         continue;
       }
-      entries.push(parsed);
+      entries.push(entry);
     }
 
     return NextResponse.json({ entries });

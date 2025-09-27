@@ -20,6 +20,9 @@ const statusCache = new Map<LLMProvider, CacheEntry<ProviderStatusSummary | null
 const STATIC_MODEL_CATALOG: Record<LLMProvider, ProviderModelInfo[]> = {
   openai: FALLBACK_MODELS.openai
     ? [
+        { id: 'gpt-5-thinking' },
+        { id: 'gpt-5-thinking-mini' },
+        { id: 'gpt-5-thinking-nano' },
         { id: 'gpt-4.1' },
         { id: 'gpt-4.1-mini' },
         { id: 'gpt-4.1-nano' },
@@ -34,6 +37,7 @@ const STATIC_MODEL_CATALOG: Record<LLMProvider, ProviderModelInfo[]> = {
     { id: 'gemini-1.5-pro-latest' },
     { id: 'gemini-1.5-flash-latest' },
     { id: 'gemini-2.5-flash-latest' },
+    { id: 'gemini-2.5-pro' },
   ],
   openrouter: [
     { id: 'openrouter/auto' },

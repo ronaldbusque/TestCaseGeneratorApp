@@ -12,6 +12,9 @@ const DOMAIN_LABELS = {
   data: 'Test Data Generator',
 } as const;
 
+const COMPACT_FIELD_CLASS = 'h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm';
+const PROVIDER_SELECT_CLASS = `${COMPACT_FIELD_CLASS} pr-8`;
+
 export default function SettingsPage() {
   const {
     settings,
@@ -102,7 +105,7 @@ export default function SettingsPage() {
                       <select
                         value={selection.provider}
                         onChange={(event) => updateProvider(domain, event.target.value as LLMProvider)}
-                        className="bg-slate-900/80 border border-white/10 text-blue-50 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm"
+                        className={PROVIDER_SELECT_CLASS}
                       >
                         {providerOptions.map((option) => (
                           <option key={option.value} value={option.value} className="bg-slate-900 text-blue-50">
@@ -126,7 +129,7 @@ export default function SettingsPage() {
                           value={selection.model}
                           onChange={(event) => updateModel(domain, event.target.value)}
                           placeholder={selectedOption?.defaultModel || selectedOption?.models?.[0]?.id || 'Select or type model'}
-                          className="w-full bg-slate-900/80 border border-white/10 text-blue-50 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm"
+                          className={`w-full ${COMPACT_FIELD_CLASS}`}
                         />
                         <p className="mt-1 text-[0.7rem] text-blue-200/60">
                           {selectedOption?.models?.length
