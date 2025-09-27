@@ -359,6 +359,20 @@ export default function Home() {
       if (result.error) {
         setError(result.error);
       } else if (result.testCases) {
+        console.log('[Client] Conversion response', result);
+
+        const requestedCount = selectedScenarios.length;
+        const limitedTestCases = Array.isArray(result.testCases)
+          ? result.testCases.slice(0, requestedCount)
+          : [];
+
+        if (result.testCases.length > requestedCount) {
+          console.warn('[Client] Conversion returned more test cases than requested', {
+            requested: requestedCount,
+            received: result.testCases.length,
+          });
+        }
+
         // First, prepare all the IDs we'll need
         const existingIds: Set<string> = new Set([
           ...convertedTestCases.map(tc => tc.id),
@@ -366,12 +380,12 @@ export default function Home() {
         ]);
 
         // Generate IDs for all new test cases first
-        const newIds: string[] = result.testCases.map((_: any, index: number) => {
+        const newIds: string[] = limitedTestCases.map((_: any, index: number) => {
           const originalScenario = selectedScenarios[index];
           const baseId = typeof originalScenario?.id === 'string' ? originalScenario.id : '';
           const matchNumber = baseId ? baseId.split('-')[1] : undefined;
           let id = matchNumber ? `TC-${matchNumber}` : getNextTestCaseId('TC');
-          
+
           // If the ID already exists, generate a new one
           while (existingIds.has(id)) {
             id = getNextTestCaseId('TC');
@@ -381,7 +395,7 @@ export default function Home() {
         });
 
         // Now create the test cases with their unique IDs
-        const newTestCases: TestCase[] = result.testCases.map((tc: any, index: number) => {
+        const newTestCases: TestCase[] = limitedTestCases.map((tc: any, index: number) => {
           const originalScenario = selectedScenarios[index];
           return {
             ...tc,
