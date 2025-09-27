@@ -12,7 +12,21 @@ interface ProviderSettingsStore {
 async function readStore(): Promise<ProviderSettingsStore> {
   try {
     const data = await fs.readFile(STORE_PATH, 'utf8');
-    return JSON.parse(data) as ProviderSettingsStore;
+    try {
+      return JSON.parse(data) as ProviderSettingsStore;
+    } catch (parseError) {
+      if (parseError instanceof SyntaxError) {
+        const backupPath = `${STORE_PATH}.corrupt-${Date.now()}`;
+        try {
+          await fs.rename(STORE_PATH, backupPath);
+        } catch (renameError) {
+          console.warn('[providerSettingsStore] Failed to quarantine corrupt store file', renameError);
+        }
+        console.warn('[providerSettingsStore] Detected corrupt provider settings store. Creating fresh store.', parseError);
+        return {};
+      }
+      throw parseError;
+    }
   } catch (error: any) {
     if (error && error.code === 'ENOENT') {
       return {};
