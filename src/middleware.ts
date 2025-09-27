@@ -12,9 +12,18 @@ export function middleware(request: NextRequest) {
   
   const pathname = request.nextUrl.pathname;
 
+  const publicApiRoutes = new Set([
+    '/api/providers',
+  ]);
+
   // Only apply validation to specific API paths (e.g., all under /api/ but not auth routes if you had them)
   // Adjust the path check as needed for your application structure.
   if (pathname.startsWith('/api/')) {
+    if (publicApiRoutes.has(pathname)) {
+      console.log(`[Middleware] Public API route passthrough: ${pathname}`);
+      return NextResponse.next();
+    }
+
     const token = request.headers.get(TOKEN_HEADER_NAME);
     
     // Add diagnostic logging without exposing the actual token
