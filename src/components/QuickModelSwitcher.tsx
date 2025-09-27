@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useProviderSettings } from '@/lib/context/ProviderSettingsContext';
-import { LLMProvider, QuickSelection } from '@/lib/types/providers';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
+import { useProviderSettings } from '@/lib/context/ProviderSettingsContext';
+import { QuickSelection } from '@/lib/types/providers';
 
 const DOMAIN_LABELS: Record<'testCases' | 'sql' | 'data', string> = {
   testCases: 'Test Case Generator',
@@ -26,22 +27,37 @@ export function QuickModelSwitcher({ domain, className }: QuickModelSwitcherProp
   } = useProviderSettings();
 
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
+
+  const updatePosition = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const menuWidth = 288;
+    const margin = 16;
+    const maxLeft = window.innerWidth - menuWidth - margin;
+    const left = Math.min(maxLeft, Math.max(margin, rect.left));
+
+    setMenuPosition({
+      top: rect.bottom + 8,
+      left,
+    });
+  }, []);
 
   useEffect(() => {
     if (!open) {
       return;
     }
 
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [open]);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [open, updatePosition]);
 
   const domainSelection = settings[domain];
 
@@ -114,14 +130,34 @@ export function QuickModelSwitcher({ domain, className }: QuickModelSwitcherProp
     );
   };
 
+  const overlay =
+    open && menuPosition && typeof window !== 'undefined'
+      ? createPortal(
+          <div
+            className="fixed inset-0 z-[9998]"
+            onClick={() => setOpen(false)}
+          >
+            <div
+              className="absolute w-72 rounded-xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-xl"
+              style={{ top: menuPosition.top, left: menuPosition.left }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              {menuContent()}
+            </div>
+          </div>,
+          document.body
+        )
+      : null;
+
   return (
-    <div ref={containerRef} className={`relative inline-block text-left ${className ?? ''}`}>
+    <div className={`relative inline-block text-left ${className ?? ''}`} style={{ zIndex: 60 }}>
       <span className="text-xs uppercase tracking-wide text-blue-200/60 block mb-1">
         {DOMAIN_LABELS[domain]}
       </span>
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
+        ref={triggerRef}
         className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-blue-100 hover:bg-white/10 transition"
       >
         <span>{loading ? 'Loading…' : formattedSelectionLabel}</span>
@@ -135,11 +171,7 @@ export function QuickModelSwitcher({ domain, className }: QuickModelSwitcherProp
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
         </svg>
       </button>
-      {open && (
-        <div className="absolute right-0 z-50 mt-2 w-72 rounded-xl border border-white/10 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-xl">
-          {menuContent()}
-        </div>
-      )}
+      {overlay}
     </div>
   );
 }

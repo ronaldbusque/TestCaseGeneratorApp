@@ -2,133 +2,114 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState, useEffect } from 'react';
-import { 
-  BeakerIcon, 
-  DocumentCheckIcon, 
-  CommandLineIcon, 
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  BeakerIcon,
+  DocumentCheckIcon,
+  CommandLineIcon,
   TableCellsIcon,
   Cog6ToothIcon,
   QueueListIcon,
 } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/Button';
 
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof DocumentCheckIcon;
+  hideLabel?: boolean;
+  iconClass?: string;
+};
+
+const NAV_ITEMS: NavItem[] = [
+  { href: '/', label: 'Test Case Generator', icon: DocumentCheckIcon, iconClass: 'h-8 w-8' },
+  { href: '/sql', label: 'SQL Assistant', icon: CommandLineIcon, iconClass: 'h-8 w-8' },
+  { href: '/data-generator', label: 'Test Data Generator', icon: TableCellsIcon, iconClass: 'h-8 w-8' },
+  { href: '/logs', label: 'AI Logs', icon: QueueListIcon, iconClass: 'h-8 w-8' },
+  { href: '/settings', label: 'Settings', icon: Cog6ToothIcon, hideLabel: true, iconClass: 'h-6 w-6' },
+];
+
 export const NavigationBar = () => {
   const pathname = usePathname();
   const [accessTokenInput, setAccessTokenInput] = useState('');
   const [savedAccessToken, setSavedAccessToken] = useState<string | null>(null);
+
   useEffect(() => {
     const storedToken = localStorage.getItem('appAccessToken');
     if (storedToken) {
       setAccessTokenInput(storedToken);
       setSavedAccessToken(storedToken);
-      console.log('Access token found in localStorage.');
     }
   }, []);
-  
+
   const handleSaveToken = () => {
-    if (!accessTokenInput) return; // Don't save empty token
-    localStorage.setItem('appAccessToken', accessTokenInput);
-    setSavedAccessToken(accessTokenInput);
-    // Provide feedback to the user
-    alert('Access Token saved successfully!');
-    console.log('Access token saved to localStorage. Token length:', accessTokenInput.length);
+    if (!accessTokenInput?.trim()) return;
+    localStorage.setItem('appAccessToken', accessTokenInput.trim());
+    setSavedAccessToken(accessTokenInput.trim());
   };
-  
+
+  const navLinks = useMemo(() => NAV_ITEMS, []);
+
   return (
-    <nav className="bg-slate-900/80 backdrop-blur-lg border-b border-white/10 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <div className="flex">
-            <div className="flex-shrink-0 flex items-center">
-              <Link href="/" className="flex items-center">
-                <BeakerIcon className="h-8 w-8 text-blue-500" />
-                <span className="ml-2 text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-blue-200">
-                  QualityForge AI
-                </span>
-              </Link>
-            </div>
-            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-              <Link
-                href="/"
-                className={`${
-                  pathname === '/' 
-                    ? 'border-blue-500 text-white' 
-                    : 'border-transparent text-gray-300 hover:border-blue-300 hover:text-blue-300'
-                } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
-              >
-                <DocumentCheckIcon className="h-5 w-5 mr-1" />
-                Test Case Generator
-              </Link>
-              <Link
-                href="/sql"
-                className={`${
-                  pathname === '/sql' 
-                    ? 'border-blue-500 text-white' 
-                    : 'border-transparent text-gray-300 hover:border-blue-300 hover:text-blue-300'
-                } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
-              >
-                <CommandLineIcon className="h-5 w-5 mr-1" />
-                SQL Assistant
-              </Link>
-              <Link
-                href="/data-generator"
-                className={`${
-                  pathname === '/data-generator' 
-                    ? 'border-blue-500 text-white' 
-                    : 'border-transparent text-gray-300 hover:border-blue-300 hover:text-blue-300'
-                } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
-              >
-                <TableCellsIcon className="h-5 w-5 mr-1" />
-                Test Data Generator
-              </Link>
-              <Link
-                href="/logs"
-                className={`${
-                  pathname === '/logs'
-                    ? 'border-blue-500 text-white'
-                    : 'border-transparent text-gray-300 hover:border-blue-300 hover:text-blue-300'
-                } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
-              >
-                <QueueListIcon className="h-5 w-5 mr-1" />
-                AI Logs
-              </Link>
-              <Link
-                href="/settings"
-                className={`${
-                  pathname === '/settings'
-                    ? 'border-blue-500 text-white'
-                    : 'border-transparent text-gray-300 hover:border-blue-300 hover:text-blue-300'
-                } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
-              >
-                <Cog6ToothIcon className="h-5 w-5 mr-1" />
-                Settings
-              </Link>
-            </div>
+    <nav className="sticky top-0 z-50 border-b border-white/5 bg-slate-950/80 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center gap-10">
+          <Link href="/" className="flex items-center gap-3 rounded-full bg-white/5 px-4 py-2 shadow-sm transition hover:bg-white/10">
+            <BeakerIcon className="h-8 w-8 text-blue-400" />
+            <span className="hidden whitespace-nowrap text-lg font-semibold text-white sm:inline">QualityForge AI</span>
+          </Link>
+
+          <div className="hidden items-center gap-1.5 rounded-full bg-white/5 px-3 py-1.5 sm:flex">
+            {navLinks.map((item) => {
+              const Icon = item.icon;
+              const isActive = pathname === item.href;
+              const iconClass = item.iconClass ?? 'h-6 w-6';
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition ${
+                    isActive
+                      ? 'bg-gradient-to-r from-blue-500/80 to-indigo-500/80 text-white shadow'
+                      : 'text-blue-100/70 hover:bg-white/10 hover:text-white'
+                  }`}
+                  aria-current={isActive ? 'page' : undefined}
+                >
+                  <Icon className={iconClass} />
+                  {item.hideLabel ? (
+                    <span className="sr-only">{item.label}</span>
+                  ) : (
+                    <span>{item.label}</span>
+                  )}
+                </Link>
+              );
+            })}
           </div>
-          
-          {/* Access Token Input */}
-          <div className="flex items-center ml-auto pl-4">
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 shadow-inner sm:flex">
+            <span className="text-xs uppercase tracking-wide text-blue-100/60">Access Token</span>
             <input
               type="password"
-              placeholder="Access Token"
+              placeholder="••••••••"
               value={accessTokenInput}
-              onChange={(e) => setAccessTokenInput(e.target.value)}
-              className="px-2 py-1 text-sm bg-slate-700 border border-slate-600 text-white rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 w-48"
-              aria-label="Access Token Input"
+              onChange={(event) => setAccessTokenInput(event.target.value)}
+              className="w-40 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-white placeholder:text-blue-200/50 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              aria-label="Access token"
             />
-            <Button
-              size="sm"
-              variant="secondary"
-              className="ml-2 bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-500"
-              onClick={handleSaveToken}
-              disabled={!accessTokenInput || accessTokenInput === savedAccessToken}
-            >
-              {savedAccessToken ? 'Update Token' : 'Save Token'}
-            </Button>
           </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="bg-blue-600/90 px-4 text-white shadow hover:bg-blue-600"
+            onClick={handleSaveToken}
+            disabled={!accessTokenInput || accessTokenInput === savedAccessToken}
+          >
+            {savedAccessToken ? 'Update Token' : 'Save Token'}
+          </Button>
         </div>
       </div>
     </nav>
   );
-}; 
+};

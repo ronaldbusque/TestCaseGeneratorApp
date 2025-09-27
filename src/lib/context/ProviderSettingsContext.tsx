@@ -13,6 +13,7 @@ import {
   FALLBACK_MODELS,
   buildDefaultSettings,
   ensureSettingsFallback,
+  normalizeModelIdentifier,
 } from '@/lib/providerSettings';
 
 type DomainKey = 'testCases' | 'sql' | 'data';
@@ -110,12 +111,44 @@ export function ProviderSettingsProvider({ children }: { children: React.ReactNo
     setSettings((prev) => ensureSettingsFallback(prev, availableProviders));
   }, [availableProviders, hasLoadedSettings]);
 
+  const getDescriptor = useCallback(
+    (providerId: LLMProvider) => availableProviders.find((p) => p.id === providerId),
+    [availableProviders]
+  );
+
   const resolveDefaultModel = useCallback((providerId: LLMProvider): string => {
-    const descriptor = availableProviders.find((p) => p.id === providerId);
-    return descriptor?.defaultModel
-      ?? descriptor?.models?.[0]?.id
-      ?? FALLBACK_MODELS[providerId];
-  }, [availableProviders]);
+    const fallback = normalizeModelIdentifier(providerId, FALLBACK_MODELS[providerId]) ?? FALLBACK_MODELS[providerId];
+    const descriptor = getDescriptor(providerId);
+    const descriptorDefault = descriptor?.defaultModel
+      ? normalizeModelIdentifier(providerId, descriptor.defaultModel)
+      : undefined;
+    const firstModel = descriptor?.models?.[0]?.id
+      ? normalizeModelIdentifier(providerId, descriptor.models[0].id)
+      : undefined;
+
+    return descriptorDefault ?? firstModel ?? fallback;
+  }, [getDescriptor]);
+
+  const sanitizeSelectionModel = useCallback((providerId: LLMProvider, model: string | undefined): string => {
+    const fallback = resolveDefaultModel(providerId);
+    const descriptor = getDescriptor(providerId);
+    const normalized = normalizeModelIdentifier(providerId, model);
+
+    if (!normalized) {
+      return fallback;
+    }
+
+    if (providerId === 'openrouter') {
+      return normalized;
+    }
+
+    const models = descriptor?.models;
+    if (!models || models.length === 0) {
+      return normalized;
+    }
+
+    return models.some((entry) => entry.id === normalized) ? normalized : fallback;
+  }, [getDescriptor, resolveDefaultModel]);
 
   const updateProvider = useCallback(
     (domain: DomainKey, providerId: LLMProvider) => {
@@ -174,12 +207,12 @@ export function ProviderSettingsProvider({ children }: { children: React.ReactNo
         }
 
         if (typeof updates.model === 'string') {
-          const trimmedModel = updates.model.trim();
-          model = trimmedModel || resolveDefaultModel(provider);
+          const trimmed = updates.model.trim();
+          model = trimmed || selection.model;
         }
 
-        const label = typeof updates.label === 'string'
-          ? (updates.label.trim() || undefined)
+        const label = updates.label !== undefined
+          ? (updates.label === '' ? undefined : updates.label)
           : selection.label;
 
         return {
@@ -213,11 +246,9 @@ export function ProviderSettingsProvider({ children }: { children: React.ReactNo
         return prev;
       }
 
-      const providerDescriptor = availableProviders.find((p) => p.id === selection.provider);
+      const providerDescriptor = getDescriptor(selection.provider);
       const providerId = providerDescriptor ? selection.provider : (availableProviders[0]?.id ?? prev[domain].provider);
-      const model = providerDescriptor
-        ? (selection.model?.trim() || resolveDefaultModel(providerId))
-        : resolveDefaultModel(providerId);
+      const model = sanitizeSelectionModel(providerId, providerDescriptor ? selection.model : undefined);
 
       if (prev[domain].provider === providerId && prev[domain].model === model) {
         return prev;
@@ -231,7 +262,7 @@ export function ProviderSettingsProvider({ children }: { children: React.ReactNo
         },
       };
     });
-  }, [availableProviders, resolveDefaultModel]);
+  }, [availableProviders, getDescriptor, sanitizeSelectionModel]);
 
   const resetSettings = useCallback(() => {
     setSettings(buildDefaultSettings(availableProviders));

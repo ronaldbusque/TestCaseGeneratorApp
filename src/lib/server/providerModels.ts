@@ -24,9 +24,6 @@ function normalizeGeminiModelId(id: string): string {
 const STATIC_MODEL_CATALOG: Record<LLMProvider, ProviderModelInfo[]> = {
   openai: FALLBACK_MODELS.openai
     ? [
-        { id: 'gpt-5-thinking' },
-        { id: 'gpt-5-thinking-mini' },
-        { id: 'gpt-5-thinking-nano' },
         { id: 'gpt-4.1' },
         { id: 'gpt-4.1-mini' },
         { id: 'gpt-4.1-nano' },
@@ -202,6 +199,16 @@ async function fetchOpenAIStatus(): Promise<ProviderStatusSummary | null> {
         Authorization: `Bearer ${apiKey}`,
       },
     }, 7000);
+
+    if (response.status === 401 || response.status === 403) {
+      return {
+        severity: 'warning',
+        headline: 'OpenAI usage unavailable',
+        detail: 'The configured API key lacks billing scope or has expired. Update credentials to see remaining credits.',
+        fetchedAt: new Date().toISOString(),
+        source: 'fallback',
+      } satisfies ProviderStatusSummary;
+    }
 
     if (!response.ok) {
       throw new Error(`OpenAI credit request failed: ${response.status}`);

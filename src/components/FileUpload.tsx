@@ -16,7 +16,6 @@ interface FileUploadProps {
 
 const SUPPORTED_FILE_TYPES = {
   'application/pdf': 'PDF',
-  'application/msword': 'DOC',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX',
   'text/plain': 'TXT',
   'image/png': 'PNG',
@@ -114,7 +113,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       'text/plain': ['.txt'],
       'text/markdown': ['.md'],
       'application/pdf': ['.pdf'],
-      'application/msword': ['.doc'],
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
       'image/*': ['.png', '.jpg', '.jpeg', '.gif'],
     },
@@ -152,7 +150,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
             </p>
           </div>
           <div className="text-xs text-blue-300 text-center space-y-1">
-            <p>Supported formats: TXT, MD, PDF, DOC, DOCX, PNG, JPG, JPEG, GIF</p>
+            <p>Supported formats: TXT, MD, PDF, DOCX, PNG, JPG, JPEG, GIF</p>
             <p>Max file size: 10MB | Total size remaining: {(remainingSize / (1024 * 1024)).toFixed(1)}MB</p>
           </div>
         </div>

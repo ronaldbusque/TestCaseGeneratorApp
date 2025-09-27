@@ -12,6 +12,31 @@ export const FALLBACK_MODELS: Record<LLMProvider, string> = {
   openrouter: 'openrouter/auto',
 };
 
+const LEGACY_MODEL_ALIASES: Record<string, string> = {
+  'gpt-5-thinking': 'gpt-4o',
+  'gpt-5-thinking-mini': 'gpt-4.1-mini',
+  'gpt-5-thinking-nano': 'gpt-4.1-nano',
+  'gemini-2.5-flash-latest': 'gemini-2.5-flash',
+};
+
+export function normalizeModelIdentifier(provider: LLMProvider, model: string | undefined): string | undefined {
+  if (!model) {
+    return undefined;
+  }
+
+  const trimmed = model.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const alias = LEGACY_MODEL_ALIASES[trimmed.toLowerCase()];
+  if (alias) {
+    return alias;
+  }
+
+  return trimmed;
+}
+
 const DEFAULT_QUICK_SELECTIONS: QuickSelection[] = [
   {
     id: 'qs-gemini-flash-latest',
@@ -19,30 +44,30 @@ const DEFAULT_QUICK_SELECTIONS: QuickSelection[] = [
     provider: 'gemini',
     model: 'gemini-flash-latest',
   },
-  {
-    id: 'qs-gemini-25-pro',
-    label: 'Gemini 2.5 Pro',
-    provider: 'gemini',
-    model: 'gemini-2.5-pro',
-  },
-  {
-    id: 'qs-gpt-41-mini',
-    label: 'GPT-4.1 Mini',
-    provider: 'openai',
-    model: 'gpt-4.1-mini',
-  },
-  {
-    id: 'qs-gpt-5-mini',
-    label: 'GPT-5 Mini',
-    provider: 'openai',
-    model: 'gpt-5-thinking-mini',
-  },
-  {
-    id: 'qs-gpt-5',
-    label: 'GPT-5',
-    provider: 'openai',
-    model: 'gpt-5-thinking',
-  },
+    {
+      id: 'qs-gemini-25-pro',
+      label: 'Gemini 2.5 Pro',
+      provider: 'gemini',
+      model: 'gemini-2.5-pro',
+    },
+    {
+      id: 'qs-gpt-41',
+      label: 'GPT-4.1',
+      provider: 'openai',
+      model: 'gpt-4.1',
+    },
+    {
+      id: 'qs-gpt-41-mini',
+      label: 'GPT-4.1 Mini',
+      provider: 'openai',
+      model: 'gpt-4.1-mini',
+    },
+    {
+      id: 'qs-gpt-4o',
+      label: 'GPT-4o',
+      provider: 'openai',
+      model: 'gpt-4o',
+    },
   {
     id: 'qs-grok-4-fast',
     label: 'Grok 4 Fast (OpenRouter)',
@@ -64,9 +89,8 @@ export function coerceStoredSettings(raw: any): ProviderSettings {
       const provider = isValidProvider(selection.provider)
         ? (selection.provider as LLMProvider)
         : 'openai';
-      const model = typeof selection.model === 'string' && selection.model.trim()
-        ? selection.model.trim()
-        : FALLBACK_MODELS[provider];
+      const candidateModel = normalizeModelIdentifier(provider, selection.model);
+      const model = candidateModel ?? FALLBACK_MODELS[provider];
       return { provider, model };
     }
 
@@ -93,9 +117,8 @@ export function coerceStoredSettings(raw: any): ProviderSettings {
         const provider = isValidProvider(entry.provider)
           ? (entry.provider as LLMProvider)
           : 'openai';
-        const model = typeof entry.model === 'string' && entry.model.trim()
-          ? entry.model.trim()
-          : FALLBACK_MODELS[provider];
+        const candidateModel = normalizeModelIdentifier(provider, entry.model);
+        const model = candidateModel ?? FALLBACK_MODELS[provider];
         const id = typeof entry.id === 'string' && entry.id.trim()
           ? entry.id.trim()
           : `qs-${provider}-${index}`;
@@ -142,9 +165,12 @@ export function ensureSettingsFallback(
       ?? descriptor.models?.[0]?.id
       ?? FALLBACK_MODELS[providerId];
     const providerChanged = selection.provider !== providerId;
+    const candidateModel = normalizeModelIdentifier(providerId, selection.model);
+    const allowCustom = providerId === 'openrouter' || !descriptor.models || descriptor.models.length === 0;
+    const modelExists = descriptor.models?.some((model) => model.id === candidateModel) ?? false;
     const normalizedModel = providerChanged
       ? defaultModel
-      : (selection.model?.trim() || defaultModel);
+      : (candidateModel && (modelExists || allowCustom) ? candidateModel : defaultModel);
 
     return {
       provider: providerId,
@@ -160,7 +186,12 @@ export function ensureSettingsFallback(
     const defaultModel = descriptor.defaultModel
       ?? descriptor.models?.[0]?.id
       ?? FALLBACK_MODELS[providerId];
-    const normalizedModel = selection.model?.trim() || defaultModel;
+    const candidateModel = normalizeModelIdentifier(providerId, selection.model);
+    const allowCustom = providerId === 'openrouter' || !descriptor.models || descriptor.models.length === 0;
+    const modelExists = descriptor.models?.some((model) => model.id === candidateModel) ?? false;
+    const normalizedModel = candidateModel && (modelExists || allowCustom)
+      ? candidateModel
+      : defaultModel;
     const label = selection.label?.trim() || undefined;
     const id = selection.id?.trim() || `qs-${providerId}-${index}`;
 
