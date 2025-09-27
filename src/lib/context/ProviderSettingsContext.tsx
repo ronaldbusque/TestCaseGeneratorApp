@@ -21,6 +21,7 @@ interface ProviderSettingsContextValue {
   updateModel: (domain: keyof ProviderSettings, model: string) => void;
   resetSettings: () => void;
   loading: boolean;
+  providerError: string | null;
 }
 
 const ProviderSettingsContext = createContext<ProviderSettingsContextValue | undefined>(undefined);
@@ -31,19 +32,19 @@ export function ProviderSettingsProvider({ children }: { children: React.ReactNo
   const [providersLoaded, setProvidersLoaded] = useState(false);
   const [hasLoadedSettings, setHasLoadedSettings] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [providerError, setProviderError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadProviders = async () => {
       try {
-        const response = await fetch('/api/providers');
-        if (!response.ok) {
-          throw new Error(`Failed to fetch providers: ${response.status}`);
-        }
-        const data = await response.json();
+        const data = await fetchApi('/api/providers');
         setAvailableProviders(data.providers ?? []);
+        setProviderError(null);
       } catch (error) {
         console.error('Failed to fetch providers', error);
         setAvailableProviders([]);
+        const message = error instanceof Error ? error.message : 'Unable to load providers.';
+        setProviderError(message);
       } finally {
         setProvidersLoaded(true);
       }
@@ -129,8 +130,8 @@ export function ProviderSettingsProvider({ children }: { children: React.ReactNo
   }, [availableProviders]);
 
   const value = useMemo<ProviderSettingsContextValue>(
-    () => ({ settings, availableProviders, updateProvider, updateModel, resetSettings, loading }),
-    [settings, availableProviders, updateProvider, updateModel, resetSettings, loading]
+    () => ({ settings, availableProviders, updateProvider, updateModel, resetSettings, loading, providerError }),
+    [settings, availableProviders, updateProvider, updateModel, resetSettings, loading, providerError]
   );
 
   return (

@@ -20,6 +20,7 @@ export default function SettingsPage() {
     updateModel,
     resetSettings,
     loading,
+    providerError,
   } = useProviderSettings();
 
   const providerOptions = useMemo(() => (
@@ -65,6 +66,13 @@ export default function SettingsPage() {
         <div className="grid gap-6">
           {loading ? (
             <div className="text-center text-blue-200">Loading available providers...</div>
+          ) : availableProviders.length === 0 ? (
+            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-lg p-6 text-center text-blue-100">
+              <p className="text-sm font-semibold">No providers available.</p>
+              <p className="mt-2 text-xs text-blue-200/70">
+                {providerError ? providerError : 'Add provider API keys and ensure your access token is saved to view and edit provider settings.'}
+              </p>
+            </div>
           ) : (
             (Object.entries(DOMAIN_LABELS) as Array<[keyof typeof DOMAIN_LABELS, string]>).map(([domain, label]) => {
               const selection = settings[domain];
