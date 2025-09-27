@@ -11,18 +11,11 @@ import {
   Cog6ToothIcon,
 } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/Button';
-import { useProviderSettings } from '@/lib/context/ProviderSettingsContext';
 
 export const NavigationBar = () => {
   const pathname = usePathname();
   const [accessTokenInput, setAccessTokenInput] = useState('');
   const [savedAccessToken, setSavedAccessToken] = useState<string | null>(null);
-  const { settings, availableProviders } = useProviderSettings();
-
-  const testCaseProvider = settings.testCases.provider;
-  const testCaseModel = settings.testCases.model;
-  const providerLabel = availableProviders.find((provider) => provider.id === testCaseProvider)?.label || 'OpenAI (Agents)';
-  
   useEffect(() => {
     const storedToken = localStorage.getItem('appAccessToken');
     if (storedToken) {
@@ -102,13 +95,8 @@ export const NavigationBar = () => {
             </div>
           </div>
           
-          {/* Provider summary and Access Token Input */}
-          <div className="flex items-center ml-auto pl-4 gap-4">
-            <div className="hidden md:flex flex-col text-right">
-              <span className="text-xs text-blue-300 uppercase tracking-wide">Test Case Provider</span>
-              <span className="text-sm text-blue-100">{providerLabel}</span>
-              <span className="text-xs text-blue-200/80">Model: {testCaseModel}</span>
-            </div>
+          {/* Access Token Input */}
+          <div className="flex items-center ml-auto pl-4">
             <input
               type="password"
               placeholder="Access Token"
