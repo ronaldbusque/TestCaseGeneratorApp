@@ -19,7 +19,9 @@ export const NavigationBar = () => {
   const [savedAccessToken, setSavedAccessToken] = useState<string | null>(null);
   const { settings, availableProviders } = useProviderSettings();
 
-  const defaultProviderLabel = availableProviders.find((provider) => provider.id === settings.testCases)?.label || 'OpenAI (Agents)';
+  const testCaseProvider = settings.testCases.provider;
+  const testCaseModel = settings.testCases.model;
+  const providerLabel = availableProviders.find((provider) => provider.id === testCaseProvider)?.label || 'OpenAI (Agents)';
   
   useEffect(() => {
     const storedToken = localStorage.getItem('appAccessToken');
@@ -104,7 +106,8 @@ export const NavigationBar = () => {
           <div className="flex items-center ml-auto pl-4 gap-4">
             <div className="hidden md:flex flex-col text-right">
               <span className="text-xs text-blue-300 uppercase tracking-wide">Test Case Provider</span>
-              <span className="text-sm text-blue-100">{defaultProviderLabel}</span>
+              <span className="text-sm text-blue-100">{providerLabel}</span>
+              <span className="text-xs text-blue-200/80">Model: {testCaseModel}</span>
             </div>
             <input
               type="password"

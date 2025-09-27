@@ -17,12 +17,13 @@ interface EnhanceRequest {
   prompt: string;
   fields: FieldDefinition[];
   provider?: LLMProvider;
+  model?: string;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { data, prompt, fields, provider } = body as EnhanceRequest;
+    const { data, prompt, fields, provider, model } = body as EnhanceRequest;
     
     console.log("=== TEST DATA ENHANCEMENT API REQUEST ===");
     console.log({ 
@@ -30,6 +31,7 @@ export async function POST(request: NextRequest) {
       prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
       fields: fields.map(f => `${f.name} (${f.type})`),
       provider: provider ?? 'openai',
+      model: model ?? 'default',
     });
     console.log("=========================================");
     
@@ -53,7 +55,7 @@ export async function POST(request: NextRequest) {
     const dataGeneratorService = new TestDataGeneratorService(coreAIService);
     console.log('TestDataGeneratorService instantiated with the core AI service');
     
-    const result = await dataGeneratorService.enhanceDataWithAI(data, prompt);
+    const result = await dataGeneratorService.enhanceDataWithAI(data, prompt, model);
     
     console.log("=== TEST DATA ENHANCEMENT API RESPONSE ===");
     console.log(`Enhanced ${result.data.length} records`);

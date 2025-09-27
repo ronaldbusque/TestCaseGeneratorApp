@@ -1,20 +1,32 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { LLMProvider, ProviderDescriptor, ProviderSettings } from '@/lib/types/providers';
+import {
+  LLMProvider,
+  ProviderDescriptor,
+  ProviderSelection,
+  ProviderSettings,
+} from '@/lib/types/providers';
 
 interface ProviderSettingsContextValue {
   settings: ProviderSettings;
   availableProviders: ProviderDescriptor[];
-  updateSetting: (domain: keyof ProviderSettings, provider: LLMProvider) => void;
+  updateProvider: (domain: keyof ProviderSettings, provider: LLMProvider) => void;
+  updateModel: (domain: keyof ProviderSettings, model: string) => void;
   resetSettings: () => void;
   loading: boolean;
 }
 
+const FALLBACK_MODELS: Record<LLMProvider, string> = {
+  openai: 'gpt-4.1-mini',
+  gemini: 'gemini-1.5-pro-latest',
+  openrouter: 'openrouter/auto',
+};
+
 const DEFAULT_SETTINGS: ProviderSettings = {
-  testCases: 'openai',
-  sql: 'openai',
-  data: 'openai',
+  testCases: { provider: 'openai', model: FALLBACK_MODELS.openai },
+  sql: { provider: 'openai', model: FALLBACK_MODELS.openai },
+  data: { provider: 'openai', model: FALLBACK_MODELS.openai },
 };
 
 const STORAGE_KEY = 'qualityforge-provider-settings';
@@ -30,8 +42,8 @@ export function ProviderSettingsProvider({ children }: { children: React.ReactNo
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored) as ProviderSettings;
-        setSettings({ ...DEFAULT_SETTINGS, ...parsed });
+        const parsed = JSON.parse(stored);
+        setSettings(coerceStoredSettings(parsed));
       }
     } catch (error) {
       console.warn('Failed to load provider settings from storage', error);
@@ -52,7 +64,13 @@ export function ProviderSettingsProvider({ children }: { children: React.ReactNo
       } catch (error) {
         console.error(error);
         const fallback: ProviderDescriptor[] = [
-          { id: 'openai', label: 'OpenAI (Agents)' },
+          {
+            id: 'openai',
+            label: 'OpenAI (Agents SDK)',
+            supportsMultimodal: true,
+            defaultModel: FALLBACK_MODELS.openai,
+            baseUrl: 'https://api.openai.com',
+          },
         ];
         setAvailableProviders(fallback);
         setSettings((prev) => ensureSettingsFallback(prev, fallback));
@@ -73,12 +91,32 @@ export function ProviderSettingsProvider({ children }: { children: React.ReactNo
     }
   }, [settings, loading]);
 
-  const updateSetting = useCallback((domain: keyof ProviderSettings, provider: LLMProvider) => {
-    setSettings((prev) => ({ ...prev, [domain]: provider }));
+  const updateProvider = useCallback(
+    (domain: keyof ProviderSettings, providerId: LLMProvider) => {
+      setSettings((prev) => {
+        const descriptor = availableProviders.find((p) => p.id === providerId);
+        const defaultModel = descriptor?.defaultModel ?? FALLBACK_MODELS[providerId] ?? FALLBACK_MODELS.openai;
+        return {
+          ...prev,
+          [domain]: { provider: providerId, model: defaultModel },
+        };
+      });
+    },
+    [availableProviders]
+  );
+
+  const updateModel = useCallback((domain: keyof ProviderSettings, model: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      [domain]: {
+        provider: prev[domain].provider,
+        model,
+      },
+    }));
   }, []);
 
   const resetSettings = useCallback(() => {
-    setSettings(ensureSettingsFallback(DEFAULT_SETTINGS, availableProviders));
+    setSettings(buildDefaultSettings(availableProviders));
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch (error) {
@@ -87,8 +125,8 @@ export function ProviderSettingsProvider({ children }: { children: React.ReactNo
   }, [availableProviders]);
 
   const value = useMemo<ProviderSettingsContextValue>(
-    () => ({ settings, availableProviders, updateSetting, resetSettings, loading }),
-    [settings, availableProviders, loading, updateSetting, resetSettings]
+    () => ({ settings, availableProviders, updateProvider, updateModel, resetSettings, loading }),
+    [settings, availableProviders, loading, updateProvider, updateModel, resetSettings]
   );
 
   return (
@@ -106,6 +144,31 @@ export function useProviderSettings(): ProviderSettingsContextValue {
   return context;
 }
 
+function coerceStoredSettings(raw: any): ProviderSettings {
+  const normalize = (selection: any, domain: keyof ProviderSettings): ProviderSelection => {
+    if (selection && typeof selection === 'object' && 'provider' in selection) {
+      const provider = isValidProvider(selection.provider) ? (selection.provider as LLMProvider) : 'openai';
+      const model = typeof selection.model === 'string' && selection.model.trim()
+        ? selection.model.trim()
+        : FALLBACK_MODELS[provider] ?? FALLBACK_MODELS.openai;
+      return { provider, model };
+    }
+
+    if (typeof selection === 'string' && isValidProvider(selection)) {
+      const provider = selection as LLMProvider;
+      return { provider, model: FALLBACK_MODELS[provider] };
+    }
+
+    return DEFAULT_SETTINGS[domain];
+  };
+
+  return {
+    testCases: normalize(raw?.testCases, 'testCases'),
+    sql: normalize(raw?.sql, 'sql'),
+    data: normalize(raw?.data, 'data'),
+  };
+}
+
 function ensureSettingsFallback(
   current: ProviderSettings,
   providers: ProviderDescriptor[],
@@ -114,16 +177,58 @@ function ensureSettingsFallback(
     return current;
   }
 
-  const providerIds = new Set(providers.map((p) => p.id));
-  const fallback = providers[0].id;
-
-  const normalize = (value: LLMProvider): LLMProvider => (
-    providerIds.has(value) ? value : fallback
+  const providerMap = new Map<LLMProvider, ProviderDescriptor>(
+    providers.map((provider) => [provider.id, provider])
   );
+  const fallbackProvider = providers[0];
+
+  const normalize = (selection: ProviderSelection): ProviderSelection => {
+    const providerId = providerMap.has(selection.provider)
+      ? selection.provider
+      : fallbackProvider.id;
+    const descriptor = providerMap.get(providerId) ?? fallbackProvider;
+    const model = selection.model?.trim()
+      ? selection.model.trim()
+      : descriptor.defaultModel ?? FALLBACK_MODELS[providerId] ?? FALLBACK_MODELS.openai;
+
+    return {
+      provider: providerId,
+      model,
+    };
+  };
 
   return {
     testCases: normalize(current.testCases),
     sql: normalize(current.sql),
     data: normalize(current.data),
   };
+}
+
+function buildDefaultSettings(providers: ProviderDescriptor[]): ProviderSettings {
+  if (!providers.length) {
+    return DEFAULT_SETTINGS;
+  }
+  const fallback = providers[0];
+  const providerMap = new Map<LLMProvider, ProviderDescriptor>(
+    providers.map((provider) => [provider.id, provider])
+  );
+
+  const createSelection = (preferred: ProviderSelection): ProviderSelection => {
+    const providerId = providerMap.has(preferred.provider)
+      ? preferred.provider
+      : fallback.id;
+    const descriptor = providerMap.get(providerId) ?? fallback;
+    const model = descriptor.defaultModel ?? FALLBACK_MODELS[providerId] ?? FALLBACK_MODELS.openai;
+    return { provider: providerId, model };
+  };
+
+  return {
+    testCases: createSelection(DEFAULT_SETTINGS.testCases),
+    sql: createSelection(DEFAULT_SETTINGS.sql),
+    data: createSelection(DEFAULT_SETTINGS.data),
+  };
+}
+
+function isValidProvider(value: any): value is LLMProvider {
+  return value === 'openai' || value === 'gemini' || value === 'openrouter';
 }

@@ -1,9 +1,14 @@
 export type LLMProvider = 'openai' | 'gemini' | 'openrouter';
 
+export interface ProviderSelection {
+  provider: LLMProvider;
+  model: string;
+}
+
 export type ProviderSettings = {
-  testCases: LLMProvider;
-  sql: LLMProvider;
-  data: LLMProvider;
+  testCases: ProviderSelection;
+  sql: ProviderSelection;
+  data: ProviderSelection;
 };
 
 export interface ProviderDescriptor {
@@ -11,4 +16,6 @@ export interface ProviderDescriptor {
   label: string;
   description?: string;
   supportsMultimodal?: boolean;
+  defaultModel?: string;
+  baseUrl?: string;
 }

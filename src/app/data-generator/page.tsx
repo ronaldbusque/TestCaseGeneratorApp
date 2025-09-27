@@ -138,7 +138,8 @@ export default function TestDataGeneratorPage() {
           ...(exportConfig.enhancementPrompt.trim() 
             ? { aiEnhancement: exportConfig.enhancementPrompt.trim() } 
             : {}),
-          provider: settings.data,
+          provider: settings.data.provider,
+          model: settings.data.model,
         })
       });
       
@@ -296,7 +297,8 @@ export default function TestDataGeneratorPage() {
           ...(exportConfig.enhancementPrompt.trim() 
             ? { aiEnhancement: exportConfig.enhancementPrompt.trim() } 
             : {}),
-          provider: settings.data,
+          provider: settings.data.provider,
+          model: settings.data.model,
         })
       });
       

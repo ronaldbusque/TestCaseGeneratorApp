@@ -14,6 +14,7 @@ export interface SQLGenerationRequest {
   targetDialect: SQLDialect;
   schema?: string; // Database schema definition (optional)
   provider?: LLMProvider;
+  model?: string;
 }
 
 export interface SQLValidationRequest {
@@ -21,6 +22,7 @@ export interface SQLValidationRequest {
   dialect: SQLDialect;
   schema?: string; // Optional database schema definition
   provider?: LLMProvider;
+  model?: string;
 }
 
 export interface SQLConversionRequest {
@@ -28,6 +30,7 @@ export interface SQLConversionRequest {
   sourceDialect: SQLDialect;
   targetDialect: SQLDialect;
   provider?: LLMProvider;
+  model?: string;
 }
 
 export interface SQLResponse {

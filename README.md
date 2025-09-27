@@ -14,6 +14,7 @@ A comprehensive suite of AI-powered tools for quality assurance and testing prof
   - Built-in tracing readiness for production debugging
 - 🔀 **Configurable LLM Providers**
   - Choose OpenAI, Google Gemini, or OpenRouter per tool from the in-app settings page
+  - Set custom model names per provider (e.g., `gpt-4.1-mini`, `gemini-1.5-pro-latest`, `openrouter/auto`)
   - Providers auto-populate based on API keys present in `.env.local`
 
 - 📄 **Lightweight Document Support**
@@ -133,7 +134,7 @@ yarn dev
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-6. Visit **Settings → Provider Settings** and choose which LLM powers each tool.
+6. Visit **Settings → Provider Settings** to choose your provider for each tool and override the model names as needed.
 
 ## 🛠️ Technology Stack
 

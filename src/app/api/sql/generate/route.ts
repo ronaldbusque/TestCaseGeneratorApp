@@ -6,10 +6,10 @@ import { SQLGenerationRequest, LLMProvider } from '@/lib/types';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { description, targetDialect, schema, provider } = body as SQLGenerationRequest & { provider?: LLMProvider };
+    const { description, targetDialect, schema, provider, model } = body as SQLGenerationRequest & { provider?: LLMProvider };
     
     console.log("=== SQL GENERATION API REQUEST ===");
-    console.log({ description, targetDialect, provider: provider ?? 'openai', schema: schema ? `${schema.substring(0, 100)}...` : undefined });
+    console.log({ description, targetDialect, provider: provider ?? 'openai', model: model ?? 'default', schema: schema ? `${schema.substring(0, 100)}...` : undefined });
     console.log("==================================");
     
     if (!description || !targetDialect) {
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     const sqlService = new SQLAIService(coreAIService);
     console.log('SQLAIService instantiated with the core AI service');
     
-    const result = await sqlService.generateSQLQuery({ description, targetDialect, schema });
+    const result = await sqlService.generateSQLQuery({ description, targetDialect, schema, model });
     
     console.log("=== SQL GENERATION API RESPONSE ===");
     console.log(JSON.stringify(result, null, 2));

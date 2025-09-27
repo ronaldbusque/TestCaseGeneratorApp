@@ -11,7 +11,7 @@ import { buildTestCasePrompt, mapModelResponseToTestCases } from './utils';
 const DEFAULT_MODEL = process.env.GEMINI_MODEL ?? 'gemini-1.5-pro-latest';
 
 export class GeminiService implements AIService {
-  private readonly model: GenerativeModel;
+  private readonly client: GoogleGenerativeAI;
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -19,16 +19,16 @@ export class GeminiService implements AIService {
       throw new Error('GEMINI_API_KEY is not configured');
     }
 
-    const client = new GoogleGenerativeAI(apiKey);
-    this.model = client.getGenerativeModel({ model: DEFAULT_MODEL });
+    this.client = new GoogleGenerativeAI(apiKey);
   }
 
   async generateTestCases(request: TestCaseGenerationRequest): Promise<TestCaseGenerationResponse> {
     try {
       const prompt = buildTestCasePrompt(request);
       const parts = this.buildParts(prompt, request);
+      const modelInstance = this.getModel(request.model);
 
-      const result = await this.model.generateContent({
+      const result = await modelInstance.generateContent({
         contents: [
           {
             role: 'user',
@@ -83,8 +83,8 @@ export class GeminiService implements AIService {
     }
   }
 
-  async generateContent(prompt: string, _model?: ModelType): Promise<string> {
-    const result = await this.model.generateContent({
+  async generateContent(prompt: string, model?: ModelType): Promise<string> {
+    const result = await this.getModel(model).generateContent({
       contents: [
         {
           role: 'user',
@@ -94,6 +94,10 @@ export class GeminiService implements AIService {
     });
 
     return result.response.text();
+  }
+
+  private getModel(model?: string): GenerativeModel {
+    return this.client.getGenerativeModel({ model: model ?? DEFAULT_MODEL });
   }
 
   private buildParts(prompt: string, request: TestCaseGenerationRequest): Part[] {

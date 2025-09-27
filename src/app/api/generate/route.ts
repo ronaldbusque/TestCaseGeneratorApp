@@ -15,6 +15,7 @@ export async function POST(request: NextRequest) {
       fileContent,
       files = [],
       provider,
+      model,
     } = body as TestCaseGenerationRequest & {
       fileContent?: string;
       files?: UploadedFilePayload[];
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
     console.log(`[API] User identifier from middleware: ${userIdentifier}`);
     
     // Log safely without exposing the entire content of requirements or fileContent
-    console.log(`[API] Request details - Mode: ${mode}, Provider: ${provider ?? 'openai'}, Requirements: ${requirements ? `${requirements.substring(0, 50)}...` : 'None'}, File content: ${fileContent ? 'Provided' : 'None'}, Files: ${files.length}`);
+    console.log(`[API] Request details - Mode: ${mode}, Provider: ${provider ?? 'openai'}, Model: ${model ?? 'default'}, Requirements: ${requirements ? `${requirements.substring(0, 50)}...` : 'None'}, File content: ${fileContent ? 'Provided' : 'None'}, Files: ${files.length}`);
     
     if (!requirements && !selectedScenarios?.length) {
       return NextResponse.json(
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
       selectedScenarios,
       files,
       provider,
+      model,
     });
     
     console.log(`[API] Generated ${result.testCases?.length || 0} test cases`);

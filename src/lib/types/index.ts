@@ -61,6 +61,7 @@ export interface TestCaseGenerationRequest {
   selectedScenarios?: HighLevelTestCase[];
   priorityMode?: TestPriorityMode;
   provider?: LLMProvider;
+  model?: string;
 }
 
 export interface TestCaseGenerationResponse {

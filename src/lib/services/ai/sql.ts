@@ -20,7 +20,7 @@ export class SQLAIService {
   }
 
   async generateSQLQuery(request: SQLGenerationRequest): Promise<SQLResponse> {
-    const { description, targetDialect, schema } = request;
+    const { description, targetDialect, schema, model } = request;
     console.log('[SQLAIService] Generating SQL Query', { targetDialect, descriptionLength: description.length, schemaProvided: !!schema });
     
     try {
@@ -114,7 +114,7 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
       console.log(prompt);
       console.log("============================");
 
-      const response = await this.aiService.generateContent(prompt);
+      const response = await this.aiService.generateContent(prompt, model);
       
       console.log("=== SQL GENERATION RAW RESPONSE ===");
       console.log(response);
@@ -205,7 +205,7 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
   }
 
   async validateSQLQuery(request: SQLValidationRequest): Promise<SQLValidationResponse> {
-    const { query, dialect, schema } = request;
+    const { query, dialect, schema, model } = request;
     console.log('[SQLAIService] Validating SQL Query', { dialect, queryLength: query.length, schemaProvided: !!schema });
     
     try {
@@ -323,7 +323,7 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
       console.log(prompt);
       console.log("============================");
 
-      const response = await this.aiService.generateContent(prompt);
+      const response = await this.aiService.generateContent(prompt, model);
       
       console.log("=== SQL VALIDATION RAW RESPONSE ===");
       console.log(response);
@@ -448,7 +448,7 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
   }
 
   async convertSQLQuery(request: SQLConversionRequest): Promise<SQLConversionResponse> {
-    const { query, sourceDialect, targetDialect } = request;
+    const { query, sourceDialect, targetDialect, model } = request;
     console.log('[SQLAIService] Converting SQL Query', { sourceDialect, targetDialect, queryLength: query.length });
     
     try {
@@ -482,7 +482,7 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
       console.log(prompt);
       console.log("============================");
 
-      const response = await this.aiService.generateContent(prompt);
+      const response = await this.aiService.generateContent(prompt, model);
       
       console.log("=== SQL CONVERSION RAW RESPONSE ===");
       console.log(response);

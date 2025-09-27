@@ -28,10 +28,10 @@ const isHighLevelTestCase = (testCase: TestCase): testCase is HighLevelTestCase 
 
 const MAX_FILE_CONTENT_LENGTH = 8000;
 const MAX_FILE_PREVIEW_LENGTH = 500;
-const DEFAULT_AGENT_MODEL = process.env.NEXT_PUBLIC_OPENAI_MODEL ?? 'gpt-4.1-mini';
 
 export default function Home() {
-  const { settings } = useProviderSettings();
+  const { settings, availableProviders } = useProviderSettings();
+  const testCaseProviderInfo = availableProviders.find((provider) => provider.id === settings.testCases.provider);
   const [testCaseMode, setTestCaseMode] = useState<TestCaseMode>('high-level');
   const [testPriorityMode, setTestPriorityMode] = useState<TestPriorityMode>('comprehensive');
   const [requirements, setRequirements] = useState('');
@@ -257,7 +257,8 @@ export default function Home() {
           mode: testCaseMode,
           priorityMode: testPriorityMode,
           files: filePayloads,
-          provider: settings.testCases,
+          provider: settings.testCases.provider,
+          model: settings.testCases.model,
         })
       });
 
@@ -350,7 +351,8 @@ export default function Home() {
           mode: 'detailed',
           selectedScenarios,
           files: filePayloads,
-          provider: settings.testCases,
+          provider: settings.testCases.provider,
+          model: settings.testCases.model,
         })
       });
 
@@ -439,8 +441,8 @@ export default function Home() {
                 <div className="flex items-center gap-3 rounded-xl bg-white/5 px-4 py-2 border border-white/10 text-blue-100">
                   <ArrowsRightLeftIcon className="h-5 w-5 text-blue-200" />
                   <div className="text-left">
-                    <p className="text-sm font-medium text-blue-100">OpenAI Agents runtime</p>
-                    <p className="text-xs text-blue-200">Default model: {DEFAULT_AGENT_MODEL}</p>
+                    <p className="text-sm font-medium text-blue-100">Provider: {testCaseProviderInfo?.label ?? settings.testCases.provider}</p>
+                    <p className="text-xs text-blue-200">Model: {settings.testCases.model}</p>
                   </div>
                 </div>
                 {hasExistingData() && (

@@ -29,14 +29,14 @@ export class TestDataGeneratorService {
   
   async generateTestData(request: TestDataGenerationRequest): Promise<TestDataGenerationResponse> {
     try {
-      const { types, configuration, count = 100, aiEnhancement } = request;
+      const { types, configuration, count = 100, aiEnhancement, model } = request;
       
       // Generate raw data using faker
       const rawData = this.generateRawFakerData(types, configuration, count);
       
       // If AI enhancement is requested, process the data
       if (aiEnhancement && aiEnhancement.trim()) {
-        return this.enhanceDataWithAI(rawData, aiEnhancement);
+        return this.enhanceDataWithAI(rawData, aiEnhancement, model);
       }
       
       // Return raw data if no AI enhancement
@@ -317,10 +317,11 @@ export class TestDataGeneratorService {
   async generateTestDataFromFields(request: { 
     fields: Array<{name: string, type: string, options: Record<string, any>}>, 
     count: number,
-    aiEnhancement?: string
+    aiEnhancement?: string,
+    model?: string,
   }): Promise<TestDataGenerationResponse> {
     try {
-      const { fields, count = 100, aiEnhancement } = request;
+      const { fields, count = 100, aiEnhancement, model } = request;
       
       // Convert fields to FieldDefinition format
       const fieldDefinitions: FieldDefinition[] = fields.map(field => ({
@@ -331,7 +332,7 @@ export class TestDataGeneratorService {
       }));
       
       // Use the new generateData method with aiEnhancement
-      const result = await this.generateData(fieldDefinitions, count, aiEnhancement);
+      const result = await this.generateData(fieldDefinitions, count, aiEnhancement, model);
       
       return {
         data: result,
@@ -442,7 +443,8 @@ export class TestDataGeneratorService {
   
   async enhanceDataWithAI(
     rawData: Record<string, any>[], 
-    aiEnhancement: string
+    aiEnhancement: string,
+    model?: string,
   ): Promise<TestDataGenerationResponse> {
     try {
       // Only process a sample of data if there's a lot to avoid token limitations
@@ -508,7 +510,7 @@ Format your response as a valid JSON object like this:
       console.log("==============================\n");
       
       // Call the AI service with the prompt
-      const response = await this.aiService.generateContent(prompt);
+      const response = await this.aiService.generateContent(prompt, model);
       
       console.log("\n=== AI ENHANCEMENT RAW RESPONSE ===");
       console.log(response);
@@ -706,7 +708,7 @@ Format your response as a valid JSON object like this:
     }
   }
 
-  async generateData(fields: FieldDefinition[], count: number, aiEnhancement?: string): Promise<any[]> {
+  async generateData(fields: FieldDefinition[], count: number, aiEnhancement?: string, model?: string): Promise<any[]> {
     try {
       // Separate regular fields from AI-generated fields
       const regularFields = fields.filter(field => field.type !== 'AI-Generated');
@@ -739,7 +741,7 @@ Format your response as a valid JSON object like this:
       
       // If there are AI fields, enhance the data with AI-generated values
       if (aiFields.length > 0) {
-        return await this.enhanceWithAIFields(data, aiFields, count, aiEnhancement);
+        return await this.enhanceWithAIFields(data, aiFields, count, aiEnhancement, model);
       }
       
       return data;
@@ -756,7 +758,8 @@ Format your response as a valid JSON object like this:
     data: any[], 
     aiFields: FieldDefinition[], 
     totalCount: number, 
-    aiEnhancement?: string
+    aiEnhancement?: string,
+    model?: string,
   ): Promise<any[]> {
     try {
       // Only process a sample of data if there's a lot to avoid token limitations
@@ -817,7 +820,7 @@ To help you keep track, number each value from 1 to ${requestedCount} using the 
       console.log("=================================\n");
       
       // Call the AI service with the prompt
-      const response = await this.aiService.generateContent(prompt);
+      const response = await this.aiService.generateContent(prompt, model);
       
       console.log("\n=== AI FIELD GENERATION RESPONSE ===");
       console.log(response);

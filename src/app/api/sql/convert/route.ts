@@ -6,10 +6,10 @@ import { SQLConversionRequest, LLMProvider } from '@/lib/types';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { query, sourceDialect, targetDialect, provider } = body as SQLConversionRequest & { provider?: LLMProvider };
+    const { query, sourceDialect, targetDialect, provider, model } = body as SQLConversionRequest & { provider?: LLMProvider };
     
     console.log("=== SQL CONVERSION API REQUEST ===");
-    console.log({ query, sourceDialect, targetDialect, provider: provider ?? 'openai' });
+    console.log({ query, sourceDialect, targetDialect, provider: provider ?? 'openai', model: model ?? 'default' });
     console.log("=================================");
     
     if (!query || !sourceDialect || !targetDialect) {
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     const sqlService = new SQLAIService(coreAIService);
     console.log('SQLAIService instantiated with the core AI service');
     
-    const result = await sqlService.convertSQLQuery({ query, sourceDialect, targetDialect });
+    const result = await sqlService.convertSQLQuery({ query, sourceDialect, targetDialect, model });
     
     console.log("=== SQL CONVERSION API RESPONSE ===");
     console.log(JSON.stringify(result, null, 2));

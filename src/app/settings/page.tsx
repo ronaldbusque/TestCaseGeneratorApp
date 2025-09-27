@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useProviderSettings } from '@/lib/context/ProviderSettingsContext';
+import { LLMProvider } from '@/lib/types/providers';
 import { Button } from '@/components/ui/Button';
 
 const DOMAIN_LABELS = {
@@ -12,15 +13,26 @@ const DOMAIN_LABELS = {
 } as const;
 
 export default function SettingsPage() {
-  const { settings, availableProviders, updateSetting, resetSettings, loading } = useProviderSettings();
+  const {
+    settings,
+    availableProviders,
+    updateProvider,
+    updateModel,
+    resetSettings,
+    loading,
+  } = useProviderSettings();
 
   const providerOptions = useMemo(() => (
     availableProviders.map((provider) => ({
       value: provider.id,
       label: provider.label,
       description: provider.description,
+      baseUrl: provider.baseUrl,
+      defaultModel: provider.defaultModel,
     }))
   ), [availableProviders]);
+
+  const providerMap = useMemo(() => new Map(providerOptions.map((option) => [option.value, option])), [providerOptions]);
 
   return (
     <div className="relative py-12">
@@ -43,48 +55,63 @@ export default function SettingsPage() {
           {loading ? (
             <div className="text-center text-blue-200">Loading available providers...</div>
           ) : (
-            (Object.entries(DOMAIN_LABELS) as Array<[keyof typeof DOMAIN_LABELS, string]>).map(([domain, label]) => (
-              <motion.div
-                key={domain}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: 0.05 }}
-                className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-lg p-6"
-              >
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                  <div>
-                    <h2 className="text-lg font-semibold text-blue-50">{label}</h2>
-                    <p className="text-sm text-blue-200/80">
-                      Select which provider should respond to {label.toLowerCase()} requests.
-                    </p>
+            (Object.entries(DOMAIN_LABELS) as Array<[keyof typeof DOMAIN_LABELS, string]>).map(([domain, label]) => {
+              const selection = settings[domain];
+              const selectedOption = providerMap.get(selection.provider);
+
+              return (
+                <motion.div
+                  key={domain}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.05 }}
+                  className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-lg p-6"
+                >
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <h2 className="text-lg font-semibold text-blue-50">{label}</h2>
+                      <p className="text-sm text-blue-200/80">
+                        Select which provider should respond to {label.toLowerCase()} requests.
+                      </p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                      <select
+                        value={selection.provider}
+                        onChange={(event) => updateProvider(domain, event.target.value as LLMProvider)}
+                        className="bg-slate-900/80 border border-white/10 text-blue-50 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm"
+                      >
+                        {providerOptions.map((option) => (
+                          <option key={option.value} value={option.value} className="bg-slate-900 text-blue-50">
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        value={selection.model}
+                        onChange={(event) => updateModel(domain, event.target.value)}
+                        placeholder={selectedOption?.defaultModel || 'Enter model name'}
+                        className="w-full sm:w-64 bg-slate-900/80 border border-white/10 text-blue-50 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm"
+                      />
+                    </div>
                   </div>
-                  <select
-                    value={settings[domain]}
-                    onChange={(event) => updateSetting(domain, event.target.value as typeof settings[typeof domain])}
-                    className="bg-slate-900/80 border border-white/10 text-blue-50 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm"
-                  >
-                    {providerOptions.map((option) => (
-                      <option key={option.value} value={option.value} className="bg-slate-900 text-blue-50">
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {providerOptions
-                  .find((option) => option.value === settings[domain])
-                  ?.description && (
-                    <p className="mt-3 text-xs text-blue-200/70">
-                      {providerOptions.find((option) => option.value === settings[domain])?.description}
-                    </p>
-                )}
-              </motion.div>
-            ))
+                  {(selectedOption?.description || selectedOption?.baseUrl) && (
+                    <div className="mt-3 text-xs text-blue-200/70 space-y-1">
+                      {selectedOption?.description && <p>{selectedOption.description}</p>}
+                      {selectedOption?.baseUrl && (
+                        <p>Base URL: <span className="text-blue-100">{selectedOption.baseUrl}</span></p>
+                      )}
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })
           )}
         </div>
 
         <div className="flex items-center justify-between">
           <div className="text-xs text-blue-200/70">
-            Resetting reverts to OpenAI Agents for all tools.
+            Resetting restores each tool to the first available provider and its default model.
           </div>
           <Button
             type="button"

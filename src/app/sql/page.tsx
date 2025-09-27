@@ -829,7 +829,11 @@ export default function SQLToolPage() {
       // Use the fetchApi utility instead of direct fetch
       const data = await fetchApi(endpoint, {
         method: 'POST',
-        body: JSON.stringify({ ...payload, provider: settings.sql }),
+        body: JSON.stringify({
+          ...payload,
+          provider: settings.sql.provider,
+          model: settings.sql.model,
+        }),
       });
       
       updateCurrentState({ result: data });

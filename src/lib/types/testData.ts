@@ -1,3 +1,5 @@
+import { LLMProvider } from './providers';
+
 export interface TestDataType {
   name: string;
   category: string;
@@ -9,6 +11,8 @@ export interface TestDataGenerationRequest {
   configuration: Record<string, any>;
   count: number;
   aiEnhancement?: string;
+  provider?: LLMProvider;
+  model?: string;
 }
 
 export type GeneratedTestData = Record<string, any>;

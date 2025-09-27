@@ -13,7 +13,7 @@ const ENDPOINT = `${BASE_URL.replace(/\/$/, '')}/chat/completions`;
 
 export class OpenRouterService implements AIService {
   private readonly apiKey: string;
-  private readonly model: string;
+  private readonly defaultModel: string;
 
   constructor() {
     const apiKey = process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_COMPAT_API_KEY;
@@ -22,14 +22,14 @@ export class OpenRouterService implements AIService {
     }
 
     this.apiKey = apiKey;
-    this.model = DEFAULT_MODEL;
+    this.defaultModel = DEFAULT_MODEL;
   }
 
   async generateTestCases(request: TestCaseGenerationRequest): Promise<TestCaseGenerationResponse> {
     try {
       const prompt = buildTestCasePrompt(request);
 
-      const rawOutput = await this.callOpenRouter(prompt);
+      const rawOutput = await this.callOpenRouter(prompt, request.model);
 
       let parsed: any[];
       try {
@@ -68,11 +68,11 @@ export class OpenRouterService implements AIService {
     }
   }
 
-  async generateContent(prompt: string, _model?: ModelType): Promise<string> {
-    return this.callOpenRouter(prompt);
+  async generateContent(prompt: string, model?: ModelType): Promise<string> {
+    return this.callOpenRouter(prompt, typeof model === 'string' ? model : undefined);
   }
 
-  private async callOpenRouter(prompt: string): Promise<string> {
+  private async callOpenRouter(prompt: string, model?: string): Promise<string> {
     const response = await fetch(ENDPOINT, {
       method: 'POST',
       headers: {
@@ -82,7 +82,7 @@ export class OpenRouterService implements AIService {
         'X-Title': 'QualityForge AI Tools',
       },
       body: JSON.stringify({
-        model: this.model,
+        model: model ?? this.defaultModel,
         messages: [
           {
             role: 'system',

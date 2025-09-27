@@ -6,10 +6,10 @@ import { SQLValidationRequest, LLMProvider } from '@/lib/types';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { query, dialect, schema, provider } = body as SQLValidationRequest & { provider?: LLMProvider };
+    const { query, dialect, schema, provider, model } = body as SQLValidationRequest & { provider?: LLMProvider };
     
     console.log("=== SQL VALIDATION API REQUEST ===");
-    console.log({ query, dialect, provider: provider ?? 'openai', schema: schema ? `${schema.substring(0, 100)}...` : undefined });
+    console.log({ query, dialect, provider: provider ?? 'openai', model: model ?? 'default', schema: schema ? `${schema.substring(0, 100)}...` : undefined });
     console.log("=================================");
     
     if (!query || !dialect) {
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     const sqlService = new SQLAIService(coreAIService);
     console.log('SQLAIService instantiated with the core AI service');
     
-    const result = await sqlService.validateSQLQuery({ query, dialect, schema });
+    const result = await sqlService.validateSQLQuery({ query, dialect, schema, model });
     
     console.log("=== SQL VALIDATION API RESPONSE ===");
     console.log(JSON.stringify(result, null, 2));

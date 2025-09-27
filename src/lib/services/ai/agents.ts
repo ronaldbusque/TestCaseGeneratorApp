@@ -16,9 +16,9 @@ const TEST_CASE_AGENT_INSTRUCTIONS = `You are an expert QA engineer. Generate th
 const GENERAL_AGENT_INSTRUCTIONS = 'You are a helpful assistant. Follow the user prompt precisely and return results in the requested format. If the prompt requests JSON, respond with valid JSON only.';
 
 export class AgentsService implements AIService {
-  private readonly testCaseAgent: Agent;
-  private readonly generalAgent: Agent;
-  private readonly model: string;
+  private readonly defaultModel: string;
+  private readonly testCaseAgents = new Map<string, Agent>();
+  private readonly generalAgents = new Map<string, Agent>();
 
   constructor() {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -27,19 +27,25 @@ export class AgentsService implements AIService {
     }
 
     setDefaultOpenAIKey(apiKey);
-    this.model = DEFAULT_MODEL;
+    this.defaultModel = DEFAULT_MODEL;
 
-    this.testCaseAgent = new Agent({
-      name: 'QualityForge Test Case Generator',
-      instructions: TEST_CASE_AGENT_INSTRUCTIONS,
-      model: this.model,
-    });
+    this.testCaseAgents.set(
+      this.defaultModel,
+      new Agent({
+        name: 'QualityForge Test Case Generator',
+        instructions: TEST_CASE_AGENT_INSTRUCTIONS,
+        model: this.defaultModel,
+      })
+    );
 
-    this.generalAgent = new Agent({
-      name: 'QualityForge General Generator',
-      instructions: GENERAL_AGENT_INSTRUCTIONS,
-      model: this.model,
-    });
+    this.generalAgents.set(
+      this.defaultModel,
+      new Agent({
+        name: 'QualityForge General Generator',
+        instructions: GENERAL_AGENT_INSTRUCTIONS,
+        model: this.defaultModel,
+      })
+    );
   }
 
   async generateTestCases(request: TestCaseGenerationRequest): Promise<TestCaseGenerationResponse> {
@@ -60,7 +66,9 @@ export class AgentsService implements AIService {
         priorityMode,
       });
 
-      const result = await run(this.testCaseAgent, prompt, {
+      const agent = this.getTestCaseAgent(request.model);
+
+      const result = await run(agent, prompt, {
         maxTurns: 4,
       });
 
@@ -113,18 +121,42 @@ export class AgentsService implements AIService {
   }
 
   async generateContent(prompt: string, model?: ModelType): Promise<string> {
-    const agent = model && model !== this.model
-      ? new Agent({
-          name: 'QualityForge General Generator',
-          instructions: GENERAL_AGENT_INSTRUCTIONS,
-          model,
-        })
-      : this.generalAgent;
+    const agent = this.getGeneralAgent(model);
 
     const result = await run(agent, prompt, {
       maxTurns: 3,
     });
 
     return result.finalOutput?.trim() ?? '';
+  }
+
+  private getTestCaseAgent(model?: string): Agent {
+    const key = model ?? this.defaultModel;
+    if (!this.testCaseAgents.has(key)) {
+      this.testCaseAgents.set(
+        key,
+        new Agent({
+          name: 'QualityForge Test Case Generator',
+          instructions: TEST_CASE_AGENT_INSTRUCTIONS,
+          model: key,
+        })
+      );
+    }
+    return this.testCaseAgents.get(key)!;
+  }
+
+  private getGeneralAgent(model?: string): Agent {
+    const key = model ?? this.defaultModel;
+    if (!this.generalAgents.has(key)) {
+      this.generalAgents.set(
+        key,
+        new Agent({
+          name: 'QualityForge General Generator',
+          instructions: GENERAL_AGENT_INSTRUCTIONS,
+          model: key,
+        })
+      );
+    }
+    return this.generalAgents.get(key)!;
   }
 }

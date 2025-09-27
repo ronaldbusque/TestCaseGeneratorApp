@@ -20,12 +20,13 @@ interface GenerateRequest {
   };
   aiEnhancement?: string;
   provider?: LLMProvider;
+  model?: string;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { fields, count = 100, format = 'JSON', options, aiEnhancement, provider } = body as GenerateRequest;
+    const { fields, count = 100, format = 'JSON', options, aiEnhancement, provider, model } = body as GenerateRequest;
     
     console.log("=== TEST DATA GENERATION API REQUEST ===");
     console.log({ 
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest) {
       options,
       hasAiEnhancement: !!aiEnhancement,
       provider: provider ?? 'openai',
+      model: model ?? 'default',
     });
     console.log("=======================================");
     
@@ -54,7 +56,8 @@ export async function POST(request: NextRequest) {
     const result = await dataGeneratorService.generateTestDataFromFields({ 
       fields, 
       count,
-      aiEnhancement
+      aiEnhancement,
+      model,
     });
     
     console.log("=== TEST DATA GENERATION API RESPONSE ===");
