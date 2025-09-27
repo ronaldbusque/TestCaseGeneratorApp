@@ -67,8 +67,6 @@ export class AgentsService implements AIService {
         priorityMode,
       });
 
-      const agent = this.getTestCaseAgent(request.model);
-
       const modelToUse = request.model ?? this.defaultModel;
       const agent = this.getTestCaseAgent(modelToUse);
 
