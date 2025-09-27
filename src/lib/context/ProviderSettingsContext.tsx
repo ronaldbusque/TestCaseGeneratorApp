@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { LLMProvider, ProviderDescriptor, ProviderSettings } from '@/lib/types/providers';
 
 interface ProviderSettingsContextValue {
@@ -73,22 +73,22 @@ export function ProviderSettingsProvider({ children }: { children: React.ReactNo
     }
   }, [settings, loading]);
 
-  const updateSetting = (domain: keyof ProviderSettings, provider: LLMProvider) => {
+  const updateSetting = useCallback((domain: keyof ProviderSettings, provider: LLMProvider) => {
     setSettings((prev) => ({ ...prev, [domain]: provider }));
-  };
+  }, []);
 
-  const resetSettings = () => {
-    setSettings(DEFAULT_SETTINGS);
+  const resetSettings = useCallback(() => {
+    setSettings(ensureSettingsFallback(DEFAULT_SETTINGS, availableProviders));
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch (error) {
       console.warn('Failed to clear provider settings from storage', error);
     }
-  };
+  }, [availableProviders]);
 
   const value = useMemo<ProviderSettingsContextValue>(
     () => ({ settings, availableProviders, updateSetting, resetSettings, loading }),
-    [settings, availableProviders, loading]
+    [settings, availableProviders, loading, updateSetting, resetSettings]
   );
 
   return (
