@@ -359,8 +359,6 @@ export default function Home() {
       if (result.error) {
         setError(result.error);
       } else if (result.testCases) {
-        console.log('[Client] Conversion response', result);
-
         const requestedCount = selectedScenarios.length;
         const limitedTestCases = Array.isArray(result.testCases)
           ? result.testCases.slice(0, requestedCount)
@@ -373,33 +371,40 @@ export default function Home() {
           });
         }
 
-        // First, prepare all the IDs we'll need
-        const existingIds: Set<string> = new Set([
-          ...convertedTestCases.map(tc => tc.id),
-          ...getCurrentTestCases().map(tc => tc.id)
-        ]);
-
-        // Generate IDs for all new test cases first
-        const newIds: string[] = limitedTestCases.map((_: any, index: number) => {
-          const originalScenario = selectedScenarios[index];
-          const baseId = typeof originalScenario?.id === 'string' ? originalScenario.id : '';
-          const matchNumber = baseId ? baseId.split('-')[1] : undefined;
-          let id = matchNumber ? `TC-${matchNumber}` : getNextTestCaseId('TC');
-
-          // If the ID already exists, generate a new one
-          while (existingIds.has(id)) {
-            id = getNextTestCaseId('TC');
-          }
-          existingIds.add(id); // Add to set to prevent duplicates in subsequent iterations
-          return id;
+        console.log('[Client] Conversion response summary', {
+          requested: requestedCount,
+          received: result.testCases.length,
         });
 
-        // Now create the test cases with their unique IDs
+        // Prepare ID generation that avoids collisions deterministically
+        const existingIds: Set<string> = new Set([
+          ...convertedTestCases.map(tc => tc.id).filter((id): id is string => typeof id === 'string'),
+          ...getCurrentTestCases().map(tc => tc.id).filter((id): id is string => typeof id === 'string'),
+        ]);
+
+        const nextId = (() => {
+          let maxNumber = 0;
+          existingIds.forEach((id) => {
+            if (id.startsWith('TC-')) {
+              const number = parseInt(id.split('-')[1], 10);
+              if (!Number.isNaN(number)) {
+                maxNumber = Math.max(maxNumber, number);
+              }
+            }
+          });
+          return () => {
+            maxNumber += 1;
+            const newId = `TC-${String(maxNumber).padStart(3, '0')}`;
+            existingIds.add(newId);
+            return newId;
+          };
+        })();
+
         const newTestCases: TestCase[] = limitedTestCases.map((tc: any, index: number) => {
           const originalScenario = selectedScenarios[index];
           return {
             ...tc,
-            id: newIds[index],
+            id: nextId(),
             area: originalScenario?.area || tc.area || 'General',
             originalScenarioId: originalScenario?.id
           };
