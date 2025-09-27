@@ -22,17 +22,30 @@ function truncate(value: string): string {
 
 export async function logAIInteraction(entry: LogEntry): Promise<void> {
   try {
-    const safeEntry = {
-      timestamp: new Date().toISOString(),
-      provider: entry.provider,
-      model: entry.model ?? null,
-      prompt: truncate(entry.prompt),
-      response: truncate(entry.response),
-      context: entry.context ?? {},
-    };
+    const timestamp = new Date().toISOString();
+    const safePrompt = truncate(entry.prompt ?? '');
+    const safeResponse = truncate(entry.response ?? '');
+    const context = entry.context && Object.keys(entry.context).length > 0
+      ? JSON.stringify(entry.context, null, 2)
+      : '{}';
+
+    const logBlock = [
+      '---',
+      `timestamp: ${timestamp}`,
+      `provider: ${entry.provider}`,
+      `model: ${entry.model ?? 'default'}`,
+      `context: ${context}`,
+      'PROMPT:',
+      safePrompt,
+      '',
+      'RESPONSE:',
+      safeResponse,
+      '---',
+      '',
+    ].join('\n');
 
     await fs.mkdir(LOG_DIR, { recursive: true });
-    await fs.appendFile(LOG_FILE, `${JSON.stringify(safeEntry)}\n`, 'utf8');
+    await fs.appendFile(LOG_FILE, logBlock, 'utf8');
   } catch (error) {
     // Intentionally swallow logging errors to avoid breaking runtime behaviour
     console.warn('[AI Logger] Failed to write log entry', error);

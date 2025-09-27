@@ -318,7 +318,7 @@ export default function Home() {
     let maxNumber = 0;
     
     for (const id of allIds) {
-      if (id.startsWith(prefix)) {
+      if (typeof id === 'string' && id.startsWith(prefix)) {
         const number = parseInt(id.split('-')[1]);
         if (!isNaN(number) && number > maxNumber) {
           maxNumber = number;
