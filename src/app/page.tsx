@@ -368,8 +368,8 @@ export default function Home() {
         // Generate IDs for all new test cases first
         const newIds: string[] = result.testCases.map((_: any, index: number) => {
           const originalScenario = selectedScenarios[index];
-          const baseId = originalScenario?.id || '';
-          const matchNumber = baseId.split('-')[1];
+          const baseId = typeof originalScenario?.id === 'string' ? originalScenario.id : '';
+          const matchNumber = baseId ? baseId.split('-')[1] : undefined;
           let id = matchNumber ? `TC-${matchNumber}` : getNextTestCaseId('TC');
           
           // If the ID already exists, generate a new one
