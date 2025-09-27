@@ -12,9 +12,7 @@ export function middleware(request: NextRequest) {
   
   const pathname = request.nextUrl.pathname;
 
-  const publicApiRoutes = new Set([
-    '/api/providers',
-  ]);
+  const publicApiRoutes = new Set<string>([]);
 
   // Only apply validation to specific API paths (e.g., all under /api/ but not auth routes if you had them)
   // Adjust the path check as needed for your application structure.
