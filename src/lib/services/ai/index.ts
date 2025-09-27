@@ -1,12 +1,11 @@
-import { AIModel, AIService } from '@/lib/types';
-import { O3MiniService } from './o3mini';
-import { GeminiService } from './gemini';
+import { LLMProvider, AIService } from '@/lib/types';
+import { createAIService } from './factory';
 
-const services: Record<AIModel, AIService> = {
-  'O3-Mini': new O3MiniService(),
-  'Gemini': new GeminiService()
-};
+const instances = new Map<LLMProvider, AIService>();
 
-export function getAIService(model: AIModel): AIService {
-  return services[model];
-} 
+export function getAIService(provider: LLMProvider = 'openai'): AIService {
+  if (!instances.has(provider)) {
+    instances.set(provider, createAIService(provider));
+  }
+  return instances.get(provider)!;
+}

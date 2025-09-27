@@ -1,5 +1,18 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    serverComponentsExternalPackages: [
+      '@openai/agents',
+      '@openai/agents-core',
+      '@modelcontextprotocol/sdk',
+      '@google/generative-ai',
+      'ts-interface-checker',
+      'isexe',
+      'extend',
+      'which',
+      'cross-spawn',
+    ],
+  },
   webpack: (config, { isServer }) => {
     // Add rule for pdf.worker.js
     config.module.rules.push({

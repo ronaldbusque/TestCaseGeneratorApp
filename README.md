@@ -8,24 +8,18 @@ A comprehensive suite of AI-powered tools for quality assurance and testing prof
 
 ### 🧪 Test Case Generator
 
-- 🤖 **Multiple AI Models**
-  - Google Gemini Integration
-  - OpenAI o3-mini Integration
-  - Smart model switching with session management
+- 🤖 **Agents-Powered Workflow**
+  - Unified OpenAI Agents SDK runtime (default gpt-4.1-mini)
+  - Consistent prompts across test case, SQL, and data tools
+  - Built-in tracing readiness for production debugging
+- 🔀 **Configurable LLM Providers**
+  - Choose OpenAI, Google Gemini, or OpenRouter per tool from the in-app settings page
+  - Providers auto-populate based on API keys present in `.env.local`
 
-- 📄 **Multi-Format Document Support**
-  - PDF files
-  - Word documents (DOC, DOCX)
-  - Plain text files (TXT)
-  - HTML files
-  - Images (PNG, JPEG, JPG, GIF, WEBP)
-
-- 🔍 **Advanced Document Processing**
-  - OCR for images using Tesseract.js
-  - PDF text extraction
-  - Word document parsing
-  - Structure preservation
-  - Metadata extraction
+- 📄 **Lightweight Document Support**
+  - Text and markdown files read inline
+  - Other formats (PDF, DOCX, images) sent with contextual metadata
+  - Multimodal models interpret original files directly – no custom OCR
 
 - 💡 **Dual Test Generation Modes**
   - High-level Test Scenarios
@@ -97,11 +91,9 @@ A comprehensive suite of AI-powered tools for quality assurance and testing prof
 
 ### Prerequisites
 
-- Node.js 18.x or higher
+- Node.js 22.x or higher (required by the OpenAI Agents SDK)
 - npm or yarn package manager
-- API keys for AI services:
-  - Google Gemini API key
-  - OpenAI API key (optional)
+- OpenAI API key with access to GPT-4.1 or later reasoning models
 
 ### Installation
 
@@ -120,9 +112,16 @@ yarn install
 
 3. Create a `.env.local` file in the root directory and add your API keys:
 ```env
-NEXT_PUBLIC_GEMINI_API_KEY=your_gemini_api_key
-NEXT_PUBLIC_OPENAI_API_KEY=your_openai_api_key
-NEXT_PUBLIC_OPENAI_API_URL=your_openai_api_url
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=gpt-4.1-mini
+NEXT_PUBLIC_OPENAI_MODEL=gpt-4.1-mini
+
+# Optional provider keys
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-1.5-pro-latest
+OPENROUTER_API_KEY=your_openrouter_api_key
+OPENROUTER_MODEL=openrouter/auto
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 ```
 
 4. Start the development server:
@@ -134,23 +133,23 @@ yarn dev
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+6. Visit **Settings → Provider Settings** and choose which LLM powers each tool.
+
 ## 🛠️ Technology Stack
 
 - **Framework**: Next.js 14.2
 - **UI Library**: React 18.2
 - **Styling**: Tailwind CSS
 - **Animations**: Framer Motion
-- **Document Processing**:
-  - mammoth (Word documents)
-  - pdfjs-dist (PDF files)
-  - tesseract.js (OCR)
-  - html-to-text
-  - turndown (HTML to Markdown)
+- **Document Handling**:
+  - Lightweight client-side previews for text-based uploads
+  - Multimodal models interpret binary files directly (PDF, DOCX, images)
 - **Data Generation**:
   - Faker.js
 - **AI Integration**:
-  - @google/generative-ai
-  - OpenAI for the o3-mini model integration
+  - @openai/agents SDK (OpenAI)
+  - @google/generative-ai (Gemini)
+  - OpenAI-compatible REST (OpenRouter / custom endpoints)
 - **Type Safety**: TypeScript
 - **Testing**: Jest
 
@@ -158,9 +157,9 @@ yarn dev
 
 ### Test Case Generator
 
-1. **Select AI Model**
-   - Choose between Google Gemini or OpenAI o3-mini
-   - Each model has its own strengths for different types of requirements
+1. **Select LLM Provider**
+   - Visit **Settings → Provider Settings** to choose OpenAI, Gemini, or OpenRouter for each tool
+   - Providers appear automatically when the corresponding API keys are present in `.env.local`
 
 2. **Choose Generation Type**
    - High-level Test Scenarios: For planning and coverage analysis
@@ -169,7 +168,7 @@ yarn dev
 3. **Input Requirements**
    - Upload relevant documents (PDF, Word, images, etc.)
    - Enter additional requirements in the text area
-   - View extracted content from uploaded files
+   - Preview text snippets or metadata summaries for each file
 
 4. **Generate Test Cases**
    - Click "Generate Test Cases" button
@@ -247,8 +246,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- Google Gemini AI for advanced LLM capabilities
-- OpenAI for the o3-mini model integration
+- OpenAI for the Agents SDK and reasoning models
 - Faker.js for powerful test data generation
 - The open-source community for the amazing libraries used in this project
 

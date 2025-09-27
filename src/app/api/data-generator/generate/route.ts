@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { TestDataGeneratorService } from '@/lib/services/ai/testDataGenerator';
 import { createAIService } from '@/lib/services/ai/factory';
-import { AIModel } from '@/lib/types';
+import { LLMProvider } from '@/lib/types';
 
 interface FieldDefinition {
   name: string;
@@ -19,13 +19,13 @@ interface GenerateRequest {
     includeBOM: boolean;
   };
   aiEnhancement?: string;
-  model?: AIModel;
+  provider?: LLMProvider;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { fields, count = 100, format = 'JSON', options, aiEnhancement, model = 'Gemini' } = body as GenerateRequest;
+    const { fields, count = 100, format = 'JSON', options, aiEnhancement, provider } = body as GenerateRequest;
     
     console.log("=== TEST DATA GENERATION API REQUEST ===");
     console.log({ 
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       format,
       options,
       hasAiEnhancement: !!aiEnhancement,
-      model
+      provider: provider ?? 'openai',
     });
     console.log("=======================================");
     
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const coreAIService = createAIService(model);
+    const coreAIService = createAIService(provider);
     console.log(`Core AI Service created: ${coreAIService.constructor.name}`);
     
     const dataGeneratorService = new TestDataGeneratorService(coreAIService);

@@ -20,7 +20,7 @@ export default function PrivacyPage() {
           
           <h2 className="text-2xl font-bold text-white mt-8 mb-4">Introduction</h2>
           <p className="text-blue-100">
-            QualityForge AI ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information when you use our website and services.
+            QualityForge AI (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information when you use our website and services.
           </p>
           
           <h2 className="text-2xl font-bold text-white mt-8 mb-4">Information We Collect</h2>

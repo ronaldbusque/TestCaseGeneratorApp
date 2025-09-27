@@ -1,22 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAIService } from '@/lib/services/ai/factory';
-import { TestCaseGenerationRequest, AIModel } from '@/lib/types';
+import { TestCaseGenerationRequest, UploadedFilePayload } from '@/lib/types';
 
 export async function POST(request: NextRequest) {
   try {
     console.log('[API] Test case generation endpoint called');
     
     const body = await request.json();
-    const { 
-      requirements, 
-      mode, 
-      priorityMode, 
+    const {
+      requirements,
+      mode,
+      priorityMode,
       selectedScenarios,
-      fileContent, // Accept file content instead of File objects
-      model = 'Gemini' 
-    } = body as TestCaseGenerationRequest & { 
-      model?: AIModel;
-      fileContent?: string; // Additional parameter for file content
+      fileContent,
+      files = [],
+      provider,
+    } = body as TestCaseGenerationRequest & {
+      fileContent?: string;
+      files?: UploadedFilePayload[];
     };
     
     // Get the user identifier from the headers (added by middleware)
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     console.log(`[API] User identifier from middleware: ${userIdentifier}`);
     
     // Log safely without exposing the entire content of requirements or fileContent
-    console.log(`[API] Request details - Mode: ${mode}, Model: ${model}, Requirements: ${requirements ? `${requirements.substring(0, 50)}...` : 'None'}, File content: ${fileContent ? 'Provided' : 'None'}`);
+    console.log(`[API] Request details - Mode: ${mode}, Provider: ${provider ?? 'openai'}, Requirements: ${requirements ? `${requirements.substring(0, 50)}...` : 'None'}, File content: ${fileContent ? 'Provided' : 'None'}, Files: ${files.length}`);
     
     if (!requirements && !selectedScenarios?.length) {
       return NextResponse.json(
@@ -33,20 +34,21 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const aiService = createAIService(model);
+    const aiService = createAIService(provider);
     console.log(`[API] Created AI service: ${aiService.constructor.name}`);
-    
+
     // Combine file content and requirements if both are present
     const combinedRequirements = [fileContent, requirements]
       .filter(Boolean)
       .join('\n\n');
-    
+
     const result = await aiService.generateTestCases({
       requirements: combinedRequirements,
       mode,
       priorityMode,
       selectedScenarios,
-      files: [] // Files are handled differently now with fileContent
+      files,
+      provider,
     });
     
     console.log(`[API] Generated ${result.testCases?.length || 0} test cases`);

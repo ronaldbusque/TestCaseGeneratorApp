@@ -11,6 +11,7 @@ import { Tab } from '@headlessui/react';
 import { TableCellsIcon, CodeBracketIcon } from '@heroicons/react/24/outline';
 import { DataGeneratorLoading } from '@/components/data-generator/DataGeneratorLoading';
 import { fetchApi } from '@/lib/utils/apiClient';
+import { useProviderSettings } from '@/lib/context/ProviderSettingsContext';
 
 interface FieldDefinition {
   id: string;
@@ -46,6 +47,7 @@ const useToast = () => {
 };
 
 export default function TestDataGeneratorPage() {
+  const { settings } = useProviderSettings();
   // Field definitions for the schema builder
   const [fields, setFields] = useState<FieldDefinition[]>([
     {
@@ -135,7 +137,8 @@ export default function TestDataGeneratorPage() {
           // Include AI enhancement if there's a prompt
           ...(exportConfig.enhancementPrompt.trim() 
             ? { aiEnhancement: exportConfig.enhancementPrompt.trim() } 
-            : {})
+            : {}),
+          provider: settings.data,
         })
       });
       
@@ -292,7 +295,8 @@ export default function TestDataGeneratorPage() {
           // Include AI enhancement if there's a prompt
           ...(exportConfig.enhancementPrompt.trim() 
             ? { aiEnhancement: exportConfig.enhancementPrompt.trim() } 
-            : {})
+            : {}),
+          provider: settings.data,
         })
       });
       

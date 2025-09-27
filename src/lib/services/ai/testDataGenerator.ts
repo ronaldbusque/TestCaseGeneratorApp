@@ -508,7 +508,7 @@ Format your response as a valid JSON object like this:
       console.log("==============================\n");
       
       // Call the AI service with the prompt
-      const response = await this.aiService.generateContent(prompt, 'gemini-2.0-flash-thinking-exp-01-21');
+      const response = await this.aiService.generateContent(prompt);
       
       console.log("\n=== AI ENHANCEMENT RAW RESPONSE ===");
       console.log(response);
@@ -817,7 +817,7 @@ To help you keep track, number each value from 1 to ${requestedCount} using the 
       console.log("=================================\n");
       
       // Call the AI service with the prompt
-      const response = await this.aiService.generateContent(prompt, 'gemini-2.0-flash-thinking-exp-01-21');
+      const response = await this.aiService.generateContent(prompt);
       
       console.log("\n=== AI FIELD GENERATION RESPONSE ===");
       console.log(response);

@@ -181,12 +181,12 @@ export function ExportOptions({ config, onConfigChange, onExport, onPreview, has
           
           <div className="mt-2">
             <p className="text-slate-300 text-xs mb-2">
-              Provide context and instructions for AI-Generated fields. This helps the AI understand how to generate values for fields with the "AI-Generated" type.
+              Provide context and instructions for AI-Generated fields. This helps the AI understand how to generate values for fields with the &quot;AI-Generated&quot; type.
             </p>
             <textarea
               value={config.enhancementPrompt}
               onChange={(e) => handleEnhancementPromptChange(e.target.value)}
-              placeholder="Examples: 'Generate sci-fi character names', 'Create realistic product descriptions for a tech company', 'Generate addresses in the Boston area'"
+              placeholder={'Examples: &quot;Generate sci-fi character names&quot;, &quot;Create realistic product descriptions for a tech company&quot;, &quot;Generate addresses in the Boston area&quot;'}
               className="w-full h-20 bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
           </div>

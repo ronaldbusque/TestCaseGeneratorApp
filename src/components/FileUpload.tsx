@@ -42,7 +42,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelect, shouldRes
     return fileList.reduce((total, file) => total + file.size, 0);
   };
 
-  const validateFiles = (newFiles: File[]): { valid: File[], errors: string[] } => {
+  const validateFiles = useCallback((newFiles: File[]): { valid: File[]; errors: string[] } => {
     const errors: string[] = [];
     const valid: File[] = [];
 
@@ -60,7 +60,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelect, shouldRes
     });
 
     return { valid, errors };
-  };
+  }, [files]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setError(null);
@@ -75,7 +75,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelect, shouldRes
       setFiles(updatedFiles);
       onFilesSelect(updatedFiles);
     }
-  }, [onFilesSelect, files]);
+  }, [onFilesSelect, files, validateFiles]);
 
   const removeFile = (fileToRemove: File) => {
     const updatedFiles = files.filter(file => file !== fileToRemove);
@@ -188,4 +188,3 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelect, shouldRes
     </div>
   );
 };
-

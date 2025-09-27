@@ -1,3 +1,5 @@
+import { LLMProvider } from './providers';
+
 export type SQLDialect = 
   | 'MySQL' 
   | 'PostgreSQL' 
@@ -11,18 +13,21 @@ export interface SQLGenerationRequest {
   description: string;
   targetDialect: SQLDialect;
   schema?: string; // Database schema definition (optional)
+  provider?: LLMProvider;
 }
 
 export interface SQLValidationRequest {
   query: string;
   dialect: SQLDialect;
   schema?: string; // Optional database schema definition
+  provider?: LLMProvider;
 }
 
 export interface SQLConversionRequest {
   query: string;
   sourceDialect: SQLDialect;
   targetDialect: SQLDialect;
+  provider?: LLMProvider;
 }
 
 export interface SQLResponse {

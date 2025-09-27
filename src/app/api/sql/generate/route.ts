@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SQLAIService } from '@/lib/services/ai/sql';
 import { createAIService } from '@/lib/services/ai/factory';
-import { SQLGenerationRequest, AIModel } from '@/lib/types';
+import { SQLGenerationRequest, LLMProvider } from '@/lib/types';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { description, targetDialect, schema, model = 'Gemini' } = body as SQLGenerationRequest & { model?: AIModel };
+    const { description, targetDialect, schema, provider } = body as SQLGenerationRequest & { provider?: LLMProvider };
     
     console.log("=== SQL GENERATION API REQUEST ===");
-    console.log({ description, targetDialect, schema: schema ? `${schema.substring(0, 100)}...` : undefined, model });
+    console.log({ description, targetDialect, provider: provider ?? 'openai', schema: schema ? `${schema.substring(0, 100)}...` : undefined });
     console.log("==================================");
     
     if (!description || !targetDialect) {
@@ -21,12 +21,11 @@ export async function POST(request: NextRequest) {
     
     console.log(`Generating SQL query for dialect: ${targetDialect}`);
     console.log(`Description: ${description.substring(0, 100)}${description.length > 100 ? '...' : ''}`);
-    console.log(`Using AI model: ${model}`);
     if (schema) {
       console.log(`Schema provided (${schema.length} characters)`);
     }
-    
-    const coreAIService = createAIService(model);
+
+    const coreAIService = createAIService(provider);
     console.log(`Core AI Service created: ${coreAIService.constructor.name}`);
     
     const sqlService = new SQLAIService(coreAIService);

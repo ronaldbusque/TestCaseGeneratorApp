@@ -1,16 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ModelSelector } from '@/components/ModelSelector';
 import { FileUpload } from '../components/FileUpload';
 import { RequirementsInput } from '@/components/RequirementsInput';
 import { TestCaseList } from '@/components/TestCaseList';
 import { createAIService } from '@/lib/services/ai/factory';
-import { AIModel, TestCase, TestCaseMode, HighLevelTestCase, TestPriorityMode } from '@/lib/types';
+import { TestCase, TestCaseMode, HighLevelTestCase, TestPriorityMode, UploadedFilePayload } from '@/lib/types';
 import { AnimatePresence } from 'framer-motion';
 import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { LoadingAnimation } from '@/components/LoadingAnimation';
-import { parseDocument } from '@/lib/services/documentParser';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
 import { ArrowPathIcon, ArrowsRightLeftIcon } from '@heroicons/react/24/outline';
@@ -22,13 +20,18 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { NavigationBar } from '@/components/NavigationBar';
 import { fetchApi } from '@/lib/utils/apiClient';
+import { useProviderSettings } from '@/lib/context/ProviderSettingsContext';
 
 const isHighLevelTestCase = (testCase: TestCase): testCase is HighLevelTestCase => {
   return 'scenario' in testCase && 'area' in testCase;
 };
 
+const MAX_FILE_CONTENT_LENGTH = 8000;
+const MAX_FILE_PREVIEW_LENGTH = 500;
+const DEFAULT_AGENT_MODEL = process.env.NEXT_PUBLIC_OPENAI_MODEL ?? 'gpt-4.1-mini';
+
 export default function Home() {
-  const [selectedModel, setSelectedModel] = useState<AIModel>('Gemini');
+  const { settings } = useProviderSettings();
   const [testCaseMode, setTestCaseMode] = useState<TestCaseMode>('high-level');
   const [testPriorityMode, setTestPriorityMode] = useState<TestPriorityMode>('comprehensive');
   const [requirements, setRequirements] = useState('');
@@ -52,8 +55,7 @@ export default function Home() {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [isFileContentVisible, setIsFileContentVisible] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
-  const [pendingModelChange, setPendingModelChange] = useState<AIModel | null>(null);
-  const [confirmationType, setConfirmationType] = useState<'new_session' | 'model_change' | null>(null);
+  const [confirmationType, setConfirmationType] = useState<'new_session' | null>(null);
   const [shouldResetFiles, setShouldResetFiles] = useState(false);
 
   // Add effect to clear fileContent when no files are present
@@ -86,23 +88,6 @@ export default function Home() {
     setIsFileContentVisible(false);
     setGenerationStep('idle');
     setShouldResetFiles(true);
-    
-    if (pendingModelChange) {
-      setSelectedModel(pendingModelChange);
-      setPendingModelChange(null);
-    }
-  };
-
-  const handleModelSelect = (model: AIModel) => {
-    if (model === selectedModel) return;
-
-    if (hasExistingData()) {
-      setPendingModelChange(model);
-      setConfirmationType('model_change');
-      setIsConfirmDialogOpen(true);
-    } else {
-      setSelectedModel(model);
-    }
   };
 
   const handleNewSession = () => {
@@ -111,13 +96,6 @@ export default function Home() {
   };
 
   const getConfirmationDetails = () => {
-    if (confirmationType === 'model_change') {
-      return {
-        title: "Change AI Model",
-        message: `Switching to ${pendingModelChange} model will clear your current work. Would you like to proceed?`,
-        confirmLabel: "Switch Model",
-      };
-    }
     return {
       title: "Start New Session",
       message: "This will clear all current files, requirements, and generated test cases. Are you sure you want to start fresh?",
@@ -127,6 +105,72 @@ export default function Home() {
 
   const hasExistingData = () => {
     return uploadedFiles.length > 0 || requirements.trim() !== '' || getCurrentTestCases().length > 0;
+  };
+
+  const extractReadableContent = async (file: File): Promise<string> => {
+    try {
+      if (file.type.startsWith('text/') || file.type === 'application/json') {
+        return await file.text();
+      }
+
+      if (file.type === 'application/pdf' || file.type.includes('wordprocessingml') || file.type.includes('msword')) {
+        return '[Binary document uploaded. The multimodal model should interpret the original file directly.]';
+      }
+
+      if (file.type.startsWith('image/')) {
+        return '[Image uploaded for visual analysis.]';
+      }
+
+      return `[${file.type || 'Unknown file type'} uploaded.]`;
+    } catch (error) {
+      console.error('File read error:', error);
+      return '';
+    }
+  };
+
+  const fileToBase64 = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        if (typeof result === 'string') {
+          const base64 = result.includes('base64,') ? result.split('base64,')[1] : result;
+          resolve(base64);
+        } else {
+          reject(new Error('Unsupported file encoding'));
+        }
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const buildFilePayloads = async (files: File[]): Promise<UploadedFilePayload[]> => {
+    const payloads = await Promise.all(
+      files.map(async (file) => {
+        const content = await extractReadableContent(file);
+        const trimmed = content.length > MAX_FILE_CONTENT_LENGTH
+          ? `${content.slice(0, MAX_FILE_CONTENT_LENGTH)}...`
+          : content;
+
+        let base64Data: string | undefined;
+        try {
+          base64Data = await fileToBase64(file);
+        } catch (error) {
+          console.warn('Failed to convert file to base64', { file: file.name, error });
+        }
+
+        return {
+          name: file.name,
+          type: file.type,
+          preview: trimmed,
+          data: base64Data,
+          size: file.size,
+        };
+      })
+    );
+
+    return payloads.filter(({ name }) => Boolean(name));
   };
 
   const handleFilesSelect = async (files: File[]) => {
@@ -142,42 +186,31 @@ export default function Home() {
 
     try {
       setGenerationStep('analyzing');
-      
-      // Skip file parsing for Gemini model as it handles files natively
-      if (selectedModel === 'Gemini') {
-        // For Gemini, just show a list of uploaded files
-        const fileList = files.map(file => file.name).join('\n');
-        setFileContent(`Uploaded Files:\n${fileList}`);
-        setGenerationStep('idle');
-        return;
-      }
 
-      const extractedRequirements = await Promise.all(
-        files.map(file => parseDocument(file))
+      const previews = await Promise.all(
+        files.map(async (file) => {
+          const content = await extractReadableContent(file);
+          const preview = content.slice(0, MAX_FILE_PREVIEW_LENGTH);
+          const truncated = content.length > MAX_FILE_PREVIEW_LENGTH;
+
+          return {
+            name: file.name,
+            type: file.type,
+            preview: preview ? `${preview}${truncated ? '...' : ''}` : '',
+          };
+        })
       );
 
-      const textRequirements = extractedRequirements
-        .filter(req => req) // Remove any null results
-        .map(result => result.content) // Extract the content from the parsing result
-        .filter(content => content.trim()) // Remove empty content
+      const summary = previews
+        .map(({ name, type, preview }) => {
+          if (!preview) {
+            return `• ${name} (${type || 'unknown'})`;
+          }
+          return `=== ${name} (${type || 'unknown'}) ===\n${preview}`;
+        })
         .join('\n\n');
 
-      // Handle image files
-      const imageFiles = files.filter(file => file.type.startsWith('image/'));
-      const imageRequirements = imageFiles.length > 0 
-        ? `\n\nImage Files for Testing:\n${imageFiles.map(file => `- ${file.name}`).join('\n')}`
-        : '';
-
-      // Combine text and image requirements
-      const combinedRequirements = textRequirements + imageRequirements;
-
-      if (combinedRequirements) {
-        setFileContent(combinedRequirements);
-      } else if (imageFiles.length > 0) {
-        // If we only have images and no text requirements, set a default message
-        setFileContent('Image files uploaded for testing.');
-      }
-
+      setFileContent(summary || `Uploaded files:\n${files.map(file => `• ${file.name}`).join('\n')}`);
       setGenerationStep('idle');
     } catch (error) {
       console.error('File processing error:', error);
@@ -211,9 +244,11 @@ export default function Home() {
       
       // Generation phase
       setGenerationStep('generating');
-      
+
+      const filePayloads = await buildFilePayloads(uploadedFiles);
+
       // Call the protected API endpoint instead of using the AI service directly
-      console.log(`[Client] Calling test case generation API - Mode: ${testCaseMode}, Model: ${selectedModel}`);
+      console.log(`[Client] Calling test case generation API - Mode: ${testCaseMode}`);
       const result = await fetchApi('/api/generate', {
         method: 'POST',
         body: JSON.stringify({
@@ -221,7 +256,8 @@ export default function Home() {
           fileContent: fileContent, // Pass the file content separately
           mode: testCaseMode,
           priorityMode: testPriorityMode,
-          model: selectedModel
+          files: filePayloads,
+          provider: settings.testCases,
         })
       });
 
@@ -305,14 +341,16 @@ export default function Home() {
         );
       
       // Call the protected API endpoint instead of using the AI service directly
-      console.log(`[Client] Calling test case conversion API - Selected scenarios: ${selectedScenarios.length}, Model: ${selectedModel}`);
+      console.log(`[Client] Calling test case conversion API - Selected scenarios: ${selectedScenarios.length}`);
+      const filePayloads = await buildFilePayloads(uploadedFiles);
       const result = await fetchApi('/api/generate', {
         method: 'POST',
         body: JSON.stringify({
           requirements,
           mode: 'detailed',
           selectedScenarios,
-          model: selectedModel
+          files: filePayloads,
+          provider: settings.testCases,
         })
       });
 
@@ -396,9 +434,15 @@ export default function Home() {
         <div className="space-y-8">
           <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 sm:p-8 border border-white/20">
             <div className="flex flex-col space-y-6">
-              {/* Top row with model selector and new session button */}
-              <div className="flex items-center justify-between">
-                <ModelSelector onModelSelect={handleModelSelect} selectedModel={selectedModel} />
+              {/* Top row with agent info and new session button */}
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3 rounded-xl bg-white/5 px-4 py-2 border border-white/10 text-blue-100">
+                  <ArrowsRightLeftIcon className="h-5 w-5 text-blue-200" />
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-blue-100">OpenAI Agents runtime</p>
+                    <p className="text-xs text-blue-200">Default model: {DEFAULT_AGENT_MODEL}</p>
+                  </div>
+                </div>
                 {hasExistingData() && (
                   <Button
                     onClick={handleNewSession}
@@ -545,7 +589,6 @@ export default function Home() {
         isOpen={isConfirmDialogOpen}
         onClose={() => {
           setIsConfirmDialogOpen(false);
-          setPendingModelChange(null);
           setConfirmationType(null);
         }}
         onConfirm={clearSession}

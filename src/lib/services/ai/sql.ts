@@ -114,7 +114,7 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
       console.log(prompt);
       console.log("============================");
 
-      const response = await this.aiService.generateContent(prompt, 'gemini-2.0-flash-thinking-exp-01-21');
+      const response = await this.aiService.generateContent(prompt);
       
       console.log("=== SQL GENERATION RAW RESPONSE ===");
       console.log(response);
@@ -323,7 +323,7 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
       console.log(prompt);
       console.log("============================");
 
-      const response = await this.aiService.generateContent(prompt, 'gemini-2.0-flash-thinking-exp-01-21');
+      const response = await this.aiService.generateContent(prompt);
       
       console.log("=== SQL VALIDATION RAW RESPONSE ===");
       console.log(response);
@@ -482,7 +482,7 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
       console.log(prompt);
       console.log("============================");
 
-      const response = await this.aiService.generateContent(prompt, 'gemini-2.0-flash-thinking-exp-01-21');
+      const response = await this.aiService.generateContent(prompt);
       
       console.log("=== SQL CONVERSION RAW RESPONSE ===");
       console.log(response);

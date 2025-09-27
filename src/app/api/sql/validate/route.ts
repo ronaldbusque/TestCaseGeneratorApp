@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SQLAIService } from '@/lib/services/ai/sql';
 import { createAIService } from '@/lib/services/ai/factory';
-import { SQLValidationRequest, AIModel } from '@/lib/types';
+import { SQLValidationRequest, LLMProvider } from '@/lib/types';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { query, dialect, schema, model = 'Gemini' } = body as SQLValidationRequest & { model?: AIModel };
+    const { query, dialect, schema, provider } = body as SQLValidationRequest & { provider?: LLMProvider };
     
     console.log("=== SQL VALIDATION API REQUEST ===");
-    console.log({ query, dialect, schema: schema ? `${schema.substring(0, 100)}...` : undefined, model });
+    console.log({ query, dialect, provider: provider ?? 'openai', schema: schema ? `${schema.substring(0, 100)}...` : undefined });
     console.log("=================================");
     
     if (!query || !dialect) {
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const coreAIService = createAIService(model);
+    const coreAIService = createAIService(provider);
     console.log(`Core AI Service created: ${coreAIService.constructor.name}`);
     
     const sqlService = new SQLAIService(coreAIService);

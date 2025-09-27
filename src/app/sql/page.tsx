@@ -24,6 +24,7 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/Button';
 import { NavigationBar } from '@/components/NavigationBar';
 import { fetchApi } from '@/lib/utils/apiClient';
+import { useProviderSettings } from '@/lib/context/ProviderSettingsContext';
 
 // SQL Tool Modes
 type SQLToolMode = 'generate' | 'validate' | 'convert';
@@ -695,6 +696,7 @@ ORDER BY
 // Main SQL Tool Page Component
 export default function SQLToolPage() {
   const [mode, setMode] = useState<SQLToolMode>('generate');
+  const { settings } = useProviderSettings();
   
   // Define interfaces for each mode's state
   interface GenerateState {
@@ -799,7 +801,7 @@ export default function SQLToolPage() {
     
     try {
       let endpoint = '';
-      let payload = {};
+      let payload: Record<string, any> = {};
       
       switch (mode) {
         case 'generate':
@@ -827,7 +829,7 @@ export default function SQLToolPage() {
       // Use the fetchApi utility instead of direct fetch
       const data = await fetchApi(endpoint, {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, provider: settings.sql }),
       });
       
       updateCurrentState({ result: data });

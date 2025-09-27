@@ -1,14 +1,16 @@
-import { AIModel } from '@/lib/types';
-import { O3MiniService } from './o3mini';
+import { LLMProvider } from '@/lib/types';
+import { AgentsService } from './agents';
 import { GeminiService } from './gemini';
+import { OpenRouterService } from './openrouter';
 
-export function createAIService(model: AIModel) {
-  switch (model) {
-    case 'Gemini':
+export function createAIService(provider: LLMProvider = 'openai') {
+  switch (provider) {
+    case 'gemini':
       return new GeminiService();
-    case 'O3-Mini':
-      return new O3MiniService();
+    case 'openrouter':
+      return new OpenRouterService();
+    case 'openai':
     default:
-      return new GeminiService(); // Default to Gemini
+      return new AgentsService();
   }
-} 
+}

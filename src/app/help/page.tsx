@@ -44,7 +44,7 @@ export default function HelpPage() {
                 <strong className="text-white">Select Test Case Mode</strong>: Choose between high-level test cases (scenarios) or detailed test cases.
               </li>
               <li>
-                <strong className="text-white">Generate Test Cases</strong>: Click the "Generate" button to create test cases based on your requirements.
+                <strong className="text-white">Generate Test Cases</strong>: Click the &quot;Generate&quot; button to create test cases based on your requirements.
               </li>
               <li>
                 <strong className="text-white">Review and Export</strong>: Review the generated test cases and export them in your preferred format.

@@ -1,14 +1,12 @@
 // Export SQL types
 export * from './sql';
+export * from './providers';
 
-export type AIModel = 'O3-Mini' | 'Gemini';
+import { LLMProvider } from './providers';
 
-export type ModelType = 
-  | 'gpt-4'
-  | 'gpt-3.5-turbo'
-  | 'claude-3-opus-20240229'
-  | 'claude-3-sonnet-20240229'
-  | 'gemini-2.0-flash-thinking-exp-01-21';
+export type AIModel = 'Agents';
+
+export type ModelType = string;
 
 export interface BaseTestCase {
   id: string;
@@ -45,22 +43,24 @@ export interface TestStep {
   description: string;
 }
 
-export interface AIModelConfig {
-  id: AIModel;
-  name: string;
-  description: string;
-  isAvailable: boolean;
-}
-
 export type TestCaseMode = 'high-level' | 'detailed';
 export type TestPriorityMode = 'comprehensive' | 'core-functionality';
 
+export interface UploadedFilePayload {
+  name: string;
+  type: string;
+  preview: string;
+  data?: string; // base64 encoded without data URL prefix
+  size?: number;
+}
+
 export interface TestCaseGenerationRequest {
   requirements: string;
-  files?: File[];
+  files?: UploadedFilePayload[];
   mode: TestCaseMode;
   selectedScenarios?: HighLevelTestCase[];
   priorityMode?: TestPriorityMode;
+  provider?: LLMProvider;
 }
 
 export interface TestCaseGenerationResponse {

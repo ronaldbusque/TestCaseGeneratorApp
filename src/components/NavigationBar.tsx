@@ -7,14 +7,19 @@ import {
   BeakerIcon, 
   DocumentCheckIcon, 
   CommandLineIcon, 
-  TableCellsIcon 
+  TableCellsIcon,
+  Cog6ToothIcon,
 } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/Button';
+import { useProviderSettings } from '@/lib/context/ProviderSettingsContext';
 
 export const NavigationBar = () => {
   const pathname = usePathname();
   const [accessTokenInput, setAccessTokenInput] = useState('');
   const [savedAccessToken, setSavedAccessToken] = useState<string | null>(null);
+  const { settings, availableProviders } = useProviderSettings();
+
+  const defaultProviderLabel = availableProviders.find((provider) => provider.id === settings.testCases)?.label || 'OpenAI (Agents)';
   
   useEffect(() => {
     const storedToken = localStorage.getItem('appAccessToken');
@@ -81,11 +86,26 @@ export const NavigationBar = () => {
                 <TableCellsIcon className="h-5 w-5 mr-1" />
                 Test Data Generator
               </Link>
+              <Link
+                href="/settings"
+                className={`${
+                  pathname === '/settings'
+                    ? 'border-blue-500 text-white'
+                    : 'border-transparent text-gray-300 hover:border-blue-300 hover:text-blue-300'
+                } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
+              >
+                <Cog6ToothIcon className="h-5 w-5 mr-1" />
+                Settings
+              </Link>
             </div>
           </div>
           
-          {/* Access Token Input */}
-          <div className="flex items-center ml-auto pl-4">
+          {/* Provider summary and Access Token Input */}
+          <div className="flex items-center ml-auto pl-4 gap-4">
+            <div className="hidden md:flex flex-col text-right">
+              <span className="text-xs text-blue-300 uppercase tracking-wide">Test Case Provider</span>
+              <span className="text-sm text-blue-100">{defaultProviderLabel}</span>
+            </div>
             <input
               type="password"
               placeholder="Access Token"
