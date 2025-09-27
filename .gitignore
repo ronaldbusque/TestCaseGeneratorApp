@@ -40,4 +40,5 @@ task-logs.md
 plan.md
 .eslintrc.json
 logs/
+!src/app/logs/
 data/

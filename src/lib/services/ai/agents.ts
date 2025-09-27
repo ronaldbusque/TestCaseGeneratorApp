@@ -76,7 +76,7 @@ export class AgentsService implements AIService {
 
       const rawOutput = result.finalOutput?.trim() ?? '';
 
-      await logAIInteraction({
+      logAIInteraction({
         provider: 'openai',
         model: modelToUse,
         prompt,
@@ -139,7 +139,7 @@ export class AgentsService implements AIService {
 
     const rawOutput = result.finalOutput?.trim() ?? '';
 
-    await logAIInteraction({
+    logAIInteraction({
       provider: 'openai',
       model: modelToUse,
       prompt,

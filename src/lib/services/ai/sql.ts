@@ -121,7 +121,7 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
       console.log(response);
       console.log("==================================");
 
-      await logAIInteraction({
+      logAIInteraction({
         provider: 'sql-core',
         model,
         prompt,
@@ -338,7 +338,7 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
       console.log(response);
       console.log("==================================");
 
-      await logAIInteraction({
+      logAIInteraction({
         provider: 'sql-core',
         model,
         prompt,
@@ -505,7 +505,7 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
       console.log(response);
       console.log("==================================");
 
-      await logAIInteraction({
+      logAIInteraction({
         provider: 'sql-core',
         model,
         prompt,

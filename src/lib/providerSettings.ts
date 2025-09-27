@@ -62,7 +62,9 @@ export function ensureSettingsFallback(
       ? selection.provider
       : fallbackProvider.id;
     const descriptor = providerMap.get(providerId) ?? fallbackProvider;
-    const defaultModel = descriptor.defaultModel ?? FALLBACK_MODELS[providerId];
+    const defaultModel = descriptor.defaultModel
+      ?? descriptor.models?.[0]?.id
+      ?? FALLBACK_MODELS[providerId];
     const providerChanged = selection.provider !== providerId;
     const normalizedModel = providerChanged
       ? defaultModel
@@ -95,7 +97,9 @@ export function buildDefaultSettings(providers: ProviderDescriptor[]): ProviderS
       ? preferred.provider
       : fallback.id;
     const descriptor = providerMap.get(providerId) ?? fallback;
-    const model = descriptor.defaultModel ?? FALLBACK_MODELS[providerId];
+    const model = descriptor.defaultModel
+      ?? descriptor.models?.[0]?.id
+      ?? FALLBACK_MODELS[providerId];
     return { provider: providerId, model };
   };
 

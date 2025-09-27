@@ -29,10 +29,21 @@ export default function SettingsPage() {
       description: provider.description,
       baseUrl: provider.baseUrl,
       defaultModel: provider.defaultModel,
+      models: provider.models ?? [],
+      status: provider.status ?? null,
     }))
   ), [availableProviders]);
 
-  const providerMap = useMemo(() => new Map(providerOptions.map((option) => [option.value, option])), [providerOptions]);
+  const providerMap = useMemo(
+    () => new Map(providerOptions.map((option) => [option.value, option])),
+    [providerOptions]
+  );
+
+  const statusAccent: Record<string, string> = {
+    ok: 'text-emerald-400',
+    warning: 'text-amber-300',
+    error: 'text-rose-400',
+  };
 
   return (
     <div className="relative py-12">
@@ -58,6 +69,11 @@ export default function SettingsPage() {
             (Object.entries(DOMAIN_LABELS) as Array<[keyof typeof DOMAIN_LABELS, string]>).map(([domain, label]) => {
               const selection = settings[domain];
               const selectedOption = providerMap.get(selection.provider);
+              const status = selectedOption?.status ?? null;
+              const lastCheckedLabel = status?.fetchedAt
+                ? new Date(status.fetchedAt).toLocaleTimeString()
+                : null;
+              const statusErrorSuffix = status?.error ? ` · ${status.error}` : '';
 
               return (
                 <motion.div
@@ -86,13 +102,30 @@ export default function SettingsPage() {
                           </option>
                         ))}
                       </select>
-                      <input
-                        type="text"
-                        value={selection.model}
-                        onChange={(event) => updateModel(domain, event.target.value)}
-                        placeholder={selectedOption?.defaultModel || 'Enter model name'}
-                        className="w-full sm:w-64 bg-slate-900/80 border border-white/10 text-blue-50 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm"
-                      />
+                      <div className="w-full sm:w-64">
+                        {selectedOption && (
+                          <datalist id={`model-options-${domain}-${selection.provider}`}>
+                            {selectedOption.models?.map((model) => (
+                              <option key={model.id} value={model.id}>
+                                {model.label ?? model.id}
+                              </option>
+                            ))}
+                          </datalist>
+                        )}
+                        <input
+                          type="text"
+                          list={`model-options-${domain}-${selection.provider}`}
+                          value={selection.model}
+                          onChange={(event) => updateModel(domain, event.target.value)}
+                          placeholder={selectedOption?.defaultModel || selectedOption?.models?.[0]?.id || 'Select or type model'}
+                          className="w-full bg-slate-900/80 border border-white/10 text-blue-50 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-sm"
+                        />
+                        <p className="mt-1 text-[0.7rem] text-blue-200/60">
+                          {selectedOption?.models?.length
+                            ? 'Start typing to filter live model suggestions.'
+                            : 'Enter the model identifier published by your provider.'}
+                        </p>
+                      </div>
                     </div>
                   </div>
                   {(selectedOption?.description || selectedOption?.baseUrl) && (
@@ -100,6 +133,22 @@ export default function SettingsPage() {
                       {selectedOption?.description && <p>{selectedOption.description}</p>}
                       {selectedOption?.baseUrl && (
                         <p>Base URL: <span className="text-blue-100">{selectedOption.baseUrl}</span></p>
+                      )}
+                    </div>
+                  )}
+                  {status && (
+                    <div className="mt-4 text-xs">
+                      <p className={`${statusAccent[status.severity] ?? 'text-blue-200'} font-semibold`}>
+                        {status.headline}
+                      </p>
+                      {status.detail && (
+                        <p className="text-blue-200/70">{status.detail}</p>
+                      )}
+                      {lastCheckedLabel && (
+                        <p className="text-blue-200/50 mt-1">
+                          Last checked {lastCheckedLabel}
+                          {statusErrorSuffix}
+                        </p>
                       )}
                     </div>
                   )}

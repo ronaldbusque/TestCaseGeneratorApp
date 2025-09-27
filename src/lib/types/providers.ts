@@ -11,6 +11,27 @@ export type ProviderSettings = {
   data: ProviderSelection;
 };
 
+export interface ProviderModelInfo {
+  id: string;
+  label?: string;
+  description?: string;
+  contextWindow?: number;
+  owned?: boolean;
+}
+
+export type ProviderStatusSeverity = 'ok' | 'warning' | 'error';
+
+export interface ProviderStatusSummary {
+  severity: ProviderStatusSeverity;
+  headline: string;
+  detail?: string;
+  remainingCreditsUsd?: number;
+  refreshAt?: string;
+  fetchedAt: string;
+  source?: 'live' | 'fallback';
+  error?: string;
+}
+
 export interface ProviderDescriptor {
   id: LLMProvider;
   label: string;
@@ -18,4 +39,6 @@ export interface ProviderDescriptor {
   supportsMultimodal?: boolean;
   defaultModel?: string;
   baseUrl?: string;
+  models?: ProviderModelInfo[];
+  status?: ProviderStatusSummary | null;
 }

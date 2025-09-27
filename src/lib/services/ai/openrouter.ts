@@ -108,7 +108,7 @@ export class OpenRouterService implements AIService {
       throw new Error('OpenRouter response missing content');
     }
 
-    await logAIInteraction({
+    logAIInteraction({
       provider: 'openrouter',
       model: model ?? this.defaultModel,
       prompt,

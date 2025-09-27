@@ -102,7 +102,9 @@ export function ProviderSettingsProvider({ children }: { children: React.ReactNo
     (domain: keyof ProviderSettings, providerId: LLMProvider) => {
       setSettings((prev) => {
         const descriptor = availableProviders.find((p) => p.id === providerId);
-        const defaultModel = descriptor?.defaultModel ?? FALLBACK_MODELS[providerId];
+        const defaultModel = descriptor?.defaultModel
+          ?? descriptor?.models?.[0]?.id
+          ?? FALLBACK_MODELS[providerId];
         return {
           ...prev,
           [domain]: { provider: providerId, model: defaultModel },

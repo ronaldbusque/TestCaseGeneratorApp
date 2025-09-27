@@ -41,7 +41,7 @@ export class GeminiService implements AIService {
 
       const rawOutput = result.response.text() ?? '';
 
-      await logAIInteraction({
+      logAIInteraction({
         provider: 'gemini',
         model: modelToUse,
         prompt,
@@ -106,7 +106,7 @@ export class GeminiService implements AIService {
 
     const rawOutput = result.response.text() ?? '';
 
-    await logAIInteraction({
+    logAIInteraction({
       provider: 'gemini',
       model: modelToUse,
       prompt,

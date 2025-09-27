@@ -9,6 +9,7 @@ import {
   CommandLineIcon, 
   TableCellsIcon,
   Cog6ToothIcon,
+  QueueListIcon,
 } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/Button';
 
@@ -80,6 +81,17 @@ export const NavigationBar = () => {
               >
                 <TableCellsIcon className="h-5 w-5 mr-1" />
                 Test Data Generator
+              </Link>
+              <Link
+                href="/logs"
+                className={`${
+                  pathname === '/logs'
+                    ? 'border-blue-500 text-white'
+                    : 'border-transparent text-gray-300 hover:border-blue-300 hover:text-blue-300'
+                } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
+              >
+                <QueueListIcon className="h-5 w-5 mr-1" />
+                AI Logs
               </Link>
               <Link
                 href="/settings"
