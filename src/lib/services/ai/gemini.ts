@@ -7,6 +7,7 @@ import {
 } from '@/lib/types';
 import { JsonCleaner } from '@/lib/utils/jsonCleaner';
 import { buildTestCasePrompt, mapModelResponseToTestCases } from './utils';
+import { logAIInteraction } from '@/lib/utils/aiLogger';
 
 const DEFAULT_MODEL = process.env.GEMINI_MODEL ?? 'gemini-1.5-pro-latest';
 
@@ -26,7 +27,8 @@ export class GeminiService implements AIService {
     try {
       const prompt = buildTestCasePrompt(request);
       const parts = this.buildParts(prompt, request);
-      const modelInstance = this.getModel(request.model);
+      const modelToUse = request.model ?? DEFAULT_MODEL;
+      const modelInstance = this.getModel(modelToUse);
 
       const result = await modelInstance.generateContent({
         contents: [
@@ -37,7 +39,15 @@ export class GeminiService implements AIService {
         ],
       });
 
-      const rawOutput = result.response.text();
+      const rawOutput = result.response.text() ?? '';
+
+      await logAIInteraction({
+        provider: 'gemini',
+        model: modelToUse,
+        prompt,
+        response: rawOutput,
+        context: { type: 'test-case-generation', mode: request.mode },
+      });
 
       if (!rawOutput) {
         return {
@@ -84,7 +94,8 @@ export class GeminiService implements AIService {
   }
 
   async generateContent(prompt: string, model?: ModelType): Promise<string> {
-    const result = await this.getModel(model).generateContent({
+    const modelToUse = typeof model === 'string' ? model : DEFAULT_MODEL;
+    const result = await this.getModel(modelToUse).generateContent({
       contents: [
         {
           role: 'user',
@@ -93,7 +104,17 @@ export class GeminiService implements AIService {
       ],
     });
 
-    return result.response.text();
+    const rawOutput = result.response.text() ?? '';
+
+    await logAIInteraction({
+      provider: 'gemini',
+      model: modelToUse,
+      prompt,
+      response: rawOutput,
+      context: { type: 'content-generation' },
+    });
+
+    return rawOutput;
   }
 
   private getModel(model?: string): GenerativeModel {

@@ -9,6 +9,7 @@ import {
   SQLConversionResponse,
   SQLIssue
 } from '@/lib/types';
+import { logAIInteraction } from '@/lib/utils/aiLogger';
 
 export class SQLAIService {
   private aiService: AIService; // Add private member for the core AI service
@@ -115,10 +116,18 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
       console.log("============================");
 
       const response = await this.aiService.generateContent(prompt, model);
-      
+
       console.log("=== SQL GENERATION RAW RESPONSE ===");
       console.log(response);
       console.log("==================================");
+
+      await logAIInteraction({
+        provider: 'sql-core',
+        model,
+        prompt,
+        response,
+        context: { type: 'sql-generate', dialect: targetDialect },
+      });
       
       try {
         // First attempt: Direct JSON parsing
@@ -324,10 +333,18 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
       console.log("============================");
 
       const response = await this.aiService.generateContent(prompt, model);
-      
+
       console.log("=== SQL VALIDATION RAW RESPONSE ===");
       console.log(response);
       console.log("==================================");
+
+      await logAIInteraction({
+        provider: 'sql-core',
+        model,
+        prompt,
+        response,
+        context: { type: 'sql-validate', dialect },
+      });
       
       try {
         // First attempt: Direct JSON parsing
@@ -483,10 +500,18 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
       console.log("============================");
 
       const response = await this.aiService.generateContent(prompt, model);
-      
+
       console.log("=== SQL CONVERSION RAW RESPONSE ===");
       console.log(response);
       console.log("==================================");
+
+      await logAIInteraction({
+        provider: 'sql-core',
+        model,
+        prompt,
+        response,
+        context: { type: 'sql-convert', sourceDialect, targetDialect },
+      });
       
       try {
         // First attempt: Direct JSON parsing

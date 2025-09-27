@@ -10,6 +10,7 @@ import {
   buildTestCasePrompt,
   mapModelResponseToTestCases,
 } from './utils';
+import { logAIInteraction } from '@/lib/utils/aiLogger';
 
 const DEFAULT_MODEL = process.env.OPENAI_MODEL ?? 'gpt-4.1-mini';
 const TEST_CASE_AGENT_INSTRUCTIONS = `You are an expert QA engineer. Generate thorough and well-structured test scenarios and detailed test cases based on the supplied requirements. Always return a JSON array matching the requested schema without extra commentary. Use the provided files and scenarios as authoritative sources.`;
@@ -68,11 +69,22 @@ export class AgentsService implements AIService {
 
       const agent = this.getTestCaseAgent(request.model);
 
+      const modelToUse = request.model ?? this.defaultModel;
+      const agent = this.getTestCaseAgent(modelToUse);
+
       const result = await run(agent, prompt, {
         maxTurns: 4,
       });
 
       const rawOutput = result.finalOutput?.trim() ?? '';
+
+      await logAIInteraction({
+        provider: 'openai',
+        model: modelToUse,
+        prompt,
+        response: rawOutput,
+        context: { type: 'test-case-generation', mode: request.mode },
+      });
 
       if (!rawOutput) {
         return {
@@ -121,13 +133,23 @@ export class AgentsService implements AIService {
   }
 
   async generateContent(prompt: string, model?: ModelType): Promise<string> {
-    const agent = this.getGeneralAgent(model);
-
+    const modelToUse = typeof model === 'string' ? model : this.defaultModel;
+    const agent = this.getGeneralAgent(modelToUse);
     const result = await run(agent, prompt, {
       maxTurns: 3,
     });
 
-    return result.finalOutput?.trim() ?? '';
+    const rawOutput = result.finalOutput?.trim() ?? '';
+
+    await logAIInteraction({
+      provider: 'openai',
+      model: modelToUse,
+      prompt,
+      response: rawOutput,
+      context: { type: 'content-generation' },
+    });
+
+    return rawOutput;
   }
 
   private getTestCaseAgent(model?: string): Agent {

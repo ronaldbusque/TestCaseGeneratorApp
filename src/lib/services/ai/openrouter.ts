@@ -6,6 +6,7 @@ import {
 } from '@/lib/types';
 import { JsonCleaner } from '@/lib/utils/jsonCleaner';
 import { buildTestCasePrompt, mapModelResponseToTestCases } from './utils';
+import { logAIInteraction } from '@/lib/utils/aiLogger';
 
 const DEFAULT_MODEL = process.env.OPENROUTER_MODEL ?? process.env.OPENAI_COMPAT_MODEL ?? 'openrouter/auto';
 const BASE_URL = process.env.OPENROUTER_BASE_URL ?? process.env.OPENAI_COMPAT_API_BASE_URL ?? 'https://openrouter.ai/api/v1';
@@ -106,6 +107,14 @@ export class OpenRouterService implements AIService {
     if (!message) {
       throw new Error('OpenRouter response missing content');
     }
+
+    await logAIInteraction({
+      provider: 'openrouter',
+      model: model ?? this.defaultModel,
+      prompt,
+      response: message,
+      context: { type: 'content-generation' },
+    });
 
     return message;
   }
