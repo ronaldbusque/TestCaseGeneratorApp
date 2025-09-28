@@ -989,9 +989,10 @@ export class TestCaseAgenticPipeline {
     focusCaseIds?: string[]
   ): string {
     const targetedFeedbackJson = JSON.stringify(focusFeedback, null, 2);
-    const includeFullFeedback =
+    const includeFullFeedback = Boolean(
       allFeedback &&
-      (allFeedback !== focusFeedback || allFeedback.length !== focusFeedback.length);
+        allFeedback.length > focusFeedback.length
+    );
     const fullFeedbackJson = includeFullFeedback
       ? JSON.stringify(allFeedback, null, 2)
       : targetedFeedbackJson;
