@@ -805,15 +805,24 @@ export default function Home() {
               <label className="block text-xs font-semibold uppercase tracking-wide text-blue-200/80 mb-2">
                 Planner model override
               </label>
-              <input
-                type="text"
-                value={plannerModelOverride}
+              <select
+                value={plannerModelOverride || settings.testCases.model}
                 onChange={(event) => setPlannerModelOverride(event.target.value)}
-                placeholder={settings.testCases.model}
                 disabled={!agenticEnabled}
                 className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-              <p className="mt-1 text-[0.7rem] text-blue-200/60">Leave blank to reuse the primary generator model.</p>
+              >
+                <option value={settings.testCases.model} className="bg-slate-900 text-blue-50">
+                  {settings.testCases.model}
+                </option>
+                {quickSelections
+                  .filter((qs) => qs.provider === settings.testCases.provider)
+                  .map((qs) => (
+                    <option key={qs.id} value={qs.model} className="bg-slate-900 text-blue-50">
+                      {qs.model}
+                    </option>
+                  ))}
+              </select>
+              <p className="mt-1 text-[0.7rem] text-blue-200/60">Choose a planner model; defaults to the main generator model.</p>
             </div>
 
             <div>
@@ -839,15 +848,24 @@ export default function Home() {
               <label className="block text-xs font-semibold uppercase tracking-wide text-blue-200/80 mb-2">
                 Reviewer model override
               </label>
-              <input
-                type="text"
-                value={reviewerModelOverride}
+              <select
+                value={reviewerModelOverride || (reviewerProviderOverride === 'same' ? settings.testCases.model : '')}
                 onChange={(event) => setReviewerModelOverride(event.target.value)}
-                placeholder={reviewerProviderOverride === 'same' ? settings.testCases.model : 'Enter model id'}
                 disabled={!agenticEnabled}
                 className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-              <p className="mt-1 text-[0.7rem] text-blue-200/60">Leave blank to reuse the writer model.</p>
+              >
+                <option value={reviewerProviderOverride === 'same' ? settings.testCases.model : ''} className="bg-slate-900 text-blue-50">
+                  {reviewerProviderOverride === 'same' ? settings.testCases.model : 'Default reviewer model'}
+                </option>
+                {quickSelections
+                  .filter((qs) => qs.provider === (reviewerProviderOverride === 'same' ? settings.testCases.provider : reviewerProviderOverride))
+                  .map((qs) => (
+                    <option key={qs.id} value={qs.model} className="bg-slate-900 text-blue-50">
+                      {qs.model}
+                    </option>
+                  ))}
+              </select>
+              <p className="mt-1 text-[0.7rem] text-blue-200/60">Select a reviewer model; defaults to the writer model.</p>
             </div>
           </div>
         </div>
