@@ -384,7 +384,11 @@ export default function Home() {
     );
 
     const chunkTotal = revisionProgress.chunkTotal ?? 0;
-    const chunkCompleted = Math.min(revisionProgress.chunkCompleted ?? 0, chunkTotal || revisionProgress.chunkCompleted ?? 0);
+    const chunkCompletedBaseline = revisionProgress.chunkCompleted ?? 0;
+    const chunkCompleted = Math.min(
+      chunkCompletedBaseline,
+      chunkTotal || chunkCompletedBaseline
+    );
     const showChunkProgress = revisionProgress.inProgress && chunkTotal > 0;
 
     const revisionStatus = (() => {
