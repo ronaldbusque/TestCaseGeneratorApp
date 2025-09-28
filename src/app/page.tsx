@@ -65,6 +65,7 @@ export default function Home() {
   const [plannerModelOverride, setPlannerModelOverride] = useState('');
   const [reviewerProviderOverride, setReviewerProviderOverride] = useState<'same' | LLMProvider>('same');
   const [reviewerModelOverride, setReviewerModelOverride] = useState('');
+  const [writerConcurrency, setWriterConcurrency] = useState(1);
   const [generationPlan, setGenerationPlan] = useState<GenerationPlanItem[]>([]);
   const [reviewFeedback, setReviewFeedback] = useState<ReviewFeedbackItem[]>([]);
   const [generationWarnings, setGenerationWarnings] = useState<string[]>([]);
@@ -311,6 +312,10 @@ export default function Home() {
       ? Math.max(0, Math.min(6, Math.floor(reviewPasses)))
       : 0;
 
+    const normalizedConcurrency = Number.isFinite(writerConcurrency)
+      ? Math.max(1, Math.min(6, Math.floor(writerConcurrency)))
+      : 1;
+
     return {
       enableAgentic: true,
       plannerProvider: writerProvider,
@@ -321,8 +326,9 @@ export default function Home() {
       reviewerModel: reviewerModel ? reviewerModel : undefined,
       maxReviewPasses: normalizedPasses,
       chunkStrategy: 'auto',
+      writerConcurrency: normalizedConcurrency,
     } as const;
-  }, [agenticEnabled, plannerModelOverride, reviewerModelOverride, reviewerProviderOverride, reviewPasses, settings.testCases.model, settings.testCases.provider]);
+  }, [agenticEnabled, plannerModelOverride, reviewerModelOverride, reviewerProviderOverride, reviewPasses, writerConcurrency, settings.testCases.model, settings.testCases.provider]);
 
   const fetchFileTokenSummary = useCallback(async (
     payloads: UploadedFilePayload[],
@@ -778,6 +784,25 @@ export default function Home() {
 
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wide text-blue-200/80 mb-2">
+                Writer concurrency
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={6}
+                value={writerConcurrency}
+                onChange={(event) => {
+                  const value = Number(event.target.value);
+                  setWriterConcurrency(Number.isNaN(value) ? 1 : value);
+                }}
+                disabled={!agenticEnabled}
+                className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <p className="mt-1 text-[0.7rem] text-blue-200/60">Increase to run multiple plan slices in parallel (may raise duplicate risk).</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-blue-200/80 mb-2">
                 Planner model override
               </label>
               <input
@@ -1037,6 +1062,10 @@ export default function Home() {
                     <div>
                       <dt className="text-blue-200/70">Reviewer</dt>
                       <dd className="font-semibold">{formatDuration(generationTelemetry.reviewerDurationMs)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-blue-200/70">Writer concurrency</dt>
+                      <dd className="font-semibold">{generationTelemetry.writerConcurrency ?? 1}</dd>
                     </div>
                     <div>
                       <dt className="text-blue-200/70">Plan items</dt>

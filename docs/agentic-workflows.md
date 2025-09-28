@@ -95,6 +95,7 @@ Assume planner returns _N_ plan items and you configure _R_ review passes.
 - Use **high-level + comprehensive** to produce scenario catalogs for backlog grooming. Enable 1 review pass to get coverage suggestions quickly.
 - Use **detailed + comprehensive** when you need executable test cases. Set review passes to 2 for safety-critical domains; expect more LLM calls proportional to plan size.
 - Use **core-functionality** priorities to keep runs fast; planner emits fewer items, so writer call count drops.
+- If provider rate limits allow, increase **writer concurrency** (1–6) to expand plan items in parallel. Expect slightly higher duplicate risk—the pipeline deduplicates automatically but may emit warnings.
 
 ## 7. Future Enhancements (Ideas)
 

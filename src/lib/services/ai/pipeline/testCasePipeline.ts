@@ -275,6 +275,7 @@ export class TestCaseAgenticPipeline {
         totalDurationMs: 0,
         plannerDurationMs,
         writerDurationMs,
+        writerConcurrency: writerOutcome.concurrencyUsed,
         reviewerDurationMs,
         writerSlices: writerOutcome.slices,
         reviewPasses: reviewOutcome.reviewTelemetry,
@@ -332,55 +333,60 @@ export class TestCaseAgenticPipeline {
   private async runWriter(
     context: PipelineContext,
     plan: GenerationPlanItem[]
-  ): Promise<{ rawCases: any[]; warnings: string[]; slices: WriterSliceTelemetry[] }> {
-    const { request, writerModel, writerProvider } = context;
+  ): Promise<{ rawCases: any[]; warnings: string[]; slices: WriterSliceTelemetry[]; concurrencyUsed: number }> {
+    const { request, writerModel, writerProvider, agenticOptions } = context;
     const warnings: string[] = [];
     const casesById = new Map<string, any>();
     const slices: WriterSliceTelemetry[] = [];
 
     const schema = this.getCaseSchema(request.mode);
+    const requestedConcurrency = agenticOptions?.writerConcurrency ?? 1;
+    const concurrency = Math.max(1, Math.min(requestedConcurrency, plan.length));
 
-    for (const planItem of plan) {
-      const prompt = this.buildWriterPrompt(request, planItem, Array.from(casesById.values()));
+    const runSlice = async (
+      planItem: GenerationPlanItem,
+      existingCases: any[]
+    ): Promise<{ planItem: GenerationPlanItem; cases: any[]; durationMs: number; warnings: string[] }> => {
+      const prompt = this.buildWriterPrompt(request, planItem, existingCases);
       const model = resolveLanguageModel({ provider: writerProvider, model: writerModel });
       const sliceStart = Date.now();
       const sliceWarnings: string[] = [];
 
-      let result;
       try {
-        result = await safeGenerateObject({
+        const result = await safeGenerateObject({
           model,
           schema,
           prompt,
           retryInstruction: 'Return ONLY a JSON object with an "items" array of test cases that matches the schema. Do not include any explanation or repeated sentences.',
         });
+
+        logAIInteraction({
+          provider: writerProvider,
+          model: writerModel,
+          prompt,
+          response: result.text ?? JSON.stringify(result.object),
+          context: {
+            type: 'test-case-generation',
+            stage: 'writer',
+            planId: planItem.id,
+          },
+        });
+
+        const cases = result.object.items ?? [];
+        const durationMs = Date.now() - sliceStart;
+        return { planItem, cases, durationMs, warnings: sliceWarnings };
       } catch (error) {
         const durationMs = Date.now() - sliceStart;
         const message = error instanceof Error ? error.message : 'Unknown generation error';
         const warning = `Failed to generate cases for plan ${planItem.id}: ${message}`;
-        warnings.push(warning);
-        slices.push({
-          planId: planItem.id,
-          durationMs,
-          caseCount: 0,
-          warnings: [warning],
-        });
-        continue;
+        sliceWarnings.push(warning);
+        return { planItem, cases: [], durationMs, warnings: sliceWarnings };
       }
+    };
 
-      logAIInteraction({
-        provider: writerProvider,
-        model: writerModel,
-        prompt,
-        response: result.text ?? JSON.stringify(result.object),
-        context: {
-          type: 'test-case-generation',
-          stage: 'writer',
-          planId: planItem.id,
-        },
-      });
-
-      (result.object.items ?? []).forEach((testCase, index) => {
+    const mergeSliceResult = (result: { planItem: GenerationPlanItem; cases: any[]; durationMs: number; warnings: string[] }) => {
+      const sliceWarnings = [...result.warnings];
+      result.cases.forEach((testCase, index) => {
         const caseId = testCase.id || this.generateCaseId(request.mode, casesById.size + index + 1);
         if (casesById.has(caseId)) {
           const duplicateWarning = `Duplicate case id ${caseId} detected. Latest slice overwrote the previous version.`;
@@ -390,16 +396,49 @@ export class TestCaseAgenticPipeline {
         casesById.set(caseId, { ...testCase, id: caseId });
       });
 
-      const durationMs = Date.now() - sliceStart;
+      if (sliceWarnings.length) {
+        warnings.push(...sliceWarnings.filter((w) => !warnings.includes(w)));
+      }
+
       slices.push({
-        planId: planItem.id,
-        durationMs,
-        caseCount: result.object.items?.length ?? 0,
+        planId: result.planItem.id,
+        durationMs: result.durationMs,
+        caseCount: result.cases.length,
         warnings: sliceWarnings.length ? sliceWarnings : undefined,
+      });
+    };
+
+    if (concurrency <= 1) {
+      for (const planItem of plan) {
+        const result = await runSlice(planItem, Array.from(casesById.values()));
+        mergeSliceResult(result);
+      }
+    } else {
+      const results: Array<{ planItem: GenerationPlanItem; cases: any[]; durationMs: number; warnings: string[] }> =
+        new Array(plan.length);
+      let nextIndex = 0;
+
+      const worker = async () => {
+        while (true) {
+          const current = nextIndex++;
+          if (current >= plan.length) {
+            break;
+          }
+          const planItem = plan[current];
+          const result = await runSlice(planItem, []);
+          results[current] = result;
+        }
+      };
+
+      await Promise.all(Array.from({ length: concurrency }, () => worker()));
+      results.forEach((result) => {
+        if (result) {
+          mergeSliceResult(result);
+        }
       });
     }
 
-    return { rawCases: Array.from(casesById.values()), warnings, slices };
+    return { rawCases: Array.from(casesById.values()), warnings, slices, concurrencyUsed: concurrency };
   }
 
   private async runReviewer(

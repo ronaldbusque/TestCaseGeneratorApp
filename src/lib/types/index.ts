@@ -76,6 +76,7 @@ export interface AgenticGenerationOptions {
   maxReviewPasses?: number;
   chunkStrategy?: 'auto' | 'fixed' | 'none';
   streamProgress?: boolean;
+  writerConcurrency?: number;
 }
 
 export interface WriterSliceTelemetry {
@@ -96,6 +97,7 @@ export interface AgenticTelemetry {
   totalDurationMs: number;
   plannerDurationMs?: number;
   writerDurationMs?: number;
+  writerConcurrency?: number;
   reviewerDurationMs?: number;
   planItemCount?: number;
   testCaseCount?: number;
