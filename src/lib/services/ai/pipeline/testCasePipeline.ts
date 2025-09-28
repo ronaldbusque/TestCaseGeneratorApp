@@ -20,6 +20,7 @@ import {
   summarizeScenarios,
 } from '../utils';
 import { logAIInteraction } from '@/lib/utils/aiLogger';
+import { JsonCleaner } from '@/lib/utils/jsonCleaner';
 
 const PlannerSchema = z.array(
   z.object({
@@ -95,6 +96,31 @@ interface GenerationArtifacts {
   passesExecuted: number;
   warnings: string[];
   telemetry: AgenticTelemetry;
+}
+
+type GenerateObjectOptions<T> = Parameters<typeof generateObject<T>>[0] & {
+  schema: z.ZodType<T>;
+};
+
+async function safeGenerateObject<T>(options: GenerateObjectOptions<T>) {
+  try {
+    return await generateObject<T>(options);
+  } catch (error: any) {
+    if (error?.name === 'AI_JSONParseError' && typeof error?.text === 'string') {
+      try {
+        const cleaned = JsonCleaner.cleanJsonResponse(error.text);
+        const parsed = JSON.parse(cleaned);
+        const validated = options.schema.parse(parsed);
+        return {
+          object: validated,
+          text: JSON.stringify(validated),
+        };
+      } catch {
+        // Fall through to rethrow original error
+      }
+    }
+    throw error;
+  }
 }
 
 export class TestCaseAgenticPipeline {
@@ -223,8 +249,8 @@ export class TestCaseAgenticPipeline {
 
     const promptSections = [
       'You are an expert QA strategist. Break the supplied materials into a concise execution plan for generating test cases.',
-      `Priority mode: ${request.priorityMode ?? 'comprehensive'}.` +
-        ' Produce a JSON array of plan items with id, title, area, focus, estimatedCases, and chunkRefs when applicable.',
+      `Priority mode: ${request.priorityMode ?? 'comprehensive'}. Produce a JSON array of plan items with id, title, area, focus, estimatedCases, and chunkRefs when applicable.`,
+      'Keep each focus under 160 characters and notes under 220 characters. Do not enumerate every acceptance criterion; summarize only the key goals for coverage.',
       requirements ? `Requirements:\n${requirements}` : 'No requirements provided.',
       filesSummary ? `Reference documents:\n${filesSummary}` : '',
       scenarioSummary,
@@ -237,7 +263,7 @@ export class TestCaseAgenticPipeline {
       model: plannerModel,
     });
 
-    const result = await generateObject({
+    const result = await safeGenerateObject({
       model,
       schema: PlannerSchema,
       prompt,
@@ -278,7 +304,7 @@ export class TestCaseAgenticPipeline {
 
       let result;
       try {
-        result = await generateObject({
+        result = await safeGenerateObject({
           model,
           schema,
           prompt,
@@ -359,7 +385,7 @@ export class TestCaseAgenticPipeline {
 
       let reviewResult;
       try {
-        reviewResult = await generateObject({
+        reviewResult = await safeGenerateObject({
           model,
           schema: reviewSchema,
           prompt,
@@ -418,7 +444,7 @@ export class TestCaseAgenticPipeline {
 
       let revisionResult;
       try {
-        revisionResult = await generateObject({
+        revisionResult = await safeGenerateObject({
           model: writerModelInstance,
           schema: caseSchema,
           prompt: revisionPrompt,
