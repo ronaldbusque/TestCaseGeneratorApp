@@ -54,7 +54,10 @@ const ReviewFeedbackSchema = z
 const ReviewResultSchema = z
   .object({
     feedback: z.array(ReviewFeedbackSchema),
-    summary: z.string().default('Review summary not provided.'),
+    summary: z
+      .string()
+      .min(1)
+      .transform((value) => value.trim() || 'Review summary not provided.'),
   })
   .strict();
 
@@ -619,7 +622,7 @@ export class TestCaseAgenticPipeline {
       'Assess coverage completeness, edge cases, and alignment with the plan. Identify missing or incorrect validations.',
       `Plan:\n${JSON.stringify(plan, null, 2)}`,
       `Current test cases:\n${JSON.stringify(cases, null, 2)}`,
-      'Return JSON with a "feedback" array of issues (caseId, issueType, severity, summary, suggestion). Always supply issueType (e.g., coverage-gap, duplication, formatting) and a suggestion string (use "No suggestion" if none). Severity must be one of info, minor, major, critical.',
+      'Return JSON with a "feedback" array of issues (caseId, issueType, severity, summary, suggestion) and a top-level "summary" string. Always supply issueType (e.g., coverage-gap, duplication, formatting) and a suggestion string (use "No suggestion provided." if none). Severity must be one of info, minor, major, critical.',
     ];
 
     return sections.join('\n\n');
