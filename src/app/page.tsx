@@ -63,6 +63,7 @@ export default function Home() {
   const [agenticEnabled, setAgenticEnabled] = useState(false);
   const [reviewPasses, setReviewPasses] = useState(1);
   const [plannerModelOverride, setPlannerModelOverride] = useState('');
+  const [writerModelOverride, setWriterModelOverride] = useState('');
   const [reviewerProviderOverride, setReviewerProviderOverride] = useState<'same' | LLMProvider>('same');
   const [reviewerModelOverride, setReviewerModelOverride] = useState('');
   const [writerConcurrency, setWriterConcurrency] = useState(1);
@@ -87,6 +88,23 @@ export default function Home() {
   );
 
   const plannerModelOptions = useMemo(() => {
+    const options: { model: string; label: string }[] = [];
+    const seen = new Set<string>();
+    const addOption = (model: string, label?: string) => {
+      if (!model || seen.has(model)) return;
+      options.push({ model, label: label ?? model });
+      seen.add(model);
+    };
+
+    addOption(settings.testCases.model, settings.testCases.model);
+    quickSelections
+      .filter((qs) => qs.provider === settings.testCases.provider)
+      .forEach((qs) => addOption(qs.model, qs.label ?? qs.model));
+
+    return options;
+  }, [quickSelections, settings.testCases.model, settings.testCases.provider]);
+
+  const writerModelOptions = useMemo(() => {
     const options: { model: string; label: string }[] = [];
     const seen = new Set<string>();
     const addOption = (model: string, label?: string) => {
@@ -461,7 +479,7 @@ export default function Home() {
     }
 
     const writerProvider = settings.testCases.provider;
-    const writerModel = settings.testCases.model;
+    const writerModel = writerModelOverride.trim() || settings.testCases.model;
     const plannerModel = plannerModelOverride.trim() || settings.testCases.model;
     const reviewerModel = reviewerModelOverride.trim() || reviewerDefaultModel;
 
@@ -489,7 +507,7 @@ export default function Home() {
       chunkStrategy: 'auto',
       writerConcurrency: normalizedConcurrency,
     } as const;
-  }, [agenticEnabled, plannerModelOverride, reviewerModelOverride, reviewerDefaultModel, reviewerProviderOverride, reviewPasses, writerConcurrency, settings.testCases.model, settings.testCases.provider]);
+  }, [agenticEnabled, plannerModelOverride, reviewerModelOverride, writerModelOverride, reviewerDefaultModel, reviewerProviderOverride, reviewPasses, writerConcurrency, settings.testCases.model, settings.testCases.provider]);
 
   const fetchFileTokenSummary = useCallback(async (
     payloads: UploadedFilePayload[],
@@ -982,6 +1000,28 @@ export default function Home() {
                 ))}
               </select>
               <p className="mt-1 text-[0.7rem] text-blue-200/60">Choose a planner model; defaults to the main generator model.</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-blue-200/80 mb-2">
+                Writer model override
+              </label>
+              <select
+                value={writerModelOverride || settings.testCases.model}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setWriterModelOverride(value === settings.testCases.model ? '' : value);
+                }}
+                disabled={!agenticEnabled}
+                className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {writerModelOptions.map((option) => (
+                  <option key={option.model} value={option.model} className="bg-slate-900 text-blue-50">
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[0.7rem] text-blue-200/60">Select the test case writer model; defaults to the main generator model.</p>
             </div>
 
             <div>

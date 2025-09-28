@@ -96,7 +96,7 @@ Assume planner returns _N_ plan items and you configure _R_ review passes.
 - Use **detailed + comprehensive** when you need executable test cases. Set review passes to 2 for safety-critical domains; expect more LLM calls proportional to plan size.
 - Use **core-functionality** priorities to keep runs fast; planner emits fewer items, so writer call count drops.
 - If provider rate limits allow, increase **writer concurrency** (1–6) to expand plan items in parallel. Expect slightly higher duplicate risk—the pipeline deduplicates automatically but may emit warnings.
-- Planner, writer, and reviewer models can be overridden independently. By default they follow the main generator selection, but you can choose faster/cheaper models for planning or reviewing while keeping a high-quality writer.
+- Planner, writer, and reviewer models can be overridden independently. Each dropdown mirrors your quick-select presets, so you can mix fast/cheap planners with high-quality writers or reviewers as needed.
 
 ## 7. Future Enhancements (Ideas)
 
