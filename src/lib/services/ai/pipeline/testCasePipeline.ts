@@ -100,23 +100,49 @@ interface GenerationArtifacts {
 
 type GenerateObjectOptions<T> = Parameters<typeof generateObject<T>>[0] & {
   schema: z.ZodType<T>;
+  retryInstruction?: string;
 };
 
+function tryParseCleaned<T>(error: any, schema: z.ZodType<T>) {
+  if (error?.name === 'AI_JSONParseError' && typeof error?.text === 'string') {
+    try {
+      const cleaned = JsonCleaner.cleanJsonResponse(error.text);
+      const parsed = JSON.parse(cleaned);
+      const validated = schema.parse(parsed);
+      return {
+        object: validated,
+        text: JSON.stringify(validated),
+      };
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 async function safeGenerateObject<T>(options: GenerateObjectOptions<T>) {
+  const { retryInstruction, ...baseOptions } = options;
   try {
-    return await generateObject<T>(options);
+    return await generateObject<T>(baseOptions);
   } catch (error: any) {
-    if (error?.name === 'AI_JSONParseError' && typeof error?.text === 'string') {
+    const parsed = tryParseCleaned(error, options.schema);
+    if (parsed) {
+      return parsed;
+    }
+
+    if (retryInstruction) {
       try {
-        const cleaned = JsonCleaner.cleanJsonResponse(error.text);
-        const parsed = JSON.parse(cleaned);
-        const validated = options.schema.parse(parsed);
-        return {
-          object: validated,
-          text: JSON.stringify(validated),
-        };
-      } catch {
-        // Fall through to rethrow original error
+        const retryResult = await generateObject<T>({
+          ...baseOptions,
+          prompt: `${baseOptions.prompt}\n\n${retryInstruction}`,
+        });
+        return retryResult;
+      } catch (retryError: any) {
+        const retryParsed = tryParseCleaned(retryError, options.schema);
+        if (retryParsed) {
+          return retryParsed;
+        }
+        throw retryError;
       }
     }
     throw error;
@@ -267,6 +293,7 @@ export class TestCaseAgenticPipeline {
       model,
       schema: PlannerSchema,
       prompt,
+      retryInstruction: 'Return ONLY a JSON array of plan items matching the schema. Do not repeat phrases or include commentary.',
     });
 
     logAIInteraction({
@@ -308,6 +335,7 @@ export class TestCaseAgenticPipeline {
           model,
           schema,
           prompt,
+          retryInstruction: 'Return ONLY a JSON array of test cases that matches the schema. Do not include any explanation or repeated sentences.',
         });
       } catch (error) {
         const durationMs = Date.now() - sliceStart;
@@ -389,6 +417,7 @@ export class TestCaseAgenticPipeline {
           model,
           schema: reviewSchema,
           prompt,
+          retryInstruction: 'Respond with JSON matching the schema (feedback array + summary). Do not add commentary outside the JSON.',
         });
       } catch (error) {
         const durationMs = Date.now() - passStart;
@@ -448,6 +477,7 @@ export class TestCaseAgenticPipeline {
           model: writerModelInstance,
           schema: caseSchema,
           prompt: revisionPrompt,
+          retryInstruction: 'Return ONLY a JSON array of updated cases. No additional text.',
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown revision error';
