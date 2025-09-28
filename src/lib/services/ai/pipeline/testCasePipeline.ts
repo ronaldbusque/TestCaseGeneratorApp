@@ -38,10 +38,10 @@ const PlannerSchema = z.object({
 
 const ReviewFeedbackSchema = z.object({
   caseId: z.string().min(1),
-  issueType: z.string().default(''),
+  issueType: z.string(),
   severity: z.enum(['info', 'minor', 'major', 'critical']).default('info'),
   summary: z.string().min(1),
-  suggestion: z.string().default(''),
+  suggestion: z.string(),
 }).strict();
 
 const ReviewResultSchema = z.object({
@@ -454,15 +454,18 @@ export class TestCaseAgenticPipeline {
       });
 
       const feedback = reviewResult.object.feedback ?? [];
+      const normalizedFeedback = feedback.map((entry) => ({
+        ...entry,
+        issueType: entry.issueType?.trim() || 'general',
+        suggestion: entry.suggestion?.trim() || 'No additional suggestion provided.',
+      }));
       const durationMs = Date.now() - passStart;
-      feedbackAccumulator.push(
-        ...feedback.map((entry) => ({
-          ...entry,
-          severity: entry.severity ?? 'info',
-        }))
-      );
+      feedbackAccumulator.push(...normalizedFeedback.map((entry) => ({
+        ...entry,
+        severity: entry.severity ?? 'info',
+      })));
 
-      const blocking = feedback.filter((entry) => entry.severity === 'critical' || entry.severity === 'major');
+      const blocking = normalizedFeedback.filter((entry) => entry.severity === 'critical' || entry.severity === 'major');
       reviewTelemetry.push({
         pass,
         durationMs,
@@ -568,7 +571,7 @@ export class TestCaseAgenticPipeline {
       'Assess coverage completeness, edge cases, and alignment with the plan. Identify missing or incorrect validations.',
       `Plan:\n${JSON.stringify(plan, null, 2)}`,
       `Current test cases:\n${JSON.stringify(cases, null, 2)}`,
-      'Return JSON with a "feedback" array of issues (caseId, severity, summary, suggestion). Severity must be one of info, minor, major, critical.',
+      'Return JSON with a "feedback" array of issues (caseId, issueType, severity, summary, suggestion). Always supply issueType (e.g., coverage-gap, duplication, formatting) and a suggestion string (use "No suggestion" if none). Severity must be one of info, minor, major, critical.',
     ];
 
     return sections.join('\n\n');

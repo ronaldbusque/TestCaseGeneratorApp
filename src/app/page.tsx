@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { FileUpload } from '../components/FileUpload';
 import { RequirementsInput } from '@/components/RequirementsInput';
 import { TestCaseList } from '@/components/TestCaseList';
@@ -71,6 +71,8 @@ export default function Home() {
   const [generationTelemetry, setGenerationTelemetry] = useState<AgenticTelemetry | null>(null);
   const [showPlanDetails, setShowPlanDetails] = useState(false);
   const [showTelemetryDetails, setShowTelemetryDetails] = useState(false);
+  const [showReviewDetails, setShowReviewDetails] = useState(false);
+  const progressRef = useRef<HTMLDivElement | null>(null);
 
   const reviewerProviderOptions = useMemo(
     () => [
@@ -119,6 +121,11 @@ export default function Home() {
   }, [generationStep, agenticEnabled]);
 
   const shouldShowProgressCard = generationStep !== 'idle';
+  useEffect(() => {
+    if (shouldShowProgressCard && progressRef.current) {
+      progressRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [shouldShowProgressCard]);
 
   const severityStyles: Record<string, string> = {
     info: 'bg-blue-500/20 text-blue-100 border-blue-500/30',
@@ -199,6 +206,8 @@ export default function Home() {
     setGenerationTelemetry(null);
     setShowPlanDetails(false);
     setShowTelemetryDetails(false);
+    setShowReviewDetails(false);
+    setShowReviewDetails(false);
   };
 
   const handleNewSession = () => {
@@ -420,6 +429,8 @@ export default function Home() {
       setGenerationTelemetry(null);
       setShowPlanDetails(false);
       setShowTelemetryDetails(false);
+      setShowReviewDetails(false);
+      setShowReviewDetails(false);
 
       // Only clear converted states when generating new high-level test cases
       if (testCaseMode === 'high-level') {
@@ -474,6 +485,8 @@ export default function Home() {
       setGenerationTelemetry(result.telemetry ?? null);
       setShowPlanDetails(false);
       setShowTelemetryDetails(false);
+      setShowReviewDetails(false);
+      setShowReviewDetails(false);
 
       setGenerationStep('finalizing');
       setGenerationStep('complete');
@@ -681,10 +694,6 @@ export default function Home() {
         </div>
         
         <div className="space-y-8">
-          <AnimatePresence>
-            {shouldShowProgressCard && <ProgressCard key="progress-card" />}
-          </AnimatePresence>
-
           <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 sm:p-8 border border-white/20">
             <div className="flex flex-col space-y-6">
               {/* Top row with agent info and new session button */}
@@ -961,30 +970,37 @@ export default function Home() {
           {reviewFeedback.length > 0 && (
             <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 sm:p-8 border border-white/20">
               <div className="flex items-center justify-between flex-wrap gap-3">
-                <h3 className="text-lg font-semibold text-blue-50">Reviewer Feedback</h3>
-                <span className="text-xs text-blue-200/70">{reviewFeedback.length} issues flagged</span>
+                <div>
+                  <h3 className="text-lg font-semibold text-blue-50">Reviewer Feedback</h3>
+                  <p className="text-xs text-blue-200/70">{reviewFeedback.length} issues flagged</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowReviewDetails((prev) => !prev)}
+                  className="text-xs font-semibold text-blue-200 hover:text-blue-100 border border-white/20 rounded-full px-3 py-1 transition-colors"
+                >
+                  {showReviewDetails ? 'Hide details' : 'Show details'}
+                </button>
               </div>
-              <div className="mt-4 space-y-3">
-                {reviewFeedback.map((item, index) => (
-                  <div key={`${item.caseId}-${index}`} className="rounded-xl border border-white/10 bg-white/5 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-blue-50">Case {item.caseId}</p>
-                      <span className={`text-xs font-semibold tracking-wide rounded-full border px-3 py-1 ${severityStyles[item.severity] ?? severityStyles.info}`}>
-                        {item.severity.toUpperCase()}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm text-blue-100">{item.summary}</p>
-                    {item.suggestion && (
+              {showReviewDetails && (
+                <div className="mt-4 space-y-3">
+                  {reviewFeedback.map((item, index) => (
+                    <div key={`${item.caseId}-${index}`} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-blue-50">Case {item.caseId}</p>
+                        <span className={`text-xs font-semibold tracking-wide rounded-full border px-3 py-1 ${severityStyles[item.severity] ?? severityStyles.info}`}>
+                          {item.severity.toUpperCase()}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm text-blue-100">{item.summary}</p>
                       <p className="mt-2 text-xs text-blue-200/70">
                         <span className="font-semibold text-blue-200">Suggestion:</span> {item.suggestion}
                       </p>
-                    )}
-                    {item.issueType && (
                       <p className="mt-2 text-xs text-blue-200/60">Tag: {item.issueType}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -1079,16 +1095,18 @@ export default function Home() {
           )}
 
           {shouldShowProgressCard && generationStep !== 'complete' && (
-            <AnimatePresence>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-8 border border-white/20"
-              >
-                <LoadingAnimation message={`${loadingMessage}...`} />
-              </motion.div>
-            </AnimatePresence>
+            <div ref={progressRef}>
+              <AnimatePresence>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-8 border border-white/20"
+                >
+                  <LoadingAnimation message={`${loadingMessage}...`} />
+                </motion.div>
+              </AnimatePresence>
+            </div>
           )}
 
           {generationStep === 'complete' && getCurrentTestCases().length > 0 && (
