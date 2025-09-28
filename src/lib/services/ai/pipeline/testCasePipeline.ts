@@ -51,10 +51,12 @@ const ReviewFeedbackSchema = z
     suggestion: entry.suggestion.trim() || 'No suggestion provided.',
   }));
 
-const ReviewResultSchema = z.object({
-  feedback: z.array(ReviewFeedbackSchema),
-  summary: z.string().optional(),
-}).strict();
+const ReviewResultSchema = z
+  .object({
+    feedback: z.array(ReviewFeedbackSchema),
+    summary: z.string().default('Review summary not provided.'),
+  })
+  .strict();
 
 const DetailedTestCaseItemSchema = z.object({
   id: z.string().min(1),
