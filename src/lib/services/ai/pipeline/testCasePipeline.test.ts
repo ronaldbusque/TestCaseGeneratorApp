@@ -58,12 +58,12 @@ describe('TestCaseAgenticPipeline', () => {
           { id: 'PLAN-1', title: 'Happy path', area: 'Auth', estimatedCases: 2 },
           { id: 'PLAN-2', title: 'Edge cases', area: 'Auth' },
         ];
-        return { object: plan, text: JSON.stringify(plan) };
+        return { object: { items: plan }, text: JSON.stringify({ items: plan }) };
       }
 
       if (prompt.includes('Case') && prompt.includes('Feedback to address')) {
         // Revision prompt
-        return { object: [], text: '[]' };
+        return { object: { items: [] }, text: JSON.stringify({ items: [] }) };
       }
 
       if (prompt.includes('reviewing generated')) {
@@ -84,7 +84,7 @@ describe('TestCaseAgenticPipeline', () => {
           expectedResult: 'Access granted',
         },
       ];
-      return { object: cases, text: JSON.stringify(cases) };
+      return { object: { items: cases }, text: JSON.stringify({ items: cases }) };
     });
 
     const pipeline = new TestCaseAgenticPipeline();

@@ -22,17 +22,19 @@ import {
 import { logAIInteraction } from '@/lib/utils/aiLogger';
 import { JsonCleaner } from '@/lib/utils/jsonCleaner';
 
-const PlannerSchema = z.array(
-  z.object({
-    id: z.string().min(1),
-    title: z.string().min(1),
-    area: z.string().min(1),
-    focus: z.string().optional(),
-    estimatedCases: z.number().int().positive().optional(),
-    chunkRefs: z.array(z.string().min(1)).optional(),
-    notes: z.string().optional(),
-  })
-);
+const PlannerItemSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  area: z.string().min(1),
+  focus: z.string().optional(),
+  estimatedCases: z.number().int().positive().optional(),
+  chunkRefs: z.array(z.string().min(1)).optional(),
+  notes: z.string().optional(),
+});
+
+const PlannerSchema = z.object({
+  items: z.array(PlannerItemSchema),
+});
 
 const ReviewFeedbackSchema = z.object({
   caseId: z.string().min(1),
@@ -47,35 +49,39 @@ const ReviewResultSchema = z.object({
   summary: z.string().optional(),
 });
 
-const DetailedTestCaseSchema = z.array(
-  z.object({
-    id: z.string().min(1),
-    title: z.string().min(1),
-    area: z.string().min(1),
-    description: z.string().default(''),
-    preconditions: z.array(z.string()).default([]),
-    testData: z.array(z.string()).default([]),
-    steps: z
-      .array(
-        z.object({
-          number: z.coerce.number().int().positive(),
-          description: z.string().min(1),
-        })
-      )
-      .default([]),
-    expectedResult: z.string().default(''),
-  })
-);
+const DetailedTestCaseItemSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  area: z.string().min(1),
+  description: z.string().default(''),
+  preconditions: z.array(z.string()).default([]),
+  testData: z.array(z.string()).default([]),
+  steps: z
+    .array(
+      z.object({
+        number: z.coerce.number().int().positive(),
+        description: z.string().min(1),
+      })
+    )
+    .default([]),
+  expectedResult: z.string().default(''),
+});
 
-const HighLevelTestCaseSchema = z.array(
-  z.object({
-    id: z.string().min(1),
-    title: z.string().min(1),
-    area: z.string().min(1),
-    scenario: z.string().min(1),
-    description: z.string().optional(),
-  })
-);
+const DetailedTestCaseSchema = z.object({
+  items: z.array(DetailedTestCaseItemSchema),
+});
+
+const HighLevelTestCaseItemSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  area: z.string().min(1),
+  scenario: z.string().min(1),
+  description: z.string().optional(),
+});
+
+const HighLevelTestCaseSchema = z.object({
+  items: z.array(HighLevelTestCaseItemSchema),
+});
 
 interface PipelineContext {
   request: TestCaseGenerationRequest;
@@ -277,7 +283,7 @@ export class TestCaseAgenticPipeline {
 
     const promptSections = [
       'You are an expert QA strategist. Break the supplied materials into a concise execution plan for generating test cases.',
-      `Priority mode: ${priorityMode}. If comprehensive, ensure broad coverage including edge cases. If core-functionality, focus on critical user journeys and regulatory must-haves. Produce a JSON array of plan items with id, title, area, focus, estimatedCases, and chunkRefs when applicable.`,
+      `Priority mode: ${priorityMode}. If comprehensive, ensure broad coverage including edge cases. If core-functionality, focus on critical user journeys and regulatory must-haves. Produce a JSON object with an "items" array of plan entries (id, title, area, focus, estimatedCases, chunkRefs when applicable).`,
       'Keep each focus under 160 characters and notes under 220 characters. Do not enumerate every acceptance criterion; summarize only the key goals for coverage.',
       requirements ? `Requirements:\n${requirements}` : 'No requirements provided.',
       filesSummary ? `Reference documents:\n${filesSummary}` : '',
@@ -295,7 +301,7 @@ export class TestCaseAgenticPipeline {
       model,
       schema: PlannerSchema,
       prompt,
-      retryInstruction: 'Return ONLY a JSON array of plan items matching the schema. Do not repeat phrases or include commentary.',
+      retryInstruction: 'Return ONLY a JSON object with an "items" array of plan entries matching the schema. Do not repeat phrases or include commentary.',
     });
 
     logAIInteraction({
@@ -306,7 +312,7 @@ export class TestCaseAgenticPipeline {
       context: { type: 'test-case-generation', stage: 'planner' },
     });
 
-    const planItems = result.object.map((item, index) => ({
+    const planItems = (result.object.items ?? []).map((item, index) => ({
       ...item,
       id: item.id || `PLAN-${index + 1}`,
     }));
@@ -337,7 +343,7 @@ export class TestCaseAgenticPipeline {
           model,
           schema,
           prompt,
-          retryInstruction: 'Return ONLY a JSON array of test cases that matches the schema. Do not include any explanation or repeated sentences.',
+          retryInstruction: 'Return ONLY a JSON object with an "items" array of test cases that matches the schema. Do not include any explanation or repeated sentences.',
         });
       } catch (error) {
         const durationMs = Date.now() - sliceStart;
@@ -365,7 +371,7 @@ export class TestCaseAgenticPipeline {
         },
       });
 
-      result.object.forEach((testCase, index) => {
+      (result.object.items ?? []).forEach((testCase, index) => {
         const caseId = testCase.id || this.generateCaseId(request.mode, casesById.size + index + 1);
         if (casesById.has(caseId)) {
           const duplicateWarning = `Duplicate case id ${caseId} detected. Latest slice overwrote the previous version.`;
@@ -379,7 +385,7 @@ export class TestCaseAgenticPipeline {
       slices.push({
         planId: planItem.id,
         durationMs,
-        caseCount: result.object.length,
+        caseCount: result.object.items?.length ?? 0,
         warnings: sliceWarnings.length ? sliceWarnings : undefined,
       });
     }
@@ -479,7 +485,7 @@ export class TestCaseAgenticPipeline {
           model: writerModelInstance,
           schema: caseSchema,
           prompt: revisionPrompt,
-          retryInstruction: 'Return ONLY a JSON array of updated cases. No additional text.',
+          retryInstruction: 'Return ONLY a JSON object with an "items" array of updated cases. No additional text.',
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown revision error';
@@ -499,7 +505,7 @@ export class TestCaseAgenticPipeline {
         },
       });
 
-      const revisions = revisionResult.object;
+      const revisions = revisionResult.object.items ?? [];
       const revisedCases = new Map(mutableCases.map((item) => [item.id, item] as const));
       revisions.forEach((updated) => {
         if (!updated.id) {
@@ -544,7 +550,7 @@ export class TestCaseAgenticPipeline {
       existingCases.length
         ? `Existing cases (avoid duplicates):\n${JSON.stringify(existingCases, null, 2)}`
         : 'No cases generated yet. Begin fresh coverage for this plan item.',
-      'Return a JSON array where each object matches the required schema for the requested mode. Do not include markdown.',
+      'Return a JSON object with an "items" array where each entry matches the required schema for the requested mode. Do not include markdown.',
     ].filter(Boolean);
 
     return sections.join('\n\n');
