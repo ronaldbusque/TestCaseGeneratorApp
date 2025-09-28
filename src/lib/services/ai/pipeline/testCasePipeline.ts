@@ -2,13 +2,15 @@ import { generateObject, generateText } from 'ai';
 import { z } from 'zod';
 import {
   AgenticGenerationOptions,
+  AgenticTelemetry,
   GenerationPlanItem,
   LLMProvider,
   ReviewFeedbackItem,
+  ReviewPassTelemetry,
   TestCaseGenerationRequest,
   TestCaseGenerationResponse,
   TestCaseMode,
-  TestPriorityMode,
+  WriterSliceTelemetry,
 } from '@/lib/types';
 import { resolveLanguageModel } from '../vercelClient';
 import {
@@ -77,6 +79,7 @@ const HighLevelTestCaseSchema = z.array(
 interface PipelineContext {
   request: TestCaseGenerationRequest;
   agenticOptions: AgenticGenerationOptions | undefined;
+  provider: LLMProvider;
   plannerModel: string;
   plannerProvider: LLMProvider;
   writerModel: string;
@@ -91,6 +94,7 @@ interface GenerationArtifacts {
   reviewFeedback: ReviewFeedbackItem[];
   passesExecuted: number;
   warnings: string[];
+  telemetry: AgenticTelemetry;
 }
 
 export class TestCaseAgenticPipeline {
@@ -103,15 +107,38 @@ export class TestCaseAgenticPipeline {
       return this.generateSingleShot(request);
     }
 
+    const startTime = Date.now();
     const context = this.buildContext(request, agenticOptions);
     const artifacts = await this.runAgenticWorkflow(context);
+    const totalDurationMs = Date.now() - startTime;
+
+    const warnings = artifacts.warnings;
+
+    const telemetry: AgenticTelemetry = {
+      totalDurationMs,
+      plannerDurationMs: artifacts.telemetry.plannerDurationMs,
+      writerDurationMs: artifacts.telemetry.writerDurationMs,
+      reviewerDurationMs: artifacts.telemetry.reviewerDurationMs,
+      planItemCount: artifacts.plan.length,
+      testCaseCount: artifacts.rawCases.length,
+      writerSlices: artifacts.telemetry.writerSlices,
+      reviewPasses: artifacts.telemetry.reviewPasses,
+      provider: context.provider,
+      models: {
+        planner: context.plannerModel,
+        writer: context.writerModel,
+        reviewer: context.reviewerModel,
+      },
+      warnings: warnings.length ? warnings : undefined,
+    };
 
     return {
       testCases: mapModelResponseToTestCases(artifacts.rawCases, request.mode),
       plan: artifacts.plan,
       reviewFeedback: artifacts.reviewFeedback,
       passesExecuted: artifacts.passesExecuted,
-      warnings: artifacts.warnings.length ? artifacts.warnings : undefined,
+      warnings: warnings.length ? warnings : undefined,
+      telemetry,
     };
   }
 
@@ -132,6 +159,7 @@ export class TestCaseAgenticPipeline {
     return {
       request,
       agenticOptions: options,
+      provider: baseProvider,
       plannerModel,
       plannerProvider,
       writerModel,
@@ -156,16 +184,34 @@ export class TestCaseAgenticPipeline {
   private async runAgenticWorkflow(context: PipelineContext): Promise<GenerationArtifacts> {
     const { request } = context;
 
+    const plannerStart = Date.now();
     const plan = await this.runPlanner(context);
-    const { rawCases, warnings } = await this.runWriter(context, plan);
-    const reviewOutcome = await this.runReviewer(context, rawCases, plan);
+    const plannerDurationMs = Date.now() - plannerStart;
+
+    const writerStart = Date.now();
+    const writerOutcome = await this.runWriter(context, plan);
+    const writerDurationMs = Date.now() - writerStart;
+
+    const reviewerStart = Date.now();
+    const reviewOutcome = await this.runReviewer(context, writerOutcome.rawCases, plan);
+    const reviewerDurationMs = Date.now() - reviewerStart;
+
+    const warnings = [...writerOutcome.warnings, ...reviewOutcome.warnings];
 
     return {
       plan,
-      rawCases,
+      rawCases: writerOutcome.rawCases,
       reviewFeedback: reviewOutcome.feedback,
       passesExecuted: reviewOutcome.passesExecuted,
       warnings,
+      telemetry: {
+        totalDurationMs: 0,
+        plannerDurationMs,
+        writerDurationMs,
+        reviewerDurationMs,
+        writerSlices: writerOutcome.slices,
+        reviewPasses: reviewOutcome.reviewTelemetry,
+      },
     };
   }
 
@@ -216,22 +262,40 @@ export class TestCaseAgenticPipeline {
   private async runWriter(
     context: PipelineContext,
     plan: GenerationPlanItem[]
-  ): Promise<{ rawCases: any[]; warnings: string[] }> {
+  ): Promise<{ rawCases: any[]; warnings: string[]; slices: WriterSliceTelemetry[] }> {
     const { request, writerModel, writerProvider } = context;
     const warnings: string[] = [];
     const casesById = new Map<string, any>();
+    const slices: WriterSliceTelemetry[] = [];
 
     const schema = this.getCaseSchema(request.mode);
 
     for (const planItem of plan) {
       const prompt = this.buildWriterPrompt(request, planItem, Array.from(casesById.values()));
       const model = resolveLanguageModel({ provider: writerProvider, model: writerModel });
+      const sliceStart = Date.now();
+      const sliceWarnings: string[] = [];
 
-      const result = await generateObject({
-        model,
-        schema,
-        prompt,
-      });
+      let result;
+      try {
+        result = await generateObject({
+          model,
+          schema,
+          prompt,
+        });
+      } catch (error) {
+        const durationMs = Date.now() - sliceStart;
+        const message = error instanceof Error ? error.message : 'Unknown generation error';
+        const warning = `Failed to generate cases for plan ${planItem.id}: ${message}`;
+        warnings.push(warning);
+        slices.push({
+          planId: planItem.id,
+          durationMs,
+          caseCount: 0,
+          warnings: [warning],
+        });
+        continue;
+      }
 
       logAIInteraction({
         provider: writerProvider,
@@ -248,30 +312,42 @@ export class TestCaseAgenticPipeline {
       result.object.forEach((testCase, index) => {
         const caseId = testCase.id || this.generateCaseId(request.mode, casesById.size + index + 1);
         if (casesById.has(caseId)) {
-          warnings.push(`Duplicate case id ${caseId} detected. Latest slice overwrote the previous version.`);
+          const duplicateWarning = `Duplicate case id ${caseId} detected. Latest slice overwrote the previous version.`;
+          warnings.push(duplicateWarning);
+          sliceWarnings.push(duplicateWarning);
         }
         casesById.set(caseId, { ...testCase, id: caseId });
       });
+
+      const durationMs = Date.now() - sliceStart;
+      slices.push({
+        planId: planItem.id,
+        durationMs,
+        caseCount: result.object.length,
+        warnings: sliceWarnings.length ? sliceWarnings : undefined,
+      });
     }
 
-    return { rawCases: Array.from(casesById.values()), warnings };
+    return { rawCases: Array.from(casesById.values()), warnings, slices };
   }
 
   private async runReviewer(
     context: PipelineContext,
     rawCases: any[],
     plan: GenerationPlanItem[]
-  ): Promise<{ feedback: ReviewFeedbackItem[]; passesExecuted: number }> {
+  ): Promise<{ feedback: ReviewFeedbackItem[]; passesExecuted: number; reviewTelemetry: ReviewPassTelemetry[]; warnings: string[] }> {
     const { request, reviewerModel, reviewerProvider, writerModel, writerProvider, agenticOptions } = context;
     const maxPasses = agenticOptions?.maxReviewPasses ?? 0;
 
     if (maxPasses <= 0 || rawCases.length === 0) {
-      return { feedback: [], passesExecuted: 0 };
+      return { feedback: [], passesExecuted: 0, reviewTelemetry: [], warnings: [] };
     }
 
     const feedbackAccumulator: ReviewFeedbackItem[] = [];
     let passesExecuted = 0;
     let mutableCases = [...rawCases];
+    const reviewTelemetry: ReviewPassTelemetry[] = [];
+    const warnings: string[] = [];
 
     const reviewSchema = ReviewResultSchema;
     const caseSchema = this.getCaseSchema(request.mode);
@@ -279,12 +355,28 @@ export class TestCaseAgenticPipeline {
     for (let pass = 1; pass <= maxPasses; pass += 1) {
       const prompt = this.buildReviewerPrompt(request, plan, mutableCases, pass);
       const model = resolveLanguageModel({ provider: reviewerProvider, model: reviewerModel });
+      const passStart = Date.now();
 
-      const reviewResult = await generateObject({
-        model,
-        schema: reviewSchema,
-        prompt,
-      });
+      let reviewResult;
+      try {
+        reviewResult = await generateObject({
+          model,
+          schema: reviewSchema,
+          prompt,
+        });
+      } catch (error) {
+        const durationMs = Date.now() - passStart;
+        const message = error instanceof Error ? error.message : 'Unknown review error';
+        const warning = `Reviewer pass ${pass} failed: ${message}`;
+        warnings.push(warning);
+        reviewTelemetry.push({
+          pass,
+          durationMs,
+          feedbackCount: 0,
+          blockingCount: 0,
+        });
+        break;
+      }
 
       logAIInteraction({
         provider: reviewerProvider,
@@ -299,6 +391,7 @@ export class TestCaseAgenticPipeline {
       });
 
       const feedback = reviewResult.object.feedback ?? [];
+      const durationMs = Date.now() - passStart;
       feedbackAccumulator.push(
         ...feedback.map((entry) => ({
           ...entry,
@@ -306,9 +399,16 @@ export class TestCaseAgenticPipeline {
         }))
       );
 
+      const blocking = feedback.filter((entry) => entry.severity === 'critical' || entry.severity === 'major');
+      reviewTelemetry.push({
+        pass,
+        durationMs,
+        feedbackCount: feedback.length,
+        blockingCount: blocking.length,
+      });
+
       passesExecuted = pass;
 
-      const blocking = feedback.filter((entry) => entry.severity === 'critical' || entry.severity === 'major');
       if (!blocking.length) {
         break;
       }
@@ -316,11 +416,18 @@ export class TestCaseAgenticPipeline {
       const revisionPrompt = this.buildRevisionPrompt(request, mutableCases, blocking, pass);
       const writerModelInstance = resolveLanguageModel({ provider: writerProvider, model: writerModel });
 
-      const revisionResult = await generateObject({
-        model: writerModelInstance,
-        schema: caseSchema,
-        prompt: revisionPrompt,
-      });
+      let revisionResult;
+      try {
+        revisionResult = await generateObject({
+          model: writerModelInstance,
+          schema: caseSchema,
+          prompt: revisionPrompt,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown revision error';
+        warnings.push(`Revision pass ${pass} failed: ${message}`);
+        break;
+      }
 
       logAIInteraction({
         provider: writerProvider,
@@ -347,7 +454,7 @@ export class TestCaseAgenticPipeline {
 
     rawCases.splice(0, rawCases.length, ...mutableCases);
 
-    return { feedback: feedbackAccumulator, passesExecuted };
+    return { feedback: feedbackAccumulator, passesExecuted, reviewTelemetry, warnings };
   }
 
   private getCaseSchema(mode: TestCaseMode) {
@@ -423,6 +530,7 @@ export class TestCaseAgenticPipeline {
   ): Promise<TestCaseGenerationResponse> {
     const provider = request.provider ?? 'openai';
     const modelId = request.model ?? this.inferDefaultModel(provider);
+    const startTime = Date.now();
 
     const prompt = buildTestCasePrompt({
       requirements: request.requirements,
@@ -440,6 +548,7 @@ export class TestCaseAgenticPipeline {
     });
 
     const rawOutput = result.text.trim();
+    const totalDurationMs = Date.now() - startTime;
 
     logAIInteraction({
       provider,
@@ -481,8 +590,16 @@ export class TestCaseAgenticPipeline {
       };
     }
 
+    const testCases = mapModelResponseToTestCases(parsed, request.mode);
+
     return {
-      testCases: mapModelResponseToTestCases(parsed, request.mode),
+      testCases,
+      telemetry: {
+        totalDurationMs,
+        provider,
+        models: { writer: modelId },
+        testCaseCount: testCases.length,
+      },
     };
   }
 }

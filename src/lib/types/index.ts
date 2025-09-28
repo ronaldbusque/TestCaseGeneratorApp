@@ -78,6 +78,38 @@ export interface AgenticGenerationOptions {
   streamProgress?: boolean;
 }
 
+export interface WriterSliceTelemetry {
+  planId: string;
+  durationMs: number;
+  caseCount: number;
+  warnings?: string[];
+}
+
+export interface ReviewPassTelemetry {
+  pass: number;
+  durationMs: number;
+  feedbackCount: number;
+  blockingCount: number;
+}
+
+export interface AgenticTelemetry {
+  totalDurationMs: number;
+  plannerDurationMs?: number;
+  writerDurationMs?: number;
+  reviewerDurationMs?: number;
+  planItemCount?: number;
+  testCaseCount?: number;
+  writerSlices?: WriterSliceTelemetry[];
+  reviewPasses?: ReviewPassTelemetry[];
+  provider?: LLMProvider;
+  models?: {
+    planner?: string;
+    writer?: string;
+    reviewer?: string;
+  };
+  warnings?: string[];
+}
+
 export interface UploadedFilePayload {
   name: string;
   type: string;
@@ -124,7 +156,7 @@ export interface TestCaseGenerationResponse {
   reviewFeedback?: ReviewFeedbackItem[];
   passesExecuted?: number;
   warnings?: string[];
-  telemetry?: Record<string, unknown>;
+  telemetry?: AgenticTelemetry;
   debug?: {
     rawResponse?: string;
     parsedResponse?: any;

@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { FileUpload } from '../components/FileUpload';
 import { RequirementsInput } from '@/components/RequirementsInput';
 import { TestCaseList } from '@/components/TestCaseList';
-import { createAIService } from '@/lib/services/ai/factory';
-import { TestCase, TestCaseMode, HighLevelTestCase, TestPriorityMode, UploadedFilePayload, FileTokenSummary } from '@/lib/types';
+import { TestCase, TestCaseMode, HighLevelTestCase, TestPriorityMode, UploadedFilePayload, FileTokenSummary, GenerationPlanItem, ReviewFeedbackItem, AgenticTelemetry } from '@/lib/types';
 import { AnimatePresence } from 'framer-motion';
 import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { LoadingAnimation } from '@/components/LoadingAnimation';
@@ -15,13 +14,13 @@ import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { TestCaseModeToggle } from '@/components/TestCaseModeToggle';
 import { NetworkBackground } from '@/components/NetworkBackground';
 import { TestPriorityToggle } from '@/components/TestPriorityToggle';
-import { DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { NavigationBar } from '@/components/NavigationBar';
 import { fetchApi } from '@/lib/utils/apiClient';
 import { useProviderSettings } from '@/lib/context/ProviderSettingsContext';
 import { QuickModelSwitcher } from '@/components/QuickModelSwitcher';
+import type { LLMProvider } from '@/lib/types/providers';
 
 const isHighLevelTestCase = (testCase: TestCase): testCase is HighLevelTestCase => {
   return 'scenario' in testCase && 'area' in testCase;
@@ -44,12 +43,11 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState<
-    'idle' | 
-    'preprocessing' | 
-    'analyzing' | 
-    'parsing' | 
-    'generating' | 
-    'formatting' |
+    'idle' |
+    'planning' |
+    'generating' |
+    'reviewing' |
+    'finalizing' |
     'complete'
   >('idle');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
@@ -61,6 +59,54 @@ export default function Home() {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [confirmationType, setConfirmationType] = useState<'new_session' | null>(null);
   const [shouldResetFiles, setShouldResetFiles] = useState(false);
+  const [agenticEnabled, setAgenticEnabled] = useState(false);
+  const [reviewPasses, setReviewPasses] = useState(1);
+  const [plannerModelOverride, setPlannerModelOverride] = useState('');
+  const [reviewerProviderOverride, setReviewerProviderOverride] = useState<'same' | LLMProvider>('same');
+  const [reviewerModelOverride, setReviewerModelOverride] = useState('');
+  const [generationPlan, setGenerationPlan] = useState<GenerationPlanItem[]>([]);
+  const [reviewFeedback, setReviewFeedback] = useState<ReviewFeedbackItem[]>([]);
+  const [generationWarnings, setGenerationWarnings] = useState<string[]>([]);
+  const [generationTelemetry, setGenerationTelemetry] = useState<AgenticTelemetry | null>(null);
+
+  const reviewerProviderOptions = useMemo(
+    () => [
+      { value: 'same' as const, label: 'Same as generator' },
+      ...availableProviders.map((provider) => ({
+        value: provider.id,
+        label: provider.label,
+      })),
+    ],
+    [availableProviders]
+  );
+
+  const generationStepMessages: Record<string, string> = {
+    idle: 'Idle',
+    planning: 'Planning strategy',
+    generating: 'Generating test cases',
+    reviewing: 'Applying reviewer feedback',
+    finalizing: 'Finalizing results',
+    complete: 'Complete',
+  };
+
+  const loadingMessage = generationStepMessages[generationStep] ?? generationStep;
+
+  const severityStyles: Record<string, string> = {
+    info: 'bg-blue-500/20 text-blue-100 border-blue-500/30',
+    minor: 'bg-amber-500/20 text-amber-100 border-amber-500/30',
+    major: 'bg-orange-500/20 text-orange-100 border-orange-500/30',
+    critical: 'bg-red-500/20 text-red-100 border-red-500/30',
+  };
+
+  const formatDuration = (ms?: number) => {
+    if (typeof ms !== 'number' || Number.isNaN(ms)) {
+      return '—';
+    }
+    if (ms < 1000) {
+      return `${Math.round(ms)} ms`;
+    }
+    return `${(ms / 1000).toFixed(1)} s`;
+  };
 
   // Add effect to clear fileContent when no files are present
   useEffect(() => {
@@ -96,6 +142,10 @@ export default function Home() {
     setIsFileContentVisible(false);
     setGenerationStep('idle');
     setShouldResetFiles(true);
+    setGenerationPlan([]);
+    setReviewFeedback([]);
+    setGenerationWarnings([]);
+    setGenerationTelemetry(null);
   };
 
   const handleNewSession = () => {
@@ -180,6 +230,37 @@ export default function Home() {
 
     return payloads.filter(({ name }) => Boolean(name));
   };
+
+  const buildAgenticOptions = useCallback(() => {
+    if (!agenticEnabled) {
+      return undefined;
+    }
+
+    const writerProvider = settings.testCases.provider;
+    const writerModel = settings.testCases.model;
+    const plannerModel = plannerModelOverride.trim();
+    const reviewerModel = reviewerModelOverride.trim();
+
+    const reviewerProvider = reviewerProviderOverride === 'same'
+      ? writerProvider
+      : reviewerProviderOverride;
+
+    const normalizedPasses = Number.isFinite(reviewPasses)
+      ? Math.max(0, Math.min(6, Math.floor(reviewPasses)))
+      : 0;
+
+    return {
+      enableAgentic: true,
+      plannerProvider: writerProvider,
+      plannerModel: plannerModel ? plannerModel : undefined,
+      writerProvider,
+      writerModel,
+      reviewerProvider,
+      reviewerModel: reviewerModel ? reviewerModel : undefined,
+      maxReviewPasses: normalizedPasses,
+      chunkStrategy: 'auto',
+    } as const;
+  }, [agenticEnabled, plannerModelOverride, reviewerModelOverride, reviewerProviderOverride, reviewPasses, settings.testCases.model, settings.testCases.provider]);
 
   const fetchFileTokenSummary = useCallback(async (
     payloads: UploadedFilePayload[],
@@ -280,27 +361,28 @@ export default function Home() {
     try {
       setError(null);
       setIsGenerating(true);
-      
+      setGenerationWarnings([]);
+      setGenerationPlan([]);
+      setReviewFeedback([]);
+      setGenerationTelemetry(null);
+
       // Only clear converted states when generating new high-level test cases
       if (testCaseMode === 'high-level') {
         setConvertedTestCases([]);
         setConvertedScenarioIds(new Set());
       }
 
-      // Start preprocessing
-      setGenerationStep('preprocessing');
-      await new Promise(resolve => setTimeout(resolve, 800)); // Add slight delay for visual feedback
+      if (agenticEnabled) {
+        setGenerationStep('planning');
+      } else {
+        setGenerationStep('generating');
+      }
 
-      // Generation phase
-      setGenerationStep('analyzing');
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const agenticOptions = buildAgenticOptions();
 
-      // Parsing phase
-      setGenerationStep('parsing');
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Generation phase
-      setGenerationStep('generating');
+      if (agenticOptions?.enableAgentic) {
+        setGenerationStep('generating');
+      }
 
       const filePayloads = preparedFilePayloads.length === uploadedFiles.length
         ? preparedFilePayloads
@@ -318,6 +400,7 @@ export default function Home() {
           files: filePayloads,
           provider: settings.testCases.provider,
           model: settings.testCases.model,
+          agenticOptions,
         })
       });
 
@@ -325,11 +408,17 @@ export default function Home() {
         throw new Error(result.error);
       }
 
-      // Formatting phase
-      setGenerationStep('formatting');
-      await new Promise(resolve => setTimeout(resolve, 600));
+      if (agenticOptions?.enableAgentic && (result.passesExecuted ?? 0) > 0) {
+        setGenerationStep('reviewing');
+      }
 
-      setCurrentTestCases(result.testCases);
+      setCurrentTestCases(result.testCases ?? []);
+      setGenerationPlan(result.plan ?? []);
+      setReviewFeedback(result.reviewFeedback ?? []);
+      setGenerationWarnings(result.warnings ?? []);
+      setGenerationTelemetry(result.telemetry ?? null);
+
+      setGenerationStep('finalizing');
       setGenerationStep('complete');
     } catch (error) {
       console.error('Generation error:', error);
@@ -396,6 +485,13 @@ export default function Home() {
     setGenerationStep('generating');
     
     try {
+      setGenerationWarnings([]);
+      setGenerationPlan([]);
+      setReviewFeedback([]);
+      setGenerationTelemetry(null);
+
+      const agenticOptions = buildAgenticOptions();
+
       const selectedScenarios = getCurrentTestCases()
         .filter((tc): tc is HighLevelTestCase => 
           isHighLevelTestCase(tc) && selectedTestCases.has(tc.id)
@@ -415,12 +511,22 @@ export default function Home() {
           files: filePayloads,
           provider: settings.testCases.provider,
           model: settings.testCases.model,
+          agenticOptions,
         })
       });
 
       if (result.error) {
         setError(result.error);
       } else if (result.testCases) {
+        if (agenticOptions?.enableAgentic && (result.passesExecuted ?? 0) > 0) {
+          setGenerationStep('reviewing');
+        }
+
+        setGenerationPlan(result.plan ?? []);
+        setReviewFeedback(result.reviewFeedback ?? []);
+        setGenerationWarnings(result.warnings ?? []);
+        setGenerationTelemetry(result.telemetry ?? null);
+
         const requestedCount = selectedScenarios.length;
         const limitedTestCases = Array.isArray(result.testCases)
           ? result.testCases.slice(0, requestedCount)
@@ -481,6 +587,7 @@ export default function Home() {
           return newSet;
         });
       }
+      setGenerationStep('finalizing');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to convert test scenarios');
     } finally {
@@ -555,11 +662,101 @@ export default function Home() {
                   />
                 </div>
               </div>
+          </div>
+        </div>
+
+        <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 sm:p-8 border border-white/20">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-blue-50">Agentic Workflow</h2>
+              <p className="text-sm text-blue-200/80">
+                Enable planner, writer, and reviewer passes for broader coverage.
+              </p>
             </div>
+            <label className="inline-flex items-center gap-2 text-sm text-blue-100">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-white/20 bg-slate-900 text-blue-500 focus:ring-blue-500"
+                checked={agenticEnabled}
+                onChange={(event) => setAgenticEnabled(event.target.checked)}
+              />
+              <span>Enable agentic mode</span>
+            </label>
           </div>
 
-          <div>
-            <div className="grid gap-6 lg:grid-cols-2">
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-blue-200/80 mb-2">
+                Review passes
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={6}
+                value={reviewPasses}
+                onChange={(event) => {
+                  const value = Number(event.target.value);
+                  setReviewPasses(Number.isNaN(value) ? 0 : value);
+                }}
+                disabled={!agenticEnabled}
+                className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <p className="mt-1 text-[0.7rem] text-blue-200/60">Set to 0 to skip reviewer passes.</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-blue-200/80 mb-2">
+                Planner model override
+              </label>
+              <input
+                type="text"
+                value={plannerModelOverride}
+                onChange={(event) => setPlannerModelOverride(event.target.value)}
+                placeholder={settings.testCases.model}
+                disabled={!agenticEnabled}
+                className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <p className="mt-1 text-[0.7rem] text-blue-200/60">Leave blank to reuse the primary generator model.</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-blue-200/80 mb-2">
+                Reviewer provider
+              </label>
+              <select
+                value={reviewerProviderOverride}
+                onChange={(event) => setReviewerProviderOverride(event.target.value as 'same' | LLMProvider)}
+                disabled={!agenticEnabled}
+                className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {reviewerProviderOptions.map((option) => (
+                  <option key={option.value} value={option.value} className="bg-slate-900 text-blue-50">
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[0.7rem] text-blue-200/60">Default uses the same provider as the writer.</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-blue-200/80 mb-2">
+                Reviewer model override
+              </label>
+              <input
+                type="text"
+                value={reviewerModelOverride}
+                onChange={(event) => setReviewerModelOverride(event.target.value)}
+                placeholder={reviewerProviderOverride === 'same' ? settings.testCases.model : 'Enter model id'}
+                disabled={!agenticEnabled}
+                className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <p className="mt-1 text-[0.7rem] text-blue-200/60">Leave blank to reuse the writer model.</p>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="grid gap-6 lg:grid-cols-2">
               <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 sm:p-8 transition-all duration-300 hover:shadow-2xl border border-white/20">
                 <FileUpload 
                   onFilesSelect={handleFilesSelect}
@@ -634,6 +831,168 @@ export default function Home() {
             </div>
           )}
 
+          {!error && generationWarnings.length > 0 && (
+            <div className="bg-amber-500/10 backdrop-blur-lg border border-amber-500/30 rounded-xl p-6">
+              <h3 className="text-sm font-semibold text-amber-200 uppercase tracking-wide">Warnings</h3>
+              <ul className="mt-3 space-y-2 text-sm text-amber-100">
+                {generationWarnings.map((warning, index) => (
+                  <li key={`${warning}-${index}`} className="flex gap-2">
+                    <span className="mt-1 h-1.5 w-1.5 rounded-full bg-amber-300/80"></span>
+                    <span>{warning}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {generationPlan.length > 0 && (
+            <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 sm:p-8 border border-white/20">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <h3 className="text-lg font-semibold text-blue-50">Planner Output</h3>
+                <span className="text-xs text-blue-200/70">{generationPlan.length} coverage segments</span>
+              </div>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                {generationPlan.map((item) => (
+                  <div key={item.id} className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-blue-50">{item.title}</p>
+                        <p className="text-xs text-blue-200/70">Area: {item.area}</p>
+                      </div>
+                      {item.estimatedCases && (
+                        <span className="text-xs font-medium text-blue-100 bg-blue-500/20 border border-blue-500/30 rounded-full px-3 py-1">
+                          ~{item.estimatedCases} cases
+                        </span>
+                      )}
+                    </div>
+                    {item.focus && (
+                      <p className="text-sm text-blue-100/90">
+                        <span className="font-medium text-blue-200">Focus:</span> {item.focus}
+                      </p>
+                    )}
+                    {item.notes && (
+                      <p className="text-xs text-blue-200/70">{item.notes}</p>
+                    )}
+                    {item.chunkRefs && item.chunkRefs.length > 0 && (
+                      <p className="text-xs text-blue-200/60">
+                        References: {item.chunkRefs.join(', ')}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {reviewFeedback.length > 0 && (
+            <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 sm:p-8 border border-white/20">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <h3 className="text-lg font-semibold text-blue-50">Reviewer Feedback</h3>
+                <span className="text-xs text-blue-200/70">{reviewFeedback.length} issues flagged</span>
+              </div>
+              <div className="mt-4 space-y-3">
+                {reviewFeedback.map((item, index) => (
+                  <div key={`${item.caseId}-${index}`} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-blue-50">Case {item.caseId}</p>
+                      <span className={`text-xs font-semibold tracking-wide rounded-full border px-3 py-1 ${severityStyles[item.severity] ?? severityStyles.info}`}>
+                        {item.severity.toUpperCase()}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-blue-100">{item.summary}</p>
+                    {item.suggestion && (
+                      <p className="mt-2 text-xs text-blue-200/70">
+                        <span className="font-semibold text-blue-200">Suggestion:</span> {item.suggestion}
+                      </p>
+                    )}
+                    {item.issueType && (
+                      <p className="mt-2 text-xs text-blue-200/60">Tag: {item.issueType}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {generationTelemetry && (
+            <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 sm:p-8 border border-white/20">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <h3 className="text-lg font-semibold text-blue-50">Run Telemetry</h3>
+                <span className="text-xs text-blue-200/70">
+                  Provider: {generationTelemetry.provider ?? settings.testCases.provider}
+                </span>
+              </div>
+              <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 text-sm text-blue-100">
+                <div>
+                  <dt className="text-blue-200/70">Total duration</dt>
+                  <dd className="font-semibold">{formatDuration(generationTelemetry.totalDurationMs)}</dd>
+                </div>
+                <div>
+                  <dt className="text-blue-200/70">Planner</dt>
+                  <dd className="font-semibold">{formatDuration(generationTelemetry.plannerDurationMs)}</dd>
+                </div>
+                <div>
+                  <dt className="text-blue-200/70">Writer</dt>
+                  <dd className="font-semibold">{formatDuration(generationTelemetry.writerDurationMs)}</dd>
+                </div>
+                <div>
+                  <dt className="text-blue-200/70">Reviewer</dt>
+                  <dd className="font-semibold">{formatDuration(generationTelemetry.reviewerDurationMs)}</dd>
+                </div>
+                <div>
+                  <dt className="text-blue-200/70">Plan items</dt>
+                  <dd className="font-semibold">{generationTelemetry.planItemCount ?? generationPlan.length}</dd>
+                </div>
+                <div>
+                  <dt className="text-blue-200/70">Test cases</dt>
+                  <dd className="font-semibold">{generationTelemetry.testCaseCount ?? getCurrentTestCases().length}</dd>
+                </div>
+                <div>
+                  <dt className="text-blue-200/70">Review passes</dt>
+                  <dd className="font-semibold">{generationTelemetry.reviewPasses?.length ?? 0}</dd>
+                </div>
+                <div>
+                  <dt className="text-blue-200/70">Passes executed</dt>
+                  <dd className="font-semibold">{generationTelemetry.reviewPasses?.map((pass) => pass.pass).join(', ') || '—'}</dd>
+                </div>
+              </dl>
+
+              {(generationTelemetry.writerSlices?.length ?? 0) > 0 && (
+                <div className="mt-4">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-blue-200/70">Writer slices</h4>
+                  <ul className="mt-2 grid gap-2 text-xs text-blue-200/80">
+                    {generationTelemetry.writerSlices?.map((slice) => (
+                      <li key={slice.planId} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-blue-100">{slice.planId}</span>
+                          <span>{formatDuration(slice.durationMs)}</span>
+                        </div>
+                        <p className="mt-1">{slice.caseCount} cases generated</p>
+                        {slice.warnings && slice.warnings.length > 0 && (
+                          <p className="mt-1 text-[0.7rem] text-amber-200">{slice.warnings.join(' ')} </p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {(generationTelemetry.reviewPasses?.length ?? 0) > 0 && (
+                <div className="mt-4">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-blue-200/70">Review rounds</h4>
+                  <ul className="mt-2 grid gap-2 text-xs text-blue-200/80">
+                    {generationTelemetry.reviewPasses?.map((pass) => (
+                      <li key={pass.pass} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 flex items-center justify-between">
+                        <span className="font-semibold text-blue-100">Pass {pass.pass}</span>
+                        <span>{pass.feedbackCount} notes · {pass.blockingCount} blocking · {formatDuration(pass.durationMs)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
           <AnimatePresence>
             {generationStep !== 'idle' && generationStep !== 'complete' && (
               <motion.div
@@ -642,7 +1001,7 @@ export default function Home() {
                 exit={{ opacity: 0, y: -20 }}
                 className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-8 border border-white/20"
               >
-                <LoadingAnimation message={`${generationStep.charAt(0).toUpperCase() + generationStep.slice(1)}...`} />
+                <LoadingAnimation message={`${loadingMessage}...`} />
               </motion.div>
             )}
           </AnimatePresence>

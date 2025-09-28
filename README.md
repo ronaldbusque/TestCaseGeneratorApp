@@ -10,8 +10,8 @@ A comprehensive suite of AI-powered tools for quality assurance and testing prof
 
 - 🤖 **Unified AI Orchestration**
   - Vercel AI SDK-powered pipeline with provider-agnostic orchestration
-  - Consistent prompts across test case, SQL, and data tools
-  - Built-in tracing readiness for production debugging
+  - Configurable planner → writer → reviewer pipeline with optional multi-pass review
+  - Built-in telemetry surfacing stage durations, reviewer notes, and slice-level warnings
 - 🔀 **Configurable LLM Providers**
   - Choose OpenAI, Google Gemini, or OpenRouter per tool from the in-app settings page
   - Set custom model names per provider (e.g., `gpt-4.1-mini`, `gemini-1.5-pro-latest`, `openrouter/auto`)
@@ -149,8 +149,9 @@ yarn dev
   - Faker.js
 - **AI Integration**:
   - Vercel AI SDK (`ai`, `@ai-sdk/openai`, `@ai-sdk/google`, `@ai-sdk/gateway`)
-  - @google/generative-ai (Gemini)
-  - OpenAI-compatible REST (OpenRouter / custom endpoints)
+  - Vercel AI Gateway (optional) for centralized routing, analytics, and rate controls
+  - OpenAI-compatible REST providers (OpenRouter / custom endpoints)
+  - Native Gemini client for direct Google-hosted models when preferred
 - **Type Safety**: TypeScript
 - **Testing**: Jest
 

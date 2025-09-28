@@ -2,7 +2,7 @@
 
 ## Context and Constraints
 
-Our legacy services (`AgentsService`, `GeminiService`, `OpenRouterService`) each called their provider with a single completion request and expected the model to return the entire JSON payload in one shot. Once requirements grew large, models hit response token ceilings and coverage suffered, particularly for `priorityMode = 'comprehensive'` and `mode = 'detailed'`. State in `src/app/page.tsx` also represented generation as a single phase, so we had no way to surface planning progress, partial slices, or review passes. We now consolidate on the Vercel AI SDK and AI Gateway, which give us a provider-agnostic TypeScript runtime with multi-step orchestration, structured outputs, and unified routing across OpenAI, Gemini, OpenRouter, and future models.
+Our legacy services (`AgentsService`, `GeminiService`, `OpenRouterService`) each called their provider with a single completion request and expected the model to return the entire JSON payload in one shot. Once requirements grew large, models hit response token ceilings and coverage suffered, particularly for `priorityMode = 'comprehensive'` and `mode = 'detailed'`. State in `src/app/page.tsx` also represented generation as a single phase, so we had no way to surface planning progress, partial slices, or review passes. We now consolidate on the Vercel AI SDK and AI Gateway, which give us a provider-agnostic TypeScript runtime with multi-step orchestration, structured outputs, and unified routing across OpenAI, Gemini, OpenRouter, and future models. As of this iteration the planner/writer/reviewer pipeline, telemetry, and frontend controls are implemented behind the "Agentic Workflow" panel.
 
 ## Goals
 
