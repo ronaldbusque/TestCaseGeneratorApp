@@ -43,12 +43,13 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState<
-    'idle' |
-    'planning' |
-    'generating' |
-    'reviewing' |
-    'finalizing' |
-    'complete'
+    'idle'
+    | 'analyzing'
+    | 'planning'
+    | 'generating'
+    | 'reviewing'
+    | 'finalizing'
+    | 'complete'
   >('idle');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [preparedFilePayloads, setPreparedFilePayloads] = useState<UploadedFilePayload[]>([]);
@@ -82,6 +83,7 @@ export default function Home() {
 
   const generationStepMessages: Record<string, string> = {
     idle: 'Idle',
+    analyzing: 'Analyzing files',
     planning: 'Planning strategy',
     generating: 'Generating test cases',
     reviewing: 'Applying reviewer feedback',
