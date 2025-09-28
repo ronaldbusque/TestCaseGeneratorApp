@@ -69,6 +69,8 @@ export default function Home() {
   const [reviewFeedback, setReviewFeedback] = useState<ReviewFeedbackItem[]>([]);
   const [generationWarnings, setGenerationWarnings] = useState<string[]>([]);
   const [generationTelemetry, setGenerationTelemetry] = useState<AgenticTelemetry | null>(null);
+  const [showPlanDetails, setShowPlanDetails] = useState(false);
+  const [showTelemetryDetails, setShowTelemetryDetails] = useState(false);
 
   const reviewerProviderOptions = useMemo(
     () => [
@@ -81,17 +83,42 @@ export default function Home() {
     [availableProviders]
   );
 
-  const generationStepMessages: Record<string, string> = {
+  const generationStepMessages = useMemo(() => ({
     idle: 'Idle',
-    analyzing: 'Analyzing files',
-    planning: 'Planning strategy',
-    generating: 'Generating test cases',
-    reviewing: 'Applying reviewer feedback',
-    finalizing: 'Finalizing results',
-    complete: 'Complete',
-  };
+    analyzing: 'Analyzing uploaded materials and estimating token usage',
+    planning: 'Planning coverage with QA best practices',
+    generating: agenticEnabled
+      ? 'Expanding each coverage area into test cases'
+      : 'Generating test cases',
+    reviewing: 'Reviewer evaluating coverage and identifying gaps',
+    finalizing: 'Finalizing results and telemetry',
+    complete: 'Generation complete',
+  }), [agenticEnabled]);
 
   const loadingMessage = generationStepMessages[generationStep] ?? generationStep;
+
+  const progressDescription = useMemo(() => {
+    switch (generationStep) {
+      case 'analyzing':
+        return 'Parsing uploaded documents and estimating how much context will be needed.';
+      case 'planning':
+        return 'Drafting a coverage blueprint that aligns with the selected priority mode.';
+      case 'generating':
+        return agenticEnabled
+          ? 'Authoring test cases for each planned coverage slice.'
+          : 'Authoring the requested test cases based on the supplied requirements.';
+      case 'reviewing':
+        return 'Reviewer agent is assessing coverage and flagging any gaps or issues.';
+      case 'finalizing':
+        return 'Applying final formatting, compiling telemetry, and preparing the response.';
+      case 'complete':
+        return 'Review the generated outcome and expand optional details below as needed.';
+      default:
+        return '';
+    }
+  }, [generationStep, agenticEnabled]);
+
+  const shouldShowProgressCard = generationStep !== 'idle';
 
   const severityStyles: Record<string, string> = {
     info: 'bg-blue-500/20 text-blue-100 border-blue-500/30',
@@ -109,6 +136,28 @@ export default function Home() {
     }
     return `${(ms / 1000).toFixed(1)} s`;
   };
+
+  const ProgressCard = () => (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 border border-white/20"
+    >
+      <div className="flex items-center gap-3">
+        <span className="relative flex h-3 w-3">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+        </span>
+        <div>
+          <p className="text-sm font-semibold text-blue-50">{loadingMessage}</p>
+          {progressDescription && (
+            <p className="text-xs text-blue-200/80 mt-1">{progressDescription}</p>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
 
   // Add effect to clear fileContent when no files are present
   useEffect(() => {
@@ -148,6 +197,8 @@ export default function Home() {
     setReviewFeedback([]);
     setGenerationWarnings([]);
     setGenerationTelemetry(null);
+    setShowPlanDetails(false);
+    setShowTelemetryDetails(false);
   };
 
   const handleNewSession = () => {
@@ -367,6 +418,8 @@ export default function Home() {
       setGenerationPlan([]);
       setReviewFeedback([]);
       setGenerationTelemetry(null);
+      setShowPlanDetails(false);
+      setShowTelemetryDetails(false);
 
       // Only clear converted states when generating new high-level test cases
       if (testCaseMode === 'high-level') {
@@ -419,6 +472,8 @@ export default function Home() {
       setReviewFeedback(result.reviewFeedback ?? []);
       setGenerationWarnings(result.warnings ?? []);
       setGenerationTelemetry(result.telemetry ?? null);
+      setShowPlanDetails(false);
+      setShowTelemetryDetails(false);
 
       setGenerationStep('finalizing');
       setGenerationStep('complete');
@@ -524,10 +579,12 @@ export default function Home() {
           setGenerationStep('reviewing');
         }
 
-        setGenerationPlan(result.plan ?? []);
-        setReviewFeedback(result.reviewFeedback ?? []);
-        setGenerationWarnings(result.warnings ?? []);
-        setGenerationTelemetry(result.telemetry ?? null);
+      setGenerationPlan(result.plan ?? []);
+      setReviewFeedback(result.reviewFeedback ?? []);
+      setGenerationWarnings(result.warnings ?? []);
+      setGenerationTelemetry(result.telemetry ?? null);
+      setShowPlanDetails(false);
+      setShowTelemetryDetails(false);
 
         const requestedCount = selectedScenarios.length;
         const limitedTestCases = Array.isArray(result.testCases)
@@ -624,6 +681,10 @@ export default function Home() {
         </div>
         
         <div className="space-y-8">
+          <AnimatePresence>
+            {shouldShowProgressCard && <ProgressCard key="progress-card" />}
+          </AnimatePresence>
+
           <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 sm:p-8 border border-white/20">
             <div className="flex flex-col space-y-6">
               {/* Top row with agent info and new session button */}
@@ -850,39 +911,50 @@ export default function Home() {
           {generationPlan.length > 0 && (
             <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 sm:p-8 border border-white/20">
               <div className="flex items-center justify-between flex-wrap gap-3">
-                <h3 className="text-lg font-semibold text-blue-50">Planner Output</h3>
-                <span className="text-xs text-blue-200/70">{generationPlan.length} coverage segments</span>
+                <div>
+                  <h3 className="text-lg font-semibold text-blue-50">Planner Output</h3>
+                  <p className="text-xs text-blue-200/70">{generationPlan.length} coverage segments</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPlanDetails((prev) => !prev)}
+                  className="text-xs font-semibold text-blue-200 hover:text-blue-100 border border-white/20 rounded-full px-3 py-1 transition-colors"
+                >
+                  {showPlanDetails ? 'Hide details' : 'Show details'}
+                </button>
               </div>
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                {generationPlan.map((item) => (
-                  <div key={item.id} className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-blue-50">{item.title}</p>
-                        <p className="text-xs text-blue-200/70">Area: {item.area}</p>
+              {showPlanDetails && (
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  {generationPlan.map((item) => (
+                    <div key={item.id} className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-blue-50">{item.title}</p>
+                          <p className="text-xs text-blue-200/70">Area: {item.area}</p>
+                        </div>
+                        {item.estimatedCases && (
+                          <span className="text-xs font-medium text-blue-100 bg-blue-500/20 border border-blue-500/30 rounded-full px-3 py-1">
+                            ~{item.estimatedCases} cases
+                          </span>
+                        )}
                       </div>
-                      {item.estimatedCases && (
-                        <span className="text-xs font-medium text-blue-100 bg-blue-500/20 border border-blue-500/30 rounded-full px-3 py-1">
-                          ~{item.estimatedCases} cases
-                        </span>
+                      {item.focus && (
+                        <p className="text-sm text-blue-100/90">
+                          <span className="font-medium text-blue-200">Focus:</span> {item.focus}
+                        </p>
+                      )}
+                      {item.notes && (
+                        <p className="text-xs text-blue-200/70">{item.notes}</p>
+                      )}
+                      {item.chunkRefs && item.chunkRefs.length > 0 && (
+                        <p className="text-xs text-blue-200/60">
+                          References: {item.chunkRefs.join(', ')}
+                        </p>
                       )}
                     </div>
-                    {item.focus && (
-                      <p className="text-sm text-blue-100/90">
-                        <span className="font-medium text-blue-200">Focus:</span> {item.focus}
-                      </p>
-                    )}
-                    {item.notes && (
-                      <p className="text-xs text-blue-200/70">{item.notes}</p>
-                    )}
-                    {item.chunkRefs && item.chunkRefs.length > 0 && (
-                      <p className="text-xs text-blue-200/60">
-                        References: {item.chunkRefs.join(', ')}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -919,84 +991,95 @@ export default function Home() {
           {generationTelemetry && (
             <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 sm:p-8 border border-white/20">
               <div className="flex items-center justify-between flex-wrap gap-3">
-                <h3 className="text-lg font-semibold text-blue-50">Run Telemetry</h3>
-                <span className="text-xs text-blue-200/70">
-                  Provider: {generationTelemetry.provider ?? settings.testCases.provider}
-                </span>
+                <div>
+                  <h3 className="text-lg font-semibold text-blue-50">Run Telemetry</h3>
+                  <p className="text-xs text-blue-200/70">Provider: {generationTelemetry.provider ?? settings.testCases.provider}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowTelemetryDetails((prev) => !prev)}
+                  className="text-xs font-semibold text-blue-200 hover:text-blue-100 border border-white/20 rounded-full px-3 py-1 transition-colors"
+                >
+                  {showTelemetryDetails ? 'Hide details' : 'Show details'}
+                </button>
               </div>
-              <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 text-sm text-blue-100">
-                <div>
-                  <dt className="text-blue-200/70">Total duration</dt>
-                  <dd className="font-semibold">{formatDuration(generationTelemetry.totalDurationMs)}</dd>
-                </div>
-                <div>
-                  <dt className="text-blue-200/70">Planner</dt>
-                  <dd className="font-semibold">{formatDuration(generationTelemetry.plannerDurationMs)}</dd>
-                </div>
-                <div>
-                  <dt className="text-blue-200/70">Writer</dt>
-                  <dd className="font-semibold">{formatDuration(generationTelemetry.writerDurationMs)}</dd>
-                </div>
-                <div>
-                  <dt className="text-blue-200/70">Reviewer</dt>
-                  <dd className="font-semibold">{formatDuration(generationTelemetry.reviewerDurationMs)}</dd>
-                </div>
-                <div>
-                  <dt className="text-blue-200/70">Plan items</dt>
-                  <dd className="font-semibold">{generationTelemetry.planItemCount ?? generationPlan.length}</dd>
-                </div>
-                <div>
-                  <dt className="text-blue-200/70">Test cases</dt>
-                  <dd className="font-semibold">{generationTelemetry.testCaseCount ?? getCurrentTestCases().length}</dd>
-                </div>
-                <div>
-                  <dt className="text-blue-200/70">Review passes</dt>
-                  <dd className="font-semibold">{generationTelemetry.reviewPasses?.length ?? 0}</dd>
-                </div>
-                <div>
-                  <dt className="text-blue-200/70">Passes executed</dt>
-                  <dd className="font-semibold">{generationTelemetry.reviewPasses?.map((pass) => pass.pass).join(', ') || '—'}</dd>
-                </div>
-              </dl>
+              {showTelemetryDetails && (
+                <>
+                  <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 text-sm text-blue-100">
+                    <div>
+                      <dt className="text-blue-200/70">Total duration</dt>
+                      <dd className="font-semibold">{formatDuration(generationTelemetry.totalDurationMs)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-blue-200/70">Planner</dt>
+                      <dd className="font-semibold">{formatDuration(generationTelemetry.plannerDurationMs)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-blue-200/70">Writer</dt>
+                      <dd className="font-semibold">{formatDuration(generationTelemetry.writerDurationMs)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-blue-200/70">Reviewer</dt>
+                      <dd className="font-semibold">{formatDuration(generationTelemetry.reviewerDurationMs)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-blue-200/70">Plan items</dt>
+                      <dd className="font-semibold">{generationTelemetry.planItemCount ?? generationPlan.length}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-blue-200/70">Test cases</dt>
+                      <dd className="font-semibold">{generationTelemetry.testCaseCount ?? getCurrentTestCases().length}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-blue-200/70">Review passes</dt>
+                      <dd className="font-semibold">{generationTelemetry.reviewPasses?.length ?? 0}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-blue-200/70">Passes executed</dt>
+                      <dd className="font-semibold">{generationTelemetry.reviewPasses?.map((pass) => pass.pass).join(', ') || '—'}</dd>
+                    </div>
+                  </dl>
 
-              {(generationTelemetry.writerSlices?.length ?? 0) > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-blue-200/70">Writer slices</h4>
-                  <ul className="mt-2 grid gap-2 text-xs text-blue-200/80">
-                    {generationTelemetry.writerSlices?.map((slice) => (
-                      <li key={slice.planId} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-blue-100">{slice.planId}</span>
-                          <span>{formatDuration(slice.durationMs)}</span>
-                        </div>
-                        <p className="mt-1">{slice.caseCount} cases generated</p>
-                        {slice.warnings && slice.warnings.length > 0 && (
-                          <p className="mt-1 text-[0.7rem] text-amber-200">{slice.warnings.join(' ')} </p>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+                  {(generationTelemetry.writerSlices?.length ?? 0) > 0 && (
+                    <div className="mt-4">
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-blue-200/70">Writer slices</h4>
+                      <ul className="mt-2 grid gap-2 text-xs text-blue-200/80">
+                        {generationTelemetry.writerSlices?.map((slice) => (
+                          <li key={slice.planId} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-blue-100">{slice.planId}</span>
+                              <span>{formatDuration(slice.durationMs)}</span>
+                            </div>
+                            <p className="mt-1">{slice.caseCount} cases generated</p>
+                            {slice.warnings && slice.warnings.length > 0 && (
+                              <p className="mt-1 text-[0.7rem] text-amber-200">{slice.warnings.join(' ')}</p>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
-              {(generationTelemetry.reviewPasses?.length ?? 0) > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-blue-200/70">Review rounds</h4>
-                  <ul className="mt-2 grid gap-2 text-xs text-blue-200/80">
-                    {generationTelemetry.reviewPasses?.map((pass) => (
-                      <li key={pass.pass} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 flex items-center justify-between">
-                        <span className="font-semibold text-blue-100">Pass {pass.pass}</span>
-                        <span>{pass.feedbackCount} notes · {pass.blockingCount} blocking · {formatDuration(pass.durationMs)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                  {(generationTelemetry.reviewPasses?.length ?? 0) > 0 && (
+                    <div className="mt-4">
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-blue-200/70">Review rounds</h4>
+                      <ul className="mt-2 grid gap-2 text-xs text-blue-200/80">
+                        {generationTelemetry.reviewPasses?.map((pass) => (
+                          <li key={pass.pass} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 flex items-center justify-between">
+                            <span className="font-semibold text-blue-100">Pass {pass.pass}</span>
+                            <span>{pass.feedbackCount} notes · {pass.blockingCount} blocking · {formatDuration(pass.durationMs)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
 
-          <AnimatePresence>
-            {generationStep !== 'idle' && generationStep !== 'complete' && (
+          {shouldShowProgressCard && generationStep !== 'complete' && (
+            <AnimatePresence>
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1005,8 +1088,8 @@ export default function Home() {
               >
                 <LoadingAnimation message={`${loadingMessage}...`} />
               </motion.div>
-            )}
-          </AnimatePresence>
+            </AnimatePresence>
+          )}
 
           {generationStep === 'complete' && getCurrentTestCases().length > 0 && (
             <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-8 border border-white/20 animate-fade-in">

@@ -273,9 +273,11 @@ export class TestCaseAgenticPipeline {
     const filesSummary = summarizeFiles(request.files);
     const scenarioSummary = summarizeScenarios(request.selectedScenarios);
 
+    const priorityMode = request.priorityMode ?? 'comprehensive';
+
     const promptSections = [
       'You are an expert QA strategist. Break the supplied materials into a concise execution plan for generating test cases.',
-      `Priority mode: ${request.priorityMode ?? 'comprehensive'}. Produce a JSON array of plan items with id, title, area, focus, estimatedCases, and chunkRefs when applicable.`,
+      `Priority mode: ${priorityMode}. If comprehensive, ensure broad coverage including edge cases. If core-functionality, focus on critical user journeys and regulatory must-haves. Produce a JSON array of plan items with id, title, area, focus, estimatedCases, and chunkRefs when applicable.`,
       'Keep each focus under 160 characters and notes under 220 characters. Do not enumerate every acceptance criterion; summarize only the key goals for coverage.',
       requirements ? `Requirements:\n${requirements}` : 'No requirements provided.',
       filesSummary ? `Reference documents:\n${filesSummary}` : '',
@@ -530,11 +532,12 @@ export class TestCaseAgenticPipeline {
     const requirements = request.requirements ?? '';
     const filesSummary = summarizeFiles(request.files);
     const scenarioSummary = summarizeScenarios(request.selectedScenarios);
+    const priorityMode = request.priorityMode ?? 'comprehensive';
 
     const sections = [
       'You are a senior QA engineer. Generate additional test cases for the provided plan item.',
       `Plan item: ${planItem.id} - ${planItem.title} (${planItem.area}). Focus: ${planItem.focus ?? 'General coverage'} `,
-      `Mode: ${request.mode}. Priority: ${request.priorityMode ?? 'comprehensive'}.`,
+      `Mode: ${request.mode}. Priority: ${priorityMode}. If comprehensive, include happy, alternate, and negative flows. If core-functionality, concentrate on essential success paths and blockers.`,
       requirements ? `Requirements:\n${requirements}` : '',
       filesSummary ? `Reference documents:\n${filesSummary}` : '',
       scenarioSummary,
