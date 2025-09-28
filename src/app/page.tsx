@@ -636,10 +636,6 @@ export default function Home() {
 
       const agenticOptions = buildAgenticOptions();
 
-      if (agenticOptions?.enableAgentic) {
-        setGenerationStep('generating');
-      }
-
       const filePayloads = preparedFilePayloads.length === uploadedFiles.length
         ? preparedFilePayloads
         : await buildFilePayloads(uploadedFiles);
