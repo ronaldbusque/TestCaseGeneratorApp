@@ -4,7 +4,7 @@ export * from './providers';
 
 import { LLMProvider } from './providers';
 
-export type AIModel = 'Agents';
+export type AIModel = 'VercelAI';
 
 export type ModelType = string;
 
@@ -45,6 +45,38 @@ export interface TestStep {
 
 export type TestCaseMode = 'high-level' | 'detailed';
 export type TestPriorityMode = 'comprehensive' | 'core-functionality';
+export type ReviewSeverity = 'info' | 'minor' | 'major' | 'critical';
+
+export interface GenerationPlanItem {
+  id: string;
+  title: string;
+  area: string;
+  focus?: string;
+  estimatedCases?: number;
+  chunkRefs?: string[];
+  notes?: string;
+}
+
+export interface ReviewFeedbackItem {
+  caseId: string;
+  issueType?: string;
+  severity: ReviewSeverity;
+  summary: string;
+  suggestion?: string;
+}
+
+export interface AgenticGenerationOptions {
+  enableAgentic?: boolean;
+  plannerProvider?: LLMProvider;
+  plannerModel?: string;
+  writerProvider?: LLMProvider;
+  writerModel?: string;
+  reviewerProvider?: LLMProvider;
+  reviewerModel?: string;
+  maxReviewPasses?: number;
+  chunkStrategy?: 'auto' | 'fixed' | 'none';
+  streamProgress?: boolean;
+}
 
 export interface UploadedFilePayload {
   name: string;
@@ -82,11 +114,17 @@ export interface TestCaseGenerationRequest {
   priorityMode?: TestPriorityMode;
   provider?: LLMProvider;
   model?: string;
+  agenticOptions?: AgenticGenerationOptions;
 }
 
 export interface TestCaseGenerationResponse {
   testCases: TestCase[];
   error?: string;
+  plan?: GenerationPlanItem[];
+  reviewFeedback?: ReviewFeedbackItem[];
+  passesExecuted?: number;
+  warnings?: string[];
+  telemetry?: Record<string, unknown>;
   debug?: {
     rawResponse?: string;
     parsedResponse?: any;

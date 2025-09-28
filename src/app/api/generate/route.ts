@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
       files = [],
       provider,
       model,
+      agenticOptions,
     } = body as TestCaseGenerationRequest & {
       fileContent?: string;
       files?: UploadedFilePayload[];
@@ -56,6 +57,7 @@ export async function POST(request: NextRequest) {
       files: enrichedFiles,
       provider,
       model,
+      agenticOptions,
     });
     
     console.log(`[API] Generated ${result.testCases?.length || 0} test cases`);

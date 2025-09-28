@@ -8,8 +8,8 @@ A comprehensive suite of AI-powered tools for quality assurance and testing prof
 
 ### 🧪 Test Case Generator
 
-- 🤖 **Agents-Powered Workflow**
-  - Unified OpenAI Agents SDK runtime (default gpt-4.1-mini)
+- 🤖 **Unified AI Orchestration**
+  - Vercel AI SDK-powered pipeline with provider-agnostic orchestration
   - Consistent prompts across test case, SQL, and data tools
   - Built-in tracing readiness for production debugging
 - 🔀 **Configurable LLM Providers**
@@ -148,7 +148,7 @@ yarn dev
 - **Data Generation**:
   - Faker.js
 - **AI Integration**:
-  - @openai/agents SDK (OpenAI)
+  - Vercel AI SDK (`ai`, `@ai-sdk/openai`, `@ai-sdk/google`, `@ai-sdk/gateway`)
   - @google/generative-ai (Gemini)
   - OpenAI-compatible REST (OpenRouter / custom endpoints)
 - **Type Safety**: TypeScript

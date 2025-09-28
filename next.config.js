@@ -2,8 +2,6 @@
 const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: [
-      '@openai/agents',
-      '@openai/agents-core',
       '@modelcontextprotocol/sdk',
       '@google/generative-ai',
       'ts-interface-checker',
