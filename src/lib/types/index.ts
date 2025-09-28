@@ -121,8 +121,10 @@ export type AgenticProgressEvent =
   | { type: 'writer:complete'; totalSlices: number; totalCases: number }
   | { type: 'review:pass-start'; pass: number; maxPasses: number }
   | { type: 'review:pass-complete'; pass: number; feedbackCount: number; blockingCount: number; maxPasses: number }
-  | { type: 'revision:start'; pass: number }
-  | { type: 'revision:complete'; pass: number; updatedCases: number }
+  | { type: 'revision:start'; pass: number; totalChunks: number; focusCaseCount: number }
+  | { type: 'revision:chunk-start'; pass: number; chunkIndex: number; totalChunks: number; focusCaseCount: number }
+  | { type: 'revision:chunk-complete'; pass: number; chunkIndex: number; totalChunks: number; updatedCases: number }
+  | { type: 'revision:complete'; pass: number; updatedCases: number; totalChunks: number }
   | { type: 'final'; result: TestCaseGenerationResponse }
   | { type: 'error'; message: string };
 

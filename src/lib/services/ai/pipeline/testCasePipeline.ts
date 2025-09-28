@@ -7,6 +7,7 @@ import {
   LLMProvider,
   ReviewFeedbackItem,
   ReviewPassTelemetry,
+  ReviewSeverity,
   TestCaseGenerationRequest,
   TestCaseGenerationResponse,
   TestCaseMode,
@@ -639,59 +640,159 @@ export class TestCaseAgenticPipeline {
         break;
       }
 
-      const revisionPrompt = this.buildRevisionPrompt(request, mutableCases, blocking, pass);
-      const writerModelInstance = resolveLanguageModel({ provider: writerProvider, model: writerModel });
-
-      let revisionResult;
-      try {
-        progressCallback?.({ type: 'revision:start', pass });
-        console.log('[Agentic] Revision run started', {
-          pass,
-          provider: writerProvider,
-          model: writerModel,
-        });
-        revisionResult = await safeGenerateObject({
-          model: writerModelInstance,
-          schema: caseSchema,
-          prompt: revisionPrompt,
-          retryInstruction: 'Return ONLY a JSON object with an "items" array of updated cases. No additional text.',
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown revision error';
-        warnings.push(`Revision pass ${pass} failed: ${message}`);
-        console.warn('[Agentic] Revision run failed', {
-          pass,
-          error: message,
-        });
+      const revisionChunks = this.buildRevisionChunks(normalizedFeedback, request, agenticOptions);
+      if (!revisionChunks.length) {
+        warnings.push(`Revision pass ${pass} skipped: reviewer returned no actionable feedback.`);
         break;
       }
+      const writerModelInstance = resolveLanguageModel({ provider: writerProvider, model: writerModel });
+      const totalChunks = Math.max(1, revisionChunks.length);
+      const focusCaseCount = revisionChunks.reduce((count, chunk) => count + chunk.caseIds.length, 0);
 
-      logAIInteraction({
+      progressCallback?.({
+        type: 'revision:start',
+        pass,
+        totalChunks,
+        focusCaseCount,
+      });
+      console.log('[Agentic] Revision run started', {
+        pass,
         provider: writerProvider,
         model: writerModel,
-        prompt: revisionPrompt,
-        response: revisionResult.text ?? JSON.stringify(revisionResult.object),
-        context: {
-          type: 'test-case-generation',
-          stage: 'writer-revision',
-          pass,
-        },
+        totalChunks,
+        focusCaseCount,
       });
 
-      const revisions = revisionResult.object.items ?? [];
+      const chunkResults: Array<{ updatedCases: any[]; warnings: string[] } | null> = new Array(totalChunks).fill(null);
+      let revisionFailed = false;
+
+      const revisionConcurrency = this.resolveRevisionConcurrency(totalChunks, agenticOptions);
+      let cursor = 0;
+
+      const runChunk = async (chunkIndex: number) => {
+        const chunk = revisionChunks[chunkIndex];
+        const chunkWarnings: string[] = [];
+        progressCallback?.({
+          type: 'revision:chunk-start',
+          pass,
+          chunkIndex: chunkIndex + 1,
+          totalChunks,
+          focusCaseCount: chunk.caseIds.length,
+        });
+
+        const revisionPrompt = this.buildRevisionPrompt(
+          request,
+          mutableCases,
+          chunk.feedback,
+          pass,
+          normalizedFeedback,
+          chunk.caseIds
+        );
+
+        try {
+          const revisionResult = await safeGenerateObject({
+            model: writerModelInstance,
+            schema: caseSchema,
+            prompt: revisionPrompt,
+            retryInstruction: 'Return ONLY a JSON object with an "items" array of updated cases. No additional text.',
+          });
+
+          logAIInteraction({
+            provider: writerProvider,
+            model: writerModel,
+            prompt: revisionPrompt,
+            response: revisionResult.text ?? JSON.stringify(revisionResult.object),
+            context: {
+              type: 'test-case-generation',
+              stage: 'writer-revision',
+              pass,
+              chunk: chunkIndex + 1,
+              totalChunks,
+            },
+          });
+
+          const revisions = revisionResult.object.items ?? [];
+          chunkResults[chunkIndex] = { updatedCases: revisions, warnings: chunkWarnings };
+          progressCallback?.({
+            type: 'revision:chunk-complete',
+            pass,
+            chunkIndex: chunkIndex + 1,
+            totalChunks,
+            updatedCases: revisions.length,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown revision error';
+          const warning = `Revision chunk ${chunkIndex + 1} (pass ${pass}) failed: ${message}`;
+          chunkWarnings.push(warning);
+          warnings.push(warning);
+          revisionFailed = true;
+          console.warn('[Agentic] Revision chunk failed', {
+            pass,
+            chunk: chunkIndex + 1,
+            error: message,
+          });
+          progressCallback?.({
+            type: 'revision:chunk-complete',
+            pass,
+            chunkIndex: chunkIndex + 1,
+            totalChunks,
+            updatedCases: 0,
+          });
+        }
+      };
+
+      const workerCount = Math.max(1, revisionConcurrency);
+      await Promise.all(
+        Array.from({ length: workerCount }, async () => {
+          while (true) {
+            if (revisionFailed) {
+              break;
+            }
+            const index = cursor;
+            if (index >= totalChunks) {
+              break;
+            }
+            cursor += 1;
+            await runChunk(index);
+            if (revisionFailed) {
+              break;
+            }
+          }
+        })
+      );
+
       const revisedCases = new Map(mutableCases.map((item) => [item.id, item] as const));
-      revisions.forEach((updated) => {
-        if (!updated.id) {
+      let totalUpdatedCases = 0;
+
+      chunkResults.forEach((result) => {
+        if (!result) {
           return;
         }
-        revisedCases.set(updated.id, updated);
+        result.updatedCases.forEach((updated) => {
+          if (!updated?.id) {
+            return;
+          }
+          revisedCases.set(updated.id, updated);
+          totalUpdatedCases += 1;
+        });
       });
+
       mutableCases = Array.from(revisedCases.values());
       console.log('[Agentic] Revision run completed', {
         pass,
-        updatedCases: revisions.length,
+        updatedCases: totalUpdatedCases,
+        totalChunks,
       });
-      progressCallback?.({ type: 'revision:complete', pass, updatedCases: revisions.length });
+      progressCallback?.({
+        type: 'revision:complete',
+        pass,
+        updatedCases: totalUpdatedCases,
+        totalChunks,
+      });
+
+      if (revisionFailed) {
+        break;
+      }
     }
 
     rawCases.splice(0, rawCases.length, ...mutableCases);
@@ -706,6 +807,133 @@ export class TestCaseAgenticPipeline {
   private generateCaseId(mode: TestCaseMode, index: number): string {
     const prefix = mode === 'high-level' ? 'TS' : 'TC';
     return `${prefix}-${String(index).padStart(3, '0')}`;
+  }
+
+  private getRevisionChunkLimits(
+    request: TestCaseGenerationRequest,
+    _options?: AgenticGenerationOptions
+  ): { softLimit: number; hardLimit: number } {
+    const isDetailed = request.mode === 'detailed';
+    const softLimit = isDetailed ? 12 : 20;
+    const hardLimit = isDetailed ? 16 : 28;
+    return { softLimit, hardLimit };
+  }
+
+  private rankRevisionSeverity(severity?: ReviewSeverity): number {
+    switch (severity) {
+      case 'critical':
+        return 3;
+      case 'major':
+        return 2;
+      case 'minor':
+        return 1;
+      case 'info':
+      default:
+        return 0;
+    }
+  }
+
+  private buildRevisionChunks(
+    feedback: ReviewFeedbackItem[],
+    request: TestCaseGenerationRequest,
+    options?: AgenticGenerationOptions
+  ): Array<{ feedback: ReviewFeedbackItem[]; caseIds: string[] }> {
+    if (feedback.length === 0) {
+      return [];
+    }
+
+    const generalFeedback: ReviewFeedbackItem[] = [];
+    const feedbackByCase = new Map<string, ReviewFeedbackItem[]>();
+
+    feedback.forEach((item) => {
+      const caseId = item.caseId?.trim();
+      if (!caseId) {
+        generalFeedback.push(item);
+        return;
+      }
+      const existing = feedbackByCase.get(caseId);
+      if (existing) {
+        existing.push(item);
+        return;
+      }
+      feedbackByCase.set(caseId, [item]);
+    });
+
+    const caseGroups = Array.from(feedbackByCase.entries()).map(([caseId, items]) => ({
+      caseId,
+      items,
+      weight: Math.max(...items.map((entry) => this.rankRevisionSeverity(entry.severity))),
+    }));
+
+    if (caseGroups.length === 0) {
+      return [{ feedback: feedback.slice(), caseIds: [] }];
+    }
+
+    caseGroups.sort((a, b) => {
+      if (b.weight !== a.weight) {
+        return b.weight - a.weight;
+      }
+      return b.items.length - a.items.length;
+    });
+
+    const { softLimit, hardLimit } = this.getRevisionChunkLimits(request, options);
+
+    if (caseGroups.length <= softLimit) {
+      return [{
+        feedback: feedback.slice(),
+        caseIds: caseGroups.map((entry) => entry.caseId),
+      }];
+    }
+
+    const chunks: Array<{ feedback: ReviewFeedbackItem[]; caseIds: string[] }> = [];
+    let currentItems: ReviewFeedbackItem[] = [];
+    let currentCaseIds: string[] = [];
+
+    const flushCurrent = () => {
+      if (!currentCaseIds.length) {
+        return;
+      }
+      chunks.push({
+        feedback: [...currentItems, ...generalFeedback],
+        caseIds: currentCaseIds.slice(),
+      });
+      currentItems = [];
+      currentCaseIds = [];
+    };
+
+    caseGroups.forEach((group) => {
+      const prospectiveCount = currentCaseIds.length + 1;
+      const exceedsHard = currentCaseIds.length > 0 && prospectiveCount > hardLimit;
+      const exceedsSoft = currentCaseIds.length >= softLimit;
+      if (exceedsHard || exceedsSoft) {
+        flushCurrent();
+      }
+      currentItems.push(...group.items);
+      currentCaseIds.push(group.caseId);
+    });
+
+    flushCurrent();
+
+    if (!chunks.length) {
+      return [{
+        feedback: feedback.slice(),
+        caseIds: caseGroups.map((entry) => entry.caseId),
+      }];
+    }
+
+    return chunks;
+  }
+
+  private resolveRevisionConcurrency(
+    chunkCount: number,
+    options?: AgenticGenerationOptions
+  ): number {
+    if (chunkCount <= 1) {
+      return 1;
+    }
+    const configured = options?.writerConcurrency ?? 1;
+    const capped = Math.max(1, Math.min(3, configured));
+    return Math.min(chunkCount, capped);
   }
 
   private buildWriterPrompt(
@@ -755,16 +983,35 @@ export class TestCaseAgenticPipeline {
   private buildRevisionPrompt(
     request: TestCaseGenerationRequest,
     cases: any[],
-    feedback: ReviewFeedbackItem[],
-    passNumber: number
+    focusFeedback: ReviewFeedbackItem[],
+    passNumber: number,
+    allFeedback?: ReviewFeedbackItem[],
+    focusCaseIds?: string[]
   ): string {
+    const targetedFeedbackJson = JSON.stringify(focusFeedback, null, 2);
+    const includeFullFeedback =
+      allFeedback &&
+      (allFeedback !== focusFeedback || allFeedback.length !== focusFeedback.length);
+    const fullFeedbackJson = includeFullFeedback
+      ? JSON.stringify(allFeedback, null, 2)
+      : targetedFeedbackJson;
+    const focusCaseSummary = focusCaseIds && focusCaseIds.length
+      ? `Targeted caseIds: ${focusCaseIds.join(', ')}`
+      : 'Focus on the caseIds referenced in the targeted feedback.';
+
     const sections = [
       'Revise the following test cases to resolve the reviewer feedback. Only return cases that change.',
       `Pass number: ${passNumber}. Mode: ${request.mode}.`,
       `Current cases:\n${JSON.stringify(cases, null, 2)}`,
-      `Feedback to address:\n${JSON.stringify(feedback, null, 2)}`,
-      'Return a JSON array of updated cases adhering to the required schema. Include all referenced caseIds exactly once.',
+      focusCaseSummary,
+      `Targeted feedback to address:\n${targetedFeedbackJson}`,
     ];
+
+    if (includeFullFeedback) {
+      sections.push(`Complete reviewer feedback for context:\n${fullFeedbackJson}`);
+    }
+
+    sections.push('Return a JSON array of updated cases adhering to the required schema. Include all referenced caseIds exactly once.');
 
     return sections.join('\n\n');
   }

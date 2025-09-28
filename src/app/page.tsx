@@ -5,12 +5,11 @@ import { FileUpload } from '../components/FileUpload';
 import { RequirementsInput } from '@/components/RequirementsInput';
 import { TestCaseList } from '@/components/TestCaseList';
 import { TestCase, TestCaseMode, HighLevelTestCase, TestPriorityMode, UploadedFilePayload, FileTokenSummary, GenerationPlanItem, ReviewFeedbackItem, AgenticTelemetry, TestCaseGenerationResponse, AgenticProgressEvent } from '@/lib/types';
-import { AnimatePresence } from 'framer-motion';
 import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { LoadingAnimation } from '@/components/LoadingAnimation';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
-import { ArrowPathIcon } from '@heroicons/react/24/outline';
+import { ArrowPathIcon, CheckCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { TestCaseModeToggle } from '@/components/TestCaseModeToggle';
 import { NetworkBackground } from '@/components/NetworkBackground';
 import { TestPriorityToggle } from '@/components/TestPriorityToggle';
@@ -48,6 +47,7 @@ export default function Home() {
     | 'planning'
     | 'generating'
     | 'reviewing'
+    | 'revising'
     | 'finalizing'
     | 'complete'
   >('idle');
@@ -88,7 +88,15 @@ export default function Home() {
     completedPasses: 0,
     blockingPassRuns: 0,
   });
-  const [revisionProgress, setRevisionProgress] = useState({ runs: 0, lastUpdatedCases: 0 });
+  const [revisionProgress, setRevisionProgress] = useState({
+    runs: 0,
+    expectedRuns: 0,
+    lastUpdatedCases: 0,
+    inProgress: false,
+    chunkTotal: 0,
+    chunkCompleted: 0,
+    focusCaseCount: 0,
+  });
   const progressRef = useRef<HTMLDivElement | null>(null);
 
   const reviewerProviderOptions = useMemo(
@@ -173,6 +181,7 @@ export default function Home() {
       ? 'Expanding each coverage area into test cases'
       : 'Generating test cases',
     reviewing: 'Reviewer evaluating coverage and identifying gaps',
+    revising: 'Revision agent applying reviewer feedback',
     finalizing: 'Finalizing results and telemetry',
     complete: 'Generation complete',
   }), [agenticEnabled]);
@@ -187,10 +196,12 @@ export default function Home() {
         return 'Drafting a coverage blueprint that aligns with the selected priority mode.';
       case 'generating':
         return agenticEnabled
-          ? 'Authoring test cases for each planned coverage slice.'
-          : 'Authoring the requested test cases based on the supplied requirements.';
-      case 'reviewing':
-        return 'Reviewer agent is assessing coverage and flagging any gaps or issues.';
+      ? 'Authoring test cases for each planned coverage slice.'
+      : 'Authoring the requested test cases based on the supplied requirements.';
+    case 'revising':
+      return 'Revision agent is updating the generated cases to address reviewer findings.';
+    case 'reviewing':
+      return 'Reviewer agent is assessing coverage and flagging any gaps or issues.';
       case 'finalizing':
         return 'Applying final formatting, compiling telemetry, and preparing the response.';
       case 'complete':
@@ -224,8 +235,33 @@ export default function Home() {
     return `${(ms / 1000).toFixed(1)} s`;
   };
 
-  const stageRows = useMemo(() => {
-    const rows: Array<{ key: string; label: string; status: string; completed?: number; total?: number; remaining?: number }> = [];
+  const { rows: stageRows, overallProgress } = useMemo(() => {
+    type StageRow = {
+      key: string;
+      label: string;
+      status: string;
+      completed?: number;
+      total?: number;
+      remaining?: number;
+      progress: number | null;
+      includeInOverall?: boolean;
+      note?: string;
+    };
+
+    const rows: StageRow[] = [];
+    let progressSum = 0;
+    let progressCount = 0;
+
+    const register = (row: StageRow) => {
+      rows.push(row);
+      const include = row.includeInOverall ?? true;
+      if (!include) {
+        return;
+      }
+      const normalized = row.progress ?? (row.status === 'Complete' || row.status === 'Skipped' ? 1 : 0);
+      progressSum += Math.max(0, Math.min(1, normalized));
+      progressCount += 1;
+    };
 
     const planTotal = Math.max(
       generationPlan.length,
@@ -235,20 +271,29 @@ export default function Home() {
 
     const plannerStatus = (() => {
       if (plannerProgress.started && !plannerProgress.completed) return 'In progress';
-      if (plannerProgress.completed || ['generating', 'reviewing', 'finalizing', 'complete'].includes(generationStep) || generationTelemetry) {
+      if (plannerProgress.completed || ['generating', 'reviewing', 'revising', 'finalizing', 'complete'].includes(generationStep) || generationTelemetry) {
         return 'Complete';
       }
       if (generationStep === 'planning' || generationStep === 'analyzing') return 'In progress';
       return 'Pending';
     })();
 
-    rows.push({
+    const plannerProgressValue = plannerProgress.completed
+      ? 1
+      : plannerProgress.started && planTotal > 0
+        ? Math.min((plannerProgress.planItems ?? 0) / planTotal, 0.95)
+        : plannerProgress.started
+          ? null
+          : 0;
+
+    register({
       key: 'planning',
       label: 'Planning',
       status: plannerStatus,
       completed: plannerProgress.completed ? planTotal : undefined,
       total: planTotal > 0 || plannerProgress.completed ? planTotal : undefined,
-      remaining: plannerProgress.completed ? 0 : planTotal > 0 ? planTotal : undefined,
+      remaining: plannerProgress.completed ? 0 : planTotal > 0 ? Math.max(planTotal - (plannerProgress.planItems ?? 0), 0) : undefined,
+      progress: plannerProgressValue,
     });
 
     const writerTotal = Math.max(
@@ -257,13 +302,13 @@ export default function Home() {
       generationTelemetry?.writerSlices?.length ?? 0,
     );
 
-    const writerCompletedCount = generationTelemetry?.writerSlices?.length ?? (writerProgress.started ? writerProgress.completedSlices : undefined);
+    const writerCompletedCount = generationTelemetry?.writerSlices?.length ?? (writerProgress.started ? writerProgress.completedSlices : 0);
 
     const writerStatus = (() => {
-      if (writerProgress.started && (writerCompletedCount ?? 0) < (writerTotal || 0)) return 'In progress';
+      if (writerProgress.started && writerTotal > 0 && writerCompletedCount < writerTotal) return 'In progress';
       if (
-        ['reviewing', 'finalizing', 'complete'].includes(generationStep) ||
-        (writerTotal > 0 && (writerCompletedCount ?? 0) >= writerTotal)
+        ['reviewing', 'revising', 'finalizing', 'complete'].includes(generationStep) ||
+        (writerTotal > 0 && writerCompletedCount >= writerTotal)
       ) {
         return 'Complete';
       }
@@ -271,15 +316,22 @@ export default function Home() {
       return 'Pending';
     })();
 
-    rows.push({
+    const writerProgressValue = writerTotal > 0
+      ? Math.min(writerCompletedCount / writerTotal, 1)
+      : writerProgress.started
+        ? 0.1
+        : 0;
+
+    register({
       key: 'writer',
       label: 'Writer slices',
       status: writerStatus,
-      completed: writerCompletedCount ?? undefined,
+      completed: writerTotal > 0 ? writerCompletedCount : undefined,
       total: writerTotal || undefined,
       remaining: writerTotal
-        ? Math.max(writerTotal - (writerCompletedCount ?? 0), 0)
+        ? Math.max(writerTotal - writerCompletedCount, 0)
         : undefined,
+      progress: writerProgressValue,
     });
 
     const executedReviewPasses = generationTelemetry?.reviewPasses?.length ?? reviewProgress.completedPasses ?? 0;
@@ -303,44 +355,94 @@ export default function Home() {
       return 'Pending';
     })();
 
-    rows.push({
+    const reviewProgressValue = expectedReviewPasses > 0
+      ? Math.min(executedReviewPasses / expectedReviewPasses, 1)
+      : reviewStatus === 'Skipped'
+        ? 1
+        : 0;
+
+    register({
       key: 'review',
       label: 'Reviewer passes',
       status: reviewStatus,
       completed: executedReviewPasses || undefined,
       total: expectedReviewPasses || undefined,
       remaining: expectedReviewPasses ? Math.max(expectedReviewPasses - executedReviewPasses, 0) : undefined,
+      progress: reviewStatus === 'Skipped' ? 1 : reviewProgressValue,
     });
 
+    const reviewComplete = executedReviewPasses >= expectedReviewPasses
+      || generationStep === 'finalizing'
+      || generationStep === 'complete';
+
     const revisionRunsTelemetry = generationTelemetry?.reviewPasses?.filter((pass) => pass.blockingCount > 0).length ?? null;
-    const revisionCompleted = revisionRunsTelemetry ?? revisionProgress.runs ?? 0;
-    const revisionTotal = Math.max(
+    const revisionCompletedPasses = Math.max(revisionRunsTelemetry ?? 0, revisionProgress.runs);
+    const revisionExpectedPasses = Math.max(
       revisionRunsTelemetry ?? 0,
+      revisionProgress.expectedRuns,
       reviewProgress.blockingPassRuns,
-      revisionProgress.runs,
     );
 
+    const chunkTotal = revisionProgress.chunkTotal ?? 0;
+    const chunkCompleted = Math.min(revisionProgress.chunkCompleted ?? 0, chunkTotal || revisionProgress.chunkCompleted ?? 0);
+    const showChunkProgress = revisionProgress.inProgress && chunkTotal > 0;
+
     const revisionStatus = (() => {
-      if (expectedReviewPasses === 0) return 'Skipped';
-      if (revisionCompleted > 0 && revisionCompleted >= revisionTotal) return 'Complete';
-      if (reviewProgress.blockingPassRuns > revisionCompleted) return 'In progress';
-      if (generationStep === 'reviewing') return 'Pending';
-      if (['finalizing', 'complete'].includes(generationStep)) {
-        return revisionCompleted > 0 ? 'Complete' : 'Skipped';
+      if (revisionProgress.inProgress) return 'In progress';
+      if (revisionExpectedPasses > 0) {
+        if (revisionCompletedPasses >= revisionExpectedPasses) {
+          return 'Complete';
+        }
+        return 'Pending';
+      }
+      if (reviewComplete) {
+        return 'Skipped';
       }
       return 'Pending';
     })();
 
-    rows.push({
+    const revisionProgressValue = showChunkProgress
+      ? (chunkTotal > 0 ? Math.min(chunkCompleted / chunkTotal, 1) : 0)
+      : revisionExpectedPasses > 0
+        ? Math.min(revisionCompletedPasses / revisionExpectedPasses, 1)
+        : revisionStatus === 'Skipped'
+          ? 1
+          : 0;
+
+    const revisionCompletedDisplay = showChunkProgress
+      ? chunkCompleted
+      : revisionExpectedPasses > 0
+        ? revisionCompletedPasses
+        : undefined;
+
+    const revisionTotalDisplay = showChunkProgress
+      ? chunkTotal || undefined
+      : revisionExpectedPasses || undefined;
+
+    const revisionRemainingDisplay = revisionTotalDisplay !== undefined && revisionCompletedDisplay !== undefined
+      ? Math.max(revisionTotalDisplay - revisionCompletedDisplay, 0)
+      : undefined;
+
+    const revisionNote = revisionProgress.focusCaseCount
+      ? `${revisionProgress.focusCaseCount} case${revisionProgress.focusCaseCount === 1 ? '' : 's'}`
+      : undefined;
+
+    register({
       key: 'revision',
       label: 'Revision runs',
       status: revisionStatus,
-      completed: revisionCompleted || undefined,
-      total: revisionTotal || undefined,
-      remaining: revisionTotal ? Math.max(revisionTotal - revisionCompleted, 0) : undefined,
+      completed: revisionCompletedDisplay,
+      total: revisionTotalDisplay,
+      remaining: revisionRemainingDisplay,
+      progress: revisionProgressValue,
+      includeInOverall: revisionExpectedPasses > 0 || revisionProgress.inProgress,
+      note: revisionNote,
     });
 
-    return rows;
+    return {
+      rows,
+      overallProgress: progressCount > 0 ? Math.min(1, progressSum / progressCount) : 0,
+    };
   }, [
     generationPlan.length,
     generationTelemetry,
@@ -366,52 +468,134 @@ export default function Home() {
     Skipped: 'text-blue-200/50',
   };
 
-  const ProgressCard = ({ showSpinner }: { showSpinner: boolean }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 border border-white/20"
-    >
-      <div className="flex items-center gap-3">
-        <span className="relative flex h-3 w-3">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+  const barClassesByStatus: Record<string, string> = {
+    'In progress': 'bg-amber-300',
+    Complete: 'bg-green-400',
+    Pending: 'bg-blue-300/60',
+    Skipped: 'bg-blue-200/50',
+  };
+
+  const runState: 'running' | 'complete' | 'error' = error
+    ? 'error'
+    : generationStep === 'complete'
+      ? 'complete'
+      : 'running';
+
+  const ProgressCard = ({ showSpinner }: { showSpinner: boolean }) => {
+    const overallPercent = Math.round(overallProgress * 100);
+
+    const renderIndicator = () => {
+      if (runState === 'complete') {
+        return (
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500/15 text-green-300">
+            <CheckCircleIcon className="h-5 w-5" />
+          </span>
+        );
+      }
+      if (runState === 'error') {
+        return (
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-500/15 text-red-300">
+            <ExclamationTriangleIcon className="h-5 w-5" />
+          </span>
+        );
+      }
+      return (
+        <span className="relative flex h-4 w-4 items-center justify-center">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400/80"></span>
+          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-400"></span>
         </span>
-        <div>
-          <p className="text-sm font-semibold text-blue-50">
-            {generationStep === 'complete' ? 'Generation complete' : loadingMessage}
-          </p>
-          {progressDescription && (
-            <p className="text-xs text-blue-200/80 mt-1">{progressDescription}</p>
-          )}
+      );
+    };
+
+    const overallBarClass = runState === 'complete'
+      ? 'bg-green-400'
+      : runState === 'error'
+        ? 'bg-red-400'
+        : 'bg-blue-400';
+
+    return (
+      <motion.div
+        layout
+        initial={false}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+        className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 border border-white/20"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            {renderIndicator()}
+            <div>
+              <p className="text-sm font-semibold text-blue-50">
+                {generationStep === 'complete' ? 'Generation complete' : loadingMessage}
+              </p>
+              {progressDescription && (
+                <p className="text-xs text-blue-200/80 mt-1">{progressDescription}</p>
+              )}
+            </div>
+          </div>
+          <span className="text-xs font-medium text-blue-200/80 whitespace-nowrap">{overallPercent}%</span>
         </div>
-      </div>
 
-      <ul className="mt-4 space-y-2 text-sm text-blue-100">
-        {stageRows.map((row) => (
-          <li key={row.key} className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <span className={`h-2.5 w-2.5 rounded-full ${statusDotClasses[row.status] ?? 'bg-blue-200/60'}`}></span>
-              <span>{row.label}</span>
-              <span className={`text-xs ${statusTextClasses[row.status] ?? 'text-blue-200/70'}`}>{row.status}</span>
-            </span>
-            <span className="text-xs text-blue-200/80">
-              {row.total !== undefined
-                ? `${row.completed ?? 0}/${row.total}${row.remaining !== undefined ? ` (${row.remaining} remaining)` : ''}`
-                : row.completed ?? '—'}
-            </span>
-          </li>
-        ))}
-      </ul>
-
-      {showSpinner && (
         <div className="mt-4">
-          <LoadingAnimation message={`${loadingMessage}...`} />
+          <div className="flex items-center justify-between text-xs text-blue-200/80 mb-1">
+            <span>Overall progress</span>
+            <span>{overallPercent}%</span>
+          </div>
+          <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+            <div
+              className={`h-full transition-[width] duration-500 ease-out ${overallBarClass}`}
+              style={{ width: `${Math.min(100, Math.max(0, overallPercent))}%` }}
+            ></div>
+          </div>
         </div>
-      )}
-    </motion.div>
-  );
+
+        <ul className="mt-4 space-y-3 text-sm text-blue-100">
+          {stageRows.map((row) => {
+            const progressValue = row.progress ?? (row.status === 'Complete' || row.status === 'Skipped' ? 1 : 0);
+            const progressPercent = Math.round(progressValue * 100);
+            const isIndeterminate = row.progress === null;
+            const barWidth = isIndeterminate
+              ? '35%'
+              : `${Math.min(100, Math.max(0, progressPercent))}%`;
+            const barClass = `${barClassesByStatus[row.status] ?? 'bg-blue-300/70'} ${isIndeterminate ? 'animate-pulse' : ''}`;
+
+            return (
+              <li key={row.key} className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <span className={`h-2.5 w-2.5 rounded-full ${statusDotClasses[row.status] ?? 'bg-blue-200/60'}`}></span>
+                <span>{row.label}</span>
+                <span className={`text-xs ${statusTextClasses[row.status] ?? 'text-blue-200/70'}`}>{row.status}</span>
+              </span>
+              <span className="text-xs text-blue-200/80">
+                {(() => {
+                  const valueText = row.total !== undefined
+                    ? `${row.completed ?? 0}/${row.total}${row.remaining !== undefined ? ` (${row.remaining} remaining)` : ''}`
+                    : row.completed ?? '—';
+                  const noteText = row.note ? ` • ${row.note}` : '';
+                  return `${valueText}${noteText}`;
+                })()}
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+              <div
+                className={`h-full transition-[width] duration-500 ease-out ${barClass}`}
+                    style={{ width: barWidth }}
+                  ></div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+
+        {showSpinner && (
+          <div className="mt-4">
+            <LoadingAnimation message={`${loadingMessage}...`} />
+          </div>
+        )}
+      </motion.div>
+    );
+  };
 
   // Add effect to clear fileContent when no files are present
   useEffect(() => {
@@ -707,7 +891,15 @@ export default function Home() {
         completedPasses: 0,
         blockingPassRuns: 0,
       });
-      setRevisionProgress({ runs: 0, lastUpdatedCases: 0 });
+      setRevisionProgress({
+        runs: 0,
+        expectedRuns: 0,
+        lastUpdatedCases: 0,
+        inProgress: false,
+        chunkTotal: 0,
+        chunkCompleted: 0,
+        focusCaseCount: 0,
+      });
 
       if (agenticEnabled) {
         setGenerationStep('planning');
@@ -773,7 +965,12 @@ export default function Home() {
           }));
           setRevisionProgress((prev) => ({
             runs: Math.max(prev.runs, blockingRuns),
+            expectedRuns: Math.max(prev.expectedRuns, blockingRuns),
             lastUpdatedCases: prev.lastUpdatedCases,
+            inProgress: false,
+            chunkTotal: prev.chunkTotal,
+            chunkCompleted: prev.chunkCompleted,
+            focusCaseCount: prev.focusCaseCount,
           }));
         }
 
@@ -858,18 +1055,63 @@ export default function Home() {
               completedPasses: Math.max(prev.completedPasses + 1, event.pass ?? prev.completedPasses + 1),
               blockingPassRuns: prev.blockingPassRuns + (event.blockingCount > 0 ? 1 : 0),
             }));
+            if (event.blockingCount > 0) {
+              setRevisionProgress((prev) => ({
+                runs: prev.runs,
+                expectedRuns: prev.expectedRuns + 1,
+                lastUpdatedCases: prev.lastUpdatedCases,
+                inProgress: prev.inProgress,
+                chunkTotal: prev.chunkTotal,
+                chunkCompleted: prev.chunkCompleted,
+                focusCaseCount: prev.focusCaseCount,
+              }));
+            }
             break;
           case 'revision:start':
             setRevisionProgress((prev) => ({
               runs: prev.runs,
+              expectedRuns: Math.max(prev.expectedRuns, prev.runs + 1),
               lastUpdatedCases: prev.lastUpdatedCases,
+              inProgress: true,
+              chunkTotal: event.totalChunks ?? 1,
+              chunkCompleted: 0,
+              focusCaseCount: event.focusCaseCount ?? prev.focusCaseCount,
+            }));
+            setGenerationStep('revising');
+            break;
+          case 'revision:chunk-start':
+            setRevisionProgress((prev) => ({
+              runs: prev.runs,
+              expectedRuns: prev.expectedRuns,
+              lastUpdatedCases: prev.lastUpdatedCases,
+              inProgress: true,
+              chunkTotal: event.totalChunks ?? prev.chunkTotal ?? 1,
+              chunkCompleted: prev.chunkCompleted,
+              focusCaseCount: (event.focusCaseCount ?? prev.focusCaseCount),
+            }));
+            break;
+          case 'revision:chunk-complete':
+            setRevisionProgress((prev) => ({
+              runs: prev.runs,
+              expectedRuns: prev.expectedRuns,
+              lastUpdatedCases: prev.lastUpdatedCases,
+              inProgress: true,
+              chunkTotal: event.totalChunks ?? prev.chunkTotal ?? 1,
+              chunkCompleted: Math.min((prev.chunkCompleted ?? 0) + 1, event.totalChunks ?? prev.chunkTotal ?? 1),
+              focusCaseCount: prev.focusCaseCount,
             }));
             break;
           case 'revision:complete':
             setRevisionProgress((prev) => ({
               runs: prev.runs + 1,
+              expectedRuns: Math.max(prev.expectedRuns, prev.runs + 1),
               lastUpdatedCases: event.updatedCases ?? prev.lastUpdatedCases,
+              inProgress: false,
+              chunkTotal: event.totalChunks ?? prev.chunkTotal,
+              chunkCompleted: event.totalChunks ?? prev.chunkCompleted,
+              focusCaseCount: prev.focusCaseCount,
             }));
+            setGenerationStep('reviewing');
             break;
           default:
             break;
@@ -1621,9 +1863,7 @@ export default function Home() {
 
           {shouldRenderProgressCard && (
             <div ref={progressRef}>
-              <AnimatePresence>
-                <ProgressCard key="progress-card" showSpinner={generationStep !== 'complete'} />
-              </AnimatePresence>
+              <ProgressCard showSpinner={generationStep !== 'complete'} />
             </div>
           )}
 
