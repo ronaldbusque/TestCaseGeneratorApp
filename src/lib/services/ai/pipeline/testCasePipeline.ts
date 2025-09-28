@@ -294,6 +294,12 @@ export class TestCaseAgenticPipeline {
 
     const priorityMode = request.priorityMode ?? 'comprehensive';
 
+    console.log('[Agentic] Planner started', {
+      provider: plannerProvider,
+      model: plannerModel,
+      priorityMode,
+    });
+
     const promptSections = [
       'You are an expert QA strategist. Break the supplied materials into a concise execution plan for generating test cases.',
       `Priority mode: ${priorityMode}. If comprehensive, ensure broad coverage including edge cases. If core-functionality, focus on critical user journeys and regulatory must-haves. Produce a JSON object with an "items" array of plan entries (id, title, area, focus, estimatedCases, chunkRefs when applicable).`,
@@ -330,6 +336,12 @@ export class TestCaseAgenticPipeline {
       id: item.id || `PLAN-${index + 1}`,
     }));
 
+    console.log('[Agentic] Planner completed', {
+      provider: plannerProvider,
+      model: plannerModel,
+      planItems: planItems.length,
+    });
+
     return planItems;
   }
 
@@ -346,10 +358,21 @@ export class TestCaseAgenticPipeline {
     const requestedConcurrency = agenticOptions?.writerConcurrency ?? 1;
     const concurrency = Math.max(1, Math.min(requestedConcurrency, plan.length));
 
+    console.log('[Agentic] Writer stage started', {
+      provider: writerProvider,
+      model: writerModel,
+      totalSlices: plan.length,
+      requestedConcurrency,
+      concurrencyUsed: concurrency,
+    });
+
     const runSlice = async (
       planItem: GenerationPlanItem,
       existingCases: any[]
     ): Promise<{ planItem: GenerationPlanItem; cases: any[]; durationMs: number; warnings: string[] }> => {
+      console.log('[Agentic] Writer slice started', {
+        planId: planItem.id,
+      });
       const prompt = this.buildWriterPrompt(request, planItem, existingCases);
       const model = resolveLanguageModel({ provider: writerProvider, model: writerModel });
       const sliceStart = Date.now();
@@ -377,12 +400,21 @@ export class TestCaseAgenticPipeline {
 
         const cases = result.object.items ?? [];
         const durationMs = Date.now() - sliceStart;
+        console.log('[Agentic] Writer slice completed', {
+          planId: planItem.id,
+          cases: cases.length,
+          durationMs,
+        });
         return { planItem, cases, durationMs, warnings: sliceWarnings };
       } catch (error) {
         const durationMs = Date.now() - sliceStart;
         const message = error instanceof Error ? error.message : 'Unknown generation error';
         const warning = `Failed to generate cases for plan ${planItem.id}: ${message}`;
         sliceWarnings.push(warning);
+        console.warn('[Agentic] Writer slice failed', {
+          planId: planItem.id,
+          error: message,
+        });
         return { planItem, cases: [], durationMs, warnings: sliceWarnings };
       }
     };
@@ -441,6 +473,13 @@ export class TestCaseAgenticPipeline {
       });
     }
 
+    console.log('[Agentic] Writer stage completed', {
+      provider: writerProvider,
+      model: writerModel,
+      slices: slices.length,
+      totalCases: casesById.size,
+    });
+
     return { rawCases: Array.from(casesById.values()), warnings, slices, concurrencyUsed: concurrency };
   }
 
@@ -471,6 +510,11 @@ export class TestCaseAgenticPipeline {
       const passStart = Date.now();
 
       let reviewResult;
+      console.log('[Agentic] Reviewer pass started', {
+        pass,
+        provider: reviewerProvider,
+        model: reviewerModel,
+      });
       try {
         reviewResult = await safeGenerateObject({
           model,
@@ -488,6 +532,10 @@ export class TestCaseAgenticPipeline {
           durationMs,
           feedbackCount: 0,
           blockingCount: 0,
+        });
+        console.warn('[Agentic] Reviewer pass failed', {
+          pass,
+          error: message,
         });
         break;
       }
@@ -523,6 +571,12 @@ export class TestCaseAgenticPipeline {
         feedbackCount: feedback.length,
         blockingCount: blocking.length,
       });
+      console.log('[Agentic] Reviewer pass completed', {
+        pass,
+        durationMs,
+        feedbackCount: normalizedFeedback.length,
+        blockingCount: blocking.length,
+      });
 
       passesExecuted = pass;
 
@@ -535,6 +589,11 @@ export class TestCaseAgenticPipeline {
 
       let revisionResult;
       try {
+        console.log('[Agentic] Revision run started', {
+          pass,
+          provider: writerProvider,
+          model: writerModel,
+        });
         revisionResult = await safeGenerateObject({
           model: writerModelInstance,
           schema: caseSchema,
@@ -544,6 +603,10 @@ export class TestCaseAgenticPipeline {
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown revision error';
         warnings.push(`Revision pass ${pass} failed: ${message}`);
+        console.warn('[Agentic] Revision run failed', {
+          pass,
+          error: message,
+        });
         break;
       }
 
@@ -568,6 +631,10 @@ export class TestCaseAgenticPipeline {
         revisedCases.set(updated.id, updated);
       });
       mutableCases = Array.from(revisedCases.values());
+      console.log('[Agentic] Revision run completed', {
+        pass,
+        updatedCases: revisions.length,
+      });
     }
 
     rawCases.splice(0, rawCases.length, ...mutableCases);

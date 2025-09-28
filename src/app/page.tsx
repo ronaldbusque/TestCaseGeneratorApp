@@ -30,7 +30,7 @@ const MAX_FILE_CONTENT_LENGTH = 8000;
 const MAX_FILE_PREVIEW_LENGTH = 500;
 
 export default function Home() {
-  const { settings, availableProviders } = useProviderSettings();
+  const { settings, availableProviders, quickSelections } = useProviderSettings();
   const [testCaseMode, setTestCaseMode] = useState<TestCaseMode>('high-level');
   const [testPriorityMode, setTestPriorityMode] = useState<TestPriorityMode>('comprehensive');
   const [requirements, setRequirements] = useState('');
@@ -86,6 +86,52 @@ export default function Home() {
     [availableProviders]
   );
 
+  const plannerModelOptions = useMemo(() => {
+    const options: { model: string; label: string }[] = [];
+    const seen = new Set<string>();
+    const addOption = (model: string, label?: string) => {
+      if (!model || seen.has(model)) return;
+      options.push({ model, label: label ?? model });
+      seen.add(model);
+    };
+
+    addOption(settings.testCases.model, settings.testCases.model);
+    quickSelections
+      .filter((qs) => qs.provider === settings.testCases.provider)
+      .forEach((qs) => addOption(qs.model, qs.label ?? qs.model));
+
+    return options;
+  }, [quickSelections, settings.testCases.model, settings.testCases.provider]);
+
+  const reviewerProviderResolved: LLMProvider = reviewerProviderOverride === 'same'
+    ? settings.testCases.provider
+    : reviewerProviderOverride;
+
+  const reviewerDefaultModel = useMemo(() => {
+    if (reviewerProviderOverride === 'same') {
+      return settings.testCases.model;
+    }
+    const descriptor = availableProviders.find((provider) => provider.id === reviewerProviderResolved);
+    return descriptor?.defaultModel ?? descriptor?.models?.[0]?.id ?? settings.testCases.model;
+  }, [availableProviders, reviewerProviderOverride, reviewerProviderResolved, settings.testCases.model]);
+
+  const reviewerModelOptions = useMemo(() => {
+    const options: { model: string; label: string }[] = [];
+    const seen = new Set<string>();
+    const addOption = (model: string | undefined, label?: string) => {
+      if (!model || seen.has(model)) return;
+      options.push({ model, label: label ?? model });
+      seen.add(model);
+    };
+
+    addOption(reviewerDefaultModel, reviewerDefaultModel);
+    quickSelections
+      .filter((qs) => qs.provider === reviewerProviderResolved)
+      .forEach((qs) => addOption(qs.model, qs.label ?? qs.model));
+
+    return options;
+  }, [quickSelections, reviewerDefaultModel, reviewerProviderResolved]);
+
   const generationStepMessages = useMemo(() => ({
     idle: 'Idle',
     analyzing: 'Analyzing uploaded materials and estimating token usage',
@@ -121,12 +167,12 @@ export default function Home() {
     }
   }, [generationStep, agenticEnabled]);
 
-  const shouldShowProgressCard = generationStep !== 'idle';
+  const shouldRenderProgressCard = generationStep !== 'idle' || Boolean(generationTelemetry);
   useEffect(() => {
-    if (shouldShowProgressCard && progressRef.current) {
+    if (shouldRenderProgressCard && progressRef.current) {
       progressRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-  }, [shouldShowProgressCard]);
+  }, [shouldRenderProgressCard, generationStep]);
 
   const severityStyles: Record<string, string> = {
     info: 'bg-blue-500/20 text-blue-100 border-blue-500/30',
@@ -145,7 +191,98 @@ export default function Home() {
     return `${(ms / 1000).toFixed(1)} s`;
   };
 
-  const ProgressCard = () => (
+  const stageRows = useMemo(() => {
+    const rows: Array<{ key: string; label: string; status: string; completed?: number; total?: number; remaining?: number }> = [];
+
+    const planTotal = generationPlan.length || generationTelemetry?.planItemCount || 0;
+    const writerCompleted = generationTelemetry?.writerSlices?.length;
+    const executedReviewPasses = generationTelemetry?.reviewPasses?.length ?? 0;
+    const revisionRuns = generationTelemetry?.reviewPasses?.filter((pass) => pass.blockingCount > 0).length ?? 0;
+    const expectedReviewPasses = Math.max(reviewPasses, executedReviewPasses);
+
+    const plannerStatus = (() => {
+      if (['planning'].includes(generationStep)) return 'In progress';
+      if (['generating', 'reviewing', 'finalizing', 'complete'].includes(generationStep) || generationTelemetry) return 'Complete';
+      if (generationStep === 'analyzing') return 'In progress';
+      return 'Pending';
+    })();
+
+    rows.push({
+      key: 'planning',
+      label: 'Planning',
+      status: plannerStatus,
+      completed: generationTelemetry ? planTotal : undefined,
+      total: planTotal,
+      remaining: generationTelemetry ? 0 : undefined,
+    });
+
+    const writerStatus = (() => {
+      if (generationStep === 'generating') return 'In progress';
+      if (['reviewing', 'finalizing', 'complete'].includes(generationStep) || generationTelemetry?.writerSlices) return 'Complete';
+      if (['analyzing', 'planning'].includes(generationStep)) return 'Pending';
+      return 'Pending';
+    })();
+
+    rows.push({
+      key: 'writer',
+      label: 'Writer slices',
+      status: writerStatus,
+      completed: writerCompleted,
+      total: planTotal,
+      remaining: writerCompleted !== undefined && planTotal ? Math.max(planTotal - writerCompleted, 0) : undefined,
+    });
+
+    const reviewStatus = (() => {
+      if (expectedReviewPasses === 0 && executedReviewPasses === 0) return 'Skipped';
+      if (generationStep === 'reviewing') return 'In progress';
+      if (['finalizing', 'complete'].includes(generationStep) || executedReviewPasses > 0) return 'Complete';
+      return 'Pending';
+    })();
+
+    rows.push({
+      key: 'review',
+      label: 'Reviewer passes',
+      status: reviewStatus,
+      completed: executedReviewPasses || undefined,
+      total: expectedReviewPasses || undefined,
+      remaining: expectedReviewPasses ? Math.max(expectedReviewPasses - executedReviewPasses, 0) : undefined,
+    });
+
+    const revisionStatus = (() => {
+      if (expectedReviewPasses === 0) return 'Skipped';
+      if (revisionRuns > 0) return 'Complete';
+      if (generationStep === 'reviewing') return 'Pending';
+      if (['finalizing', 'complete'].includes(generationStep)) return revisionRuns > 0 ? 'Complete' : 'Skipped';
+      return 'Pending';
+    })();
+
+    rows.push({
+      key: 'revision',
+      label: 'Revision runs',
+      status: revisionStatus,
+      completed: revisionRuns || undefined,
+      total: executedReviewPasses || undefined,
+      remaining: executedReviewPasses ? Math.max(executedReviewPasses - revisionRuns, 0) : undefined,
+    });
+
+    return rows;
+  }, [generationPlan.length, generationTelemetry, generationStep, reviewPasses]);
+
+  const statusDotClasses: Record<string, string> = {
+    'In progress': 'bg-amber-400',
+    Complete: 'bg-green-400',
+    Pending: 'bg-blue-400/60',
+    Skipped: 'bg-blue-200/60',
+  };
+
+  const statusTextClasses: Record<string, string> = {
+    'In progress': 'text-amber-300',
+    Complete: 'text-green-300',
+    Pending: 'text-blue-200/70',
+    Skipped: 'text-blue-200/50',
+  };
+
+  const ProgressCard = ({ showSpinner }: { showSpinner: boolean }) => (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -158,12 +295,37 @@ export default function Home() {
           <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
         </span>
         <div>
-          <p className="text-sm font-semibold text-blue-50">{loadingMessage}</p>
+          <p className="text-sm font-semibold text-blue-50">
+            {generationStep === 'complete' ? 'Generation complete' : loadingMessage}
+          </p>
           {progressDescription && (
             <p className="text-xs text-blue-200/80 mt-1">{progressDescription}</p>
           )}
         </div>
       </div>
+
+      <ul className="mt-4 space-y-2 text-sm text-blue-100">
+        {stageRows.map((row) => (
+          <li key={row.key} className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <span className={`h-2.5 w-2.5 rounded-full ${statusDotClasses[row.status] ?? 'bg-blue-200/60'}`}></span>
+              <span>{row.label}</span>
+              <span className={`text-xs ${statusTextClasses[row.status] ?? 'text-blue-200/70'}`}>{row.status}</span>
+            </span>
+            <span className="text-xs text-blue-200/80">
+              {row.total !== undefined
+                ? `${row.completed ?? 0}/${row.total}${row.remaining !== undefined ? ` (${row.remaining} remaining)` : ''}`
+                : row.completed ?? '—'}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      {showSpinner && (
+        <div className="mt-4">
+          <LoadingAnimation message={`${loadingMessage}...`} />
+        </div>
+      )}
     </motion.div>
   );
 
@@ -207,7 +369,6 @@ export default function Home() {
     setGenerationTelemetry(null);
     setShowPlanDetails(false);
     setShowTelemetryDetails(false);
-    setShowReviewDetails(false);
     setShowReviewDetails(false);
   };
 
@@ -301,8 +462,8 @@ export default function Home() {
 
     const writerProvider = settings.testCases.provider;
     const writerModel = settings.testCases.model;
-    const plannerModel = plannerModelOverride.trim();
-    const reviewerModel = reviewerModelOverride.trim();
+    const plannerModel = plannerModelOverride.trim() || settings.testCases.model;
+    const reviewerModel = reviewerModelOverride.trim() || reviewerDefaultModel;
 
     const reviewerProvider = reviewerProviderOverride === 'same'
       ? writerProvider
@@ -319,16 +480,16 @@ export default function Home() {
     return {
       enableAgentic: true,
       plannerProvider: writerProvider,
-      plannerModel: plannerModel ? plannerModel : undefined,
+      plannerModel,
       writerProvider,
       writerModel,
       reviewerProvider,
-      reviewerModel: reviewerModel ? reviewerModel : undefined,
+      reviewerModel,
       maxReviewPasses: normalizedPasses,
       chunkStrategy: 'auto',
       writerConcurrency: normalizedConcurrency,
     } as const;
-  }, [agenticEnabled, plannerModelOverride, reviewerModelOverride, reviewerProviderOverride, reviewPasses, writerConcurrency, settings.testCases.model, settings.testCases.provider]);
+  }, [agenticEnabled, plannerModelOverride, reviewerModelOverride, reviewerDefaultModel, reviewerProviderOverride, reviewPasses, writerConcurrency, settings.testCases.model, settings.testCases.provider]);
 
   const fetchFileTokenSummary = useCallback(async (
     payloads: UploadedFilePayload[],
@@ -807,20 +968,18 @@ export default function Home() {
               </label>
               <select
                 value={plannerModelOverride || settings.testCases.model}
-                onChange={(event) => setPlannerModelOverride(event.target.value)}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setPlannerModelOverride(value === settings.testCases.model ? '' : value);
+                }}
                 disabled={!agenticEnabled}
                 className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <option value={settings.testCases.model} className="bg-slate-900 text-blue-50">
-                  {settings.testCases.model}
-                </option>
-                {quickSelections
-                  .filter((qs) => qs.provider === settings.testCases.provider)
-                  .map((qs) => (
-                    <option key={qs.id} value={qs.model} className="bg-slate-900 text-blue-50">
-                      {qs.model}
-                    </option>
-                  ))}
+                {plannerModelOptions.map((option) => (
+                  <option key={option.model} value={option.model} className="bg-slate-900 text-blue-50">
+                    {option.label}
+                  </option>
+                ))}
               </select>
               <p className="mt-1 text-[0.7rem] text-blue-200/60">Choose a planner model; defaults to the main generator model.</p>
             </div>
@@ -849,21 +1008,19 @@ export default function Home() {
                 Reviewer model override
               </label>
               <select
-                value={reviewerModelOverride || (reviewerProviderOverride === 'same' ? settings.testCases.model : '')}
-                onChange={(event) => setReviewerModelOverride(event.target.value)}
+                value={reviewerModelOverride || reviewerDefaultModel}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setReviewerModelOverride(value === reviewerDefaultModel ? '' : value);
+                }}
                 disabled={!agenticEnabled}
                 className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <option value={reviewerProviderOverride === 'same' ? settings.testCases.model : ''} className="bg-slate-900 text-blue-50">
-                  {reviewerProviderOverride === 'same' ? settings.testCases.model : 'Default reviewer model'}
-                </option>
-                {quickSelections
-                  .filter((qs) => qs.provider === (reviewerProviderOverride === 'same' ? settings.testCases.provider : reviewerProviderOverride))
-                  .map((qs) => (
-                    <option key={qs.id} value={qs.model} className="bg-slate-900 text-blue-50">
-                      {qs.model}
-                    </option>
-                  ))}
+                {reviewerModelOptions.map((option) => (
+                  <option key={option.model} value={option.model} className="bg-slate-900 text-blue-50">
+                    {option.label}
+                  </option>
+                ))}
               </select>
               <p className="mt-1 text-[0.7rem] text-blue-200/60">Select a reviewer model; defaults to the writer model.</p>
             </div>
@@ -1141,17 +1298,10 @@ export default function Home() {
             </div>
           )}
 
-          {shouldShowProgressCard && generationStep !== 'complete' && (
+          {shouldRenderProgressCard && (
             <div ref={progressRef}>
               <AnimatePresence>
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-8 border border-white/20"
-                >
-                  <LoadingAnimation message={`${loadingMessage}...`} />
-                </motion.div>
+                <ProgressCard key="progress-card" showSpinner={generationStep !== 'complete'} />
               </AnimatePresence>
             </div>
           )}
