@@ -67,7 +67,18 @@ describe('TestCaseAgenticPipeline', () => {
       }
 
       if (prompt.includes('reviewing generated')) {
-        const review = { feedback: [{ caseId: 'TC-002', severity: 'minor', summary: 'Add boundary case' }], summary: 'Minor issues' };
+        const review = {
+          feedback: [
+            {
+              caseId: 'TC-002',
+              issueType: 'coverage-gap',
+              severity: 'minor',
+              summary: 'Add boundary case',
+              suggestion: 'Add a scenario covering min/max email length.',
+            },
+          ],
+          summary: 'Minor issues',
+        };
         return { object: review, text: JSON.stringify(review) };
       }
 

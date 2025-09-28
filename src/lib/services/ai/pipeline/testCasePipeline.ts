@@ -36,13 +36,20 @@ const PlannerSchema = z.object({
   items: z.array(PlannerItemSchema),
 }).strict();
 
-const ReviewFeedbackSchema = z.object({
-  caseId: z.string().min(1),
-  issueType: z.string(),
-  severity: z.enum(['info', 'minor', 'major', 'critical']).default('info'),
-  summary: z.string().min(1),
-  suggestion: z.string(),
-}).strict();
+const ReviewFeedbackSchema = z
+  .object({
+    caseId: z.string().min(1),
+    issueType: z.string().min(1),
+    severity: z.enum(['info', 'minor', 'major', 'critical']),
+    summary: z.string().min(1),
+    suggestion: z.string().min(1),
+  })
+  .strict()
+  .transform((entry) => ({
+    ...entry,
+    issueType: entry.issueType.trim() || 'general',
+    suggestion: entry.suggestion.trim() || 'No suggestion provided.',
+  }));
 
 const ReviewResultSchema = z.object({
   feedback: z.array(ReviewFeedbackSchema),
