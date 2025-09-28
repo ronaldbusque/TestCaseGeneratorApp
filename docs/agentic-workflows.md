@@ -23,7 +23,7 @@ graph TD
 | Stage | LLM Calls | Notes |
 |-------|-----------|-------|
 | Planner | 1 per request (plus at most 1 retry on malformed JSON) | Uses a QA-strategist prompt that summarizes requirements/files, enforces focus length limits, and asks for JSON plan items (`id`, `title`, `area`, optional `focus`, `estimatedCases`, `chunkRefs`). |
-| Writer | 1 per plan item (plus optional retry) | Each item yields a JSON array of cases matching the selected mode. |
+| Writer | 1 per plan item (plus optional retry) | Each item yields a JSON array of cases matching the selected mode, now grouping closely-related checks into a single case where practical to reduce duplication. |
 | Reviewer | Up to _maxReviewPasses_ calls (each may retry once) | Produces structured feedback. |
 | Revision | One call per reviewer pass that has blocking feedback | Only executes if reviewer returns `major`/`critical` items. |
 

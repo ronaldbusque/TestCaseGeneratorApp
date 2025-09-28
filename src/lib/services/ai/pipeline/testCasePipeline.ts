@@ -38,16 +38,16 @@ const PlannerSchema = z.object({
 
 const ReviewFeedbackSchema = z.object({
   caseId: z.string().min(1),
-  issueType: z.string().optional(),
+  issueType: z.string().default(''),
   severity: z.enum(['info', 'minor', 'major', 'critical']).default('info'),
   summary: z.string().min(1),
-  suggestion: z.string().optional(),
-});
+  suggestion: z.string().default(''),
+}).strict();
 
 const ReviewResultSchema = z.object({
   feedback: z.array(ReviewFeedbackSchema),
   summary: z.string().optional(),
-});
+}).strict();
 
 const DetailedTestCaseItemSchema = z.object({
   id: z.string().min(1),
@@ -544,6 +544,7 @@ export class TestCaseAgenticPipeline {
       'You are a senior QA engineer. Generate additional test cases for the provided plan item.',
       `Plan item: ${planItem.id} - ${planItem.title} (${planItem.area}). Focus: ${planItem.focus ?? 'General coverage'} `,
       `Mode: ${request.mode}. Priority: ${priorityMode}. If comprehensive, include happy, alternate, and negative flows. If core-functionality, concentrate on essential success paths and blockers.`,
+      'Group closely-related validations into the same test case when they belong to one workflow. Only split cases when outcomes or personas differ materially (e.g., happy vs negative vs edge). Use the description to summarize key checks in a single paragraph separated by semicolons.',
       requirements ? `Requirements:\n${requirements}` : '',
       filesSummary ? `Reference documents:\n${filesSummary}` : '',
       scenarioSummary,
