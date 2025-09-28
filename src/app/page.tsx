@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { FileUpload } from '../components/FileUpload';
 import { RequirementsInput } from '@/components/RequirementsInput';
 import { TestCaseList } from '@/components/TestCaseList';
-import { TestCase, TestCaseMode, HighLevelTestCase, TestPriorityMode, UploadedFilePayload, FileTokenSummary, GenerationPlanItem, ReviewFeedbackItem, AgenticTelemetry } from '@/lib/types';
+import { TestCase, TestCaseMode, HighLevelTestCase, TestPriorityMode, UploadedFilePayload, FileTokenSummary, GenerationPlanItem, ReviewFeedbackItem, AgenticTelemetry, TestCaseGenerationResponse, AgenticProgressEvent } from '@/lib/types';
 import { AnimatePresence } from 'framer-motion';
 import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { LoadingAnimation } from '@/components/LoadingAnimation';
@@ -17,7 +17,7 @@ import { TestPriorityToggle } from '@/components/TestPriorityToggle';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { NavigationBar } from '@/components/NavigationBar';
-import { fetchApi } from '@/lib/utils/apiClient';
+import { fetchApi, fetchApiStream } from '@/lib/utils/apiClient';
 import { useProviderSettings } from '@/lib/context/ProviderSettingsContext';
 import { QuickModelSwitcher } from '@/components/QuickModelSwitcher';
 import type { LLMProvider } from '@/lib/types/providers';
@@ -74,6 +74,21 @@ export default function Home() {
   const [showPlanDetails, setShowPlanDetails] = useState(false);
   const [showTelemetryDetails, setShowTelemetryDetails] = useState(false);
   const [showReviewDetails, setShowReviewDetails] = useState(false);
+  const [plannerProgress, setPlannerProgress] = useState({ started: false, completed: false, planItems: 0 });
+  const [writerProgress, setWriterProgress] = useState({
+    started: false,
+    completedSlices: 0,
+    totalSlices: 0,
+    totalCases: 0,
+    concurrency: 1,
+  });
+  const [reviewProgress, setReviewProgress] = useState({
+    started: false,
+    maxPasses: 0,
+    completedPasses: 0,
+    blockingPassRuns: 0,
+  });
+  const [revisionProgress, setRevisionProgress] = useState({ runs: 0, lastUpdatedCases: 0 });
   const progressRef = useRef<HTMLDivElement | null>(null);
 
   const reviewerProviderOptions = useMemo(
@@ -212,16 +227,18 @@ export default function Home() {
   const stageRows = useMemo(() => {
     const rows: Array<{ key: string; label: string; status: string; completed?: number; total?: number; remaining?: number }> = [];
 
-    const planTotal = generationPlan.length || generationTelemetry?.planItemCount || 0;
-    const writerCompleted = generationTelemetry?.writerSlices?.length;
-    const executedReviewPasses = generationTelemetry?.reviewPasses?.length ?? 0;
-    const revisionRuns = generationTelemetry?.reviewPasses?.filter((pass) => pass.blockingCount > 0).length ?? 0;
-    const expectedReviewPasses = Math.max(reviewPasses, executedReviewPasses);
+    const planTotal = Math.max(
+      generationPlan.length,
+      generationTelemetry?.planItemCount ?? 0,
+      plannerProgress.planItems ?? 0,
+    );
 
     const plannerStatus = (() => {
-      if (['planning'].includes(generationStep)) return 'In progress';
-      if (['generating', 'reviewing', 'finalizing', 'complete'].includes(generationStep) || generationTelemetry) return 'Complete';
-      if (generationStep === 'analyzing') return 'In progress';
+      if (plannerProgress.started && !plannerProgress.completed) return 'In progress';
+      if (plannerProgress.completed || ['generating', 'reviewing', 'finalizing', 'complete'].includes(generationStep) || generationTelemetry) {
+        return 'Complete';
+      }
+      if (generationStep === 'planning' || generationStep === 'analyzing') return 'In progress';
       return 'Pending';
     })();
 
@@ -229,15 +246,28 @@ export default function Home() {
       key: 'planning',
       label: 'Planning',
       status: plannerStatus,
-      completed: planTotal || undefined,
-      total: planTotal,
-      remaining: planTotal ? 0 : undefined,
+      completed: plannerProgress.completed ? planTotal : undefined,
+      total: planTotal > 0 || plannerProgress.completed ? planTotal : undefined,
+      remaining: plannerProgress.completed ? 0 : planTotal > 0 ? planTotal : undefined,
     });
 
+    const writerTotal = Math.max(
+      planTotal,
+      writerProgress.totalSlices || 0,
+      generationTelemetry?.writerSlices?.length ?? 0,
+    );
+
+    const writerCompletedCount = generationTelemetry?.writerSlices?.length ?? (writerProgress.started ? writerProgress.completedSlices : undefined);
+
     const writerStatus = (() => {
-      if (generationStep === 'generating') return 'In progress';
-      if (['reviewing', 'finalizing', 'complete'].includes(generationStep) || generationTelemetry?.writerSlices) return 'Complete';
-      if (['analyzing', 'planning'].includes(generationStep)) return 'Pending';
+      if (writerProgress.started && (writerCompletedCount ?? 0) < (writerTotal || 0)) return 'In progress';
+      if (
+        ['reviewing', 'finalizing', 'complete'].includes(generationStep) ||
+        (writerTotal > 0 && (writerCompletedCount ?? 0) >= writerTotal)
+      ) {
+        return 'Complete';
+      }
+      if (plannerProgress.completed || generationStep === 'generating') return 'In progress';
       return 'Pending';
     })();
 
@@ -245,20 +275,31 @@ export default function Home() {
       key: 'writer',
       label: 'Writer slices',
       status: writerStatus,
-      completed: writerCompleted ?? (generationStep === 'generating' ? 0 : undefined),
-      total: planTotal,
-      remaining:
-        planTotal && writerCompleted !== undefined
-          ? Math.max(planTotal - writerCompleted, 0)
-          : generationStep === 'generating'
-            ? Math.max(planTotal - (writerCompleted ?? 0), 0)
-            : undefined,
+      completed: writerCompletedCount ?? undefined,
+      total: writerTotal || undefined,
+      remaining: writerTotal
+        ? Math.max(writerTotal - (writerCompletedCount ?? 0), 0)
+        : undefined,
     });
+
+    const executedReviewPasses = generationTelemetry?.reviewPasses?.length ?? reviewProgress.completedPasses ?? 0;
+
+    const expectedReviewPasses = Math.max(
+      reviewPasses,
+      reviewProgress.maxPasses,
+      executedReviewPasses,
+    );
 
     const reviewStatus = (() => {
       if (expectedReviewPasses === 0 && executedReviewPasses === 0) return 'Skipped';
-      if (generationStep === 'reviewing') return 'In progress';
-      if (['finalizing', 'complete'].includes(generationStep) || executedReviewPasses > 0) return 'Complete';
+      if (reviewProgress.started && executedReviewPasses < expectedReviewPasses) return 'In progress';
+      if (
+        executedReviewPasses >= expectedReviewPasses ||
+        ['finalizing', 'complete'].includes(generationStep)
+      ) {
+        return 'Complete';
+      }
+      if (writerProgress.started) return 'Pending';
       return 'Pending';
     })();
 
@@ -271,11 +312,22 @@ export default function Home() {
       remaining: expectedReviewPasses ? Math.max(expectedReviewPasses - executedReviewPasses, 0) : undefined,
     });
 
+    const revisionRunsTelemetry = generationTelemetry?.reviewPasses?.filter((pass) => pass.blockingCount > 0).length ?? null;
+    const revisionCompleted = revisionRunsTelemetry ?? revisionProgress.runs ?? 0;
+    const revisionTotal = Math.max(
+      revisionRunsTelemetry ?? 0,
+      reviewProgress.blockingPassRuns,
+      revisionProgress.runs,
+    );
+
     const revisionStatus = (() => {
       if (expectedReviewPasses === 0) return 'Skipped';
-      if (revisionRuns > 0) return 'Complete';
+      if (revisionCompleted > 0 && revisionCompleted >= revisionTotal) return 'Complete';
+      if (reviewProgress.blockingPassRuns > revisionCompleted) return 'In progress';
       if (generationStep === 'reviewing') return 'Pending';
-      if (['finalizing', 'complete'].includes(generationStep)) return revisionRuns > 0 ? 'Complete' : 'Skipped';
+      if (['finalizing', 'complete'].includes(generationStep)) {
+        return revisionCompleted > 0 ? 'Complete' : 'Skipped';
+      }
       return 'Pending';
     })();
 
@@ -283,13 +335,22 @@ export default function Home() {
       key: 'revision',
       label: 'Revision runs',
       status: revisionStatus,
-      completed: revisionRuns || undefined,
-      total: executedReviewPasses || undefined,
-      remaining: executedReviewPasses ? Math.max(executedReviewPasses - revisionRuns, 0) : undefined,
+      completed: revisionCompleted || undefined,
+      total: revisionTotal || undefined,
+      remaining: revisionTotal ? Math.max(revisionTotal - revisionCompleted, 0) : undefined,
     });
 
     return rows;
-  }, [generationPlan.length, generationTelemetry, generationStep, reviewPasses]);
+  }, [
+    generationPlan.length,
+    generationTelemetry,
+    generationStep,
+    plannerProgress,
+    writerProgress,
+    reviewProgress,
+    revisionProgress,
+    reviewPasses,
+  ]);
 
   const statusDotClasses: Record<string, string> = {
     'In progress': 'bg-amber-400',
@@ -511,6 +572,7 @@ export default function Home() {
       maxReviewPasses: normalizedPasses,
       chunkStrategy: 'auto',
       writerConcurrency: normalizedConcurrency,
+      streamProgress: true,
     } as const;
   }, [agenticEnabled, plannerModelOverride, reviewerModelOverride, writerModelOverride, reviewerDefaultModel, reviewerProviderOverride, reviewPasses, writerConcurrency, settings.testCases.model, settings.testCases.provider]);
 
@@ -620,68 +682,280 @@ export default function Home() {
       setShowPlanDetails(false);
       setShowTelemetryDetails(false);
       setShowReviewDetails(false);
-      setShowReviewDetails(false);
 
-      // Only clear converted states when generating new high-level test cases
       if (testCaseMode === 'high-level') {
         setConvertedTestCases([]);
         setConvertedScenarioIds(new Set());
       }
 
+      const agenticOptions = buildAgenticOptions();
+      const shouldStream = Boolean(agenticOptions?.streamProgress);
+      const normalizedPasses = agenticOptions?.maxReviewPasses ?? 0;
+      const initialConcurrency = agenticOptions?.writerConcurrency ?? 1;
+
+      setPlannerProgress({ started: false, completed: false, planItems: 0 });
+      setWriterProgress({
+        started: false,
+        completedSlices: 0,
+        totalSlices: 0,
+        totalCases: 0,
+        concurrency: initialConcurrency,
+      });
+      setReviewProgress({
+        started: false,
+        maxPasses: normalizedPasses,
+        completedPasses: 0,
+        blockingPassRuns: 0,
+      });
+      setRevisionProgress({ runs: 0, lastUpdatedCases: 0 });
+
       if (agenticEnabled) {
         setGenerationStep('planning');
+        if (!shouldStream) {
+          setTimeout(() => {
+            setGenerationStep((prev) => (prev === 'planning' ? 'generating' : prev));
+          }, 150);
+        }
       } else {
         setGenerationStep('generating');
-      }
-
-      const agenticOptions = buildAgenticOptions();
-
-      if (agenticEnabled) {
-        setTimeout(() => {
-          setGenerationStep((prev) => (prev === 'planning' ? 'generating' : prev));
-        }, 150);
       }
 
       const filePayloads = preparedFilePayloads.length === uploadedFiles.length
         ? preparedFilePayloads
         : await buildFilePayloads(uploadedFiles);
 
-      // Call the protected API endpoint instead of using the AI service directly
       console.log(`[Client] Calling test case generation API - Mode: ${testCaseMode}`);
-      const result = await fetchApi('/api/generate', {
+
+      const requestPayload = {
+        requirements: manualRequirements,
+        fileContent,
+        mode: testCaseMode,
+        priorityMode: testPriorityMode,
+        files: filePayloads,
+        provider: settings.testCases.provider,
+        model: settings.testCases.model,
+        agenticOptions,
+      };
+
+      const requestInit: RequestInit = {
         method: 'POST',
-        body: JSON.stringify({
-          requirements: manualRequirements,
-          fileContent: fileContent, // Pass the file content separately
-          mode: testCaseMode,
-          priorityMode: testPriorityMode,
-          files: filePayloads,
-          provider: settings.testCases.provider,
-          model: settings.testCases.model,
-          agenticOptions,
-        })
-      });
+        body: JSON.stringify(requestPayload),
+      };
 
-      if (result.error) {
-        throw new Error(result.error);
+      const applyFinalResult = (result: TestCaseGenerationResponse) => {
+        if (result.error) {
+          throw new Error(result.error);
+        }
+
+        if (result.plan) {
+          setPlannerProgress({ started: true, completed: true, planItems: result.plan.length });
+        }
+
+        if (result.telemetry?.writerSlices) {
+          const completedSlices = result.telemetry.writerSlices.length;
+          setWriterProgress((prev) => ({
+            started: true,
+            completedSlices: Math.max(prev.completedSlices, completedSlices),
+            totalSlices: Math.max(prev.totalSlices, completedSlices),
+            totalCases: result.telemetry?.testCaseCount ?? prev.totalCases,
+            concurrency: result.telemetry?.writerConcurrency ?? prev.concurrency,
+          }));
+        }
+
+        if (result.telemetry?.reviewPasses) {
+          const reviewPassCount = result.telemetry.reviewPasses.length;
+          const blockingRuns = result.telemetry.reviewPasses.filter((pass) => pass.blockingCount > 0).length;
+          setReviewProgress((prev) => ({
+            started: reviewPassCount > 0 || prev.started,
+            maxPasses: Math.max(prev.maxPasses, reviewPassCount, normalizedPasses),
+            completedPasses: Math.max(prev.completedPasses, reviewPassCount),
+            blockingPassRuns: Math.max(prev.blockingPassRuns, blockingRuns),
+          }));
+          setRevisionProgress((prev) => ({
+            runs: Math.max(prev.runs, blockingRuns),
+            lastUpdatedCases: prev.lastUpdatedCases,
+          }));
+        }
+
+        if (agenticOptions?.enableAgentic && (result.passesExecuted ?? 0) > 0) {
+          setGenerationStep('reviewing');
+        }
+
+        setCurrentTestCases(result.testCases ?? []);
+        setGenerationPlan(result.plan ?? []);
+        setReviewFeedback(result.reviewFeedback ?? []);
+        setGenerationWarnings(result.warnings ?? []);
+        setGenerationTelemetry(result.telemetry ?? null);
+        setShowPlanDetails(false);
+        setShowTelemetryDetails(false);
+        setShowReviewDetails(false);
+
+        setGenerationStep('finalizing');
+        setGenerationStep('complete');
+      };
+
+      const parseProgressEvent = (event: AgenticProgressEvent) => {
+        switch (event.type) {
+          case 'planner:start':
+            setPlannerProgress({ started: true, completed: false, planItems: 0 });
+            break;
+          case 'planner:complete':
+            setPlannerProgress({ started: true, completed: true, planItems: event.planItems ?? 0 });
+            break;
+          case 'writer:start':
+            setWriterProgress({
+              started: true,
+              completedSlices: 0,
+              totalSlices: event.totalSlices ?? 0,
+              totalCases: 0,
+              concurrency: event.concurrency ?? initialConcurrency,
+            });
+            setGenerationStep('generating');
+            break;
+          case 'writer:slice-start':
+            setWriterProgress((prev) => ({
+              ...prev,
+              started: true,
+              totalSlices: event.totalSlices ?? prev.totalSlices,
+            }));
+            break;
+          case 'writer:slice-complete':
+            setWriterProgress((prev) => {
+              const reportedTotal = event.totalSlices ?? prev.totalSlices;
+              const inferredTotal = reportedTotal || Math.max(prev.totalSlices, prev.completedSlices + 1);
+              const completed = Math.min(prev.completedSlices + 1, inferredTotal);
+              return {
+                ...prev,
+                started: true,
+                totalSlices: inferredTotal,
+                completedSlices: completed,
+                totalCases: prev.totalCases + (event.cases ?? 0),
+              };
+            });
+            break;
+          case 'writer:complete':
+            setWriterProgress((prev) => ({
+              ...prev,
+              started: true,
+              totalSlices: event.totalSlices ?? prev.totalSlices,
+              completedSlices: event.totalSlices ?? prev.totalSlices ?? prev.completedSlices,
+              totalCases: event.totalCases ?? prev.totalCases,
+            }));
+            break;
+          case 'review:pass-start':
+            setReviewProgress((prev) => ({
+              started: true,
+              maxPasses: Math.max(prev.maxPasses, event.maxPasses ?? prev.maxPasses, normalizedPasses),
+              completedPasses: prev.completedPasses,
+              blockingPassRuns: prev.blockingPassRuns,
+            }));
+            setGenerationStep('reviewing');
+            break;
+          case 'review:pass-complete':
+            setReviewProgress((prev) => ({
+              started: true,
+              maxPasses: Math.max(prev.maxPasses, event.maxPasses ?? prev.maxPasses, normalizedPasses),
+              completedPasses: Math.max(prev.completedPasses + 1, event.pass ?? prev.completedPasses + 1),
+              blockingPassRuns: prev.blockingPassRuns + (event.blockingCount > 0 ? 1 : 0),
+            }));
+            break;
+          case 'revision:start':
+            setRevisionProgress((prev) => ({
+              runs: prev.runs,
+              lastUpdatedCases: prev.lastUpdatedCases,
+            }));
+            break;
+          case 'revision:complete':
+            setRevisionProgress((prev) => ({
+              runs: prev.runs + 1,
+              lastUpdatedCases: event.updatedCases ?? prev.lastUpdatedCases,
+            }));
+            break;
+          default:
+            break;
+        }
+      };
+
+      const streamProgress = async () => {
+        const response = await fetchApiStream('/api/generate', requestInit);
+        const contentType = response.headers.get('Content-Type') ?? '';
+
+        if (!contentType.includes('application/x-ndjson') || !response.body) {
+          const fallback = await response.json();
+          applyFinalResult(fallback);
+          return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let finalReceived = false;
+        let streamError: Error | null = null;
+        let shouldStop = false;
+
+        const processBuffer = () => {
+          while (!shouldStop) {
+            const newlineIndex = buffer.indexOf('\n');
+            if (newlineIndex === -1) {
+              break;
+            }
+            const line = buffer.slice(0, newlineIndex).trim();
+            buffer = buffer.slice(newlineIndex + 1);
+            if (!line) {
+              continue;
+            }
+            try {
+              const event = JSON.parse(line) as AgenticProgressEvent;
+              if (event.type === 'error') {
+                streamError = new Error(event.message || 'Streaming error');
+                shouldStop = true;
+                return;
+              }
+              if (event.type === 'final') {
+                applyFinalResult(event.result);
+                finalReceived = true;
+                shouldStop = true;
+                return;
+              }
+              parseProgressEvent(event);
+            } catch (parseError) {
+              console.warn('Failed to parse progress event', parseError);
+            }
+          }
+        };
+
+        try {
+          while (!shouldStop) {
+            const { value, done } = await reader.read();
+            if (done) {
+              break;
+            }
+            buffer += decoder.decode(value, { stream: true });
+            processBuffer();
+          }
+          if (!shouldStop) {
+            buffer += decoder.decode();
+            processBuffer();
+          }
+        } finally {
+          reader.releaseLock();
+        }
+
+        if (streamError) {
+          throw streamError;
+        }
+
+        if (!finalReceived) {
+          throw new Error('Stream ended before final result was received.');
+        }
+      };
+
+      if (shouldStream) {
+        await streamProgress();
+      } else {
+        const result = await fetchApi('/api/generate', requestInit);
+        applyFinalResult(result);
       }
-
-      if (agenticOptions?.enableAgentic && (result.passesExecuted ?? 0) > 0) {
-        setGenerationStep('reviewing');
-      }
-
-      setCurrentTestCases(result.testCases ?? []);
-      setGenerationPlan(result.plan ?? []);
-      setReviewFeedback(result.reviewFeedback ?? []);
-      setGenerationWarnings(result.warnings ?? []);
-      setGenerationTelemetry(result.telemetry ?? null);
-      setShowPlanDetails(false);
-      setShowTelemetryDetails(false);
-      setShowReviewDetails(false);
-      setShowReviewDetails(false);
-
-      setGenerationStep('finalizing');
-      setGenerationStep('complete');
     } catch (error) {
       console.error('Generation error:', error);
       setError(error instanceof Error ? error.message : 'Failed to generate test cases');

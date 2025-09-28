@@ -169,7 +169,8 @@ async function safeGenerateObject<T>(options: GenerateObjectOptions<T>) {
 
 export class TestCaseAgenticPipeline {
   async generate(
-    request: TestCaseGenerationRequest
+    request: TestCaseGenerationRequest,
+    progressCallback?: (event: AgenticProgressEvent) => void
   ): Promise<TestCaseGenerationResponse> {
     const agenticOptions = request.agenticOptions;
 
@@ -179,7 +180,8 @@ export class TestCaseAgenticPipeline {
 
     const startTime = Date.now();
     const context = this.buildContext(request, agenticOptions);
-    const artifacts = await this.runAgenticWorkflow(context);
+    progressCallback?.({ type: 'planner:start' });
+    const artifacts = await this.runAgenticWorkflow(context, progressCallback);
     const totalDurationMs = Date.now() - startTime;
 
     const warnings = artifacts.warnings;
@@ -188,6 +190,7 @@ export class TestCaseAgenticPipeline {
       totalDurationMs,
       plannerDurationMs: artifacts.telemetry.plannerDurationMs,
       writerDurationMs: artifacts.telemetry.writerDurationMs,
+      writerConcurrency: artifacts.telemetry.writerConcurrency,
       reviewerDurationMs: artifacts.telemetry.reviewerDurationMs,
       planItemCount: artifacts.plan.length,
       testCaseCount: artifacts.rawCases.length,
@@ -202,7 +205,7 @@ export class TestCaseAgenticPipeline {
       warnings: warnings.length ? warnings : undefined,
     };
 
-    return {
+    const result: TestCaseGenerationResponse = {
       testCases: mapModelResponseToTestCases(artifacts.rawCases, request.mode),
       plan: artifacts.plan,
       reviewFeedback: artifacts.reviewFeedback,
@@ -210,6 +213,10 @@ export class TestCaseAgenticPipeline {
       warnings: warnings.length ? warnings : undefined,
       telemetry,
     };
+
+    progressCallback?.({ type: 'final', result });
+
+    return result;
   }
 
   private buildContext(
@@ -251,19 +258,22 @@ export class TestCaseAgenticPipeline {
     }
   }
 
-  private async runAgenticWorkflow(context: PipelineContext): Promise<GenerationArtifacts> {
+  private async runAgenticWorkflow(
+    context: PipelineContext,
+    progressCallback?: (event: AgenticProgressEvent) => void
+  ): Promise<GenerationArtifacts> {
     const { request } = context;
 
     const plannerStart = Date.now();
-    const plan = await this.runPlanner(context);
+    const plan = await this.runPlanner(context, progressCallback);
     const plannerDurationMs = Date.now() - plannerStart;
 
     const writerStart = Date.now();
-    const writerOutcome = await this.runWriter(context, plan);
+    const writerOutcome = await this.runWriter(context, plan, progressCallback);
     const writerDurationMs = Date.now() - writerStart;
 
     const reviewerStart = Date.now();
-    const reviewOutcome = await this.runReviewer(context, writerOutcome.rawCases, plan);
+    const reviewOutcome = await this.runReviewer(context, writerOutcome.rawCases, plan, progressCallback);
     const reviewerDurationMs = Date.now() - reviewerStart;
 
     const warnings = [...writerOutcome.warnings, ...reviewOutcome.warnings];
@@ -286,7 +296,10 @@ export class TestCaseAgenticPipeline {
     };
   }
 
-  private async runPlanner(context: PipelineContext): Promise<GenerationPlanItem[]> {
+  private async runPlanner(
+    context: PipelineContext,
+    progressCallback?: (event: AgenticProgressEvent) => void
+  ): Promise<GenerationPlanItem[]> {
     const { request, plannerModel, plannerProvider } = context;
     const requirements = request.requirements ?? '';
     const filesSummary = summarizeFiles(request.files);
@@ -342,12 +355,15 @@ export class TestCaseAgenticPipeline {
       planItems: planItems.length,
     });
 
+    progressCallback?.({ type: 'planner:complete', planItems: planItems.length });
+
     return planItems;
   }
 
   private async runWriter(
     context: PipelineContext,
-    plan: GenerationPlanItem[]
+    plan: GenerationPlanItem[],
+    progressCallback?: (event: AgenticProgressEvent) => void
   ): Promise<{ rawCases: any[]; warnings: string[]; slices: WriterSliceTelemetry[]; concurrencyUsed: number }> {
     const { request, writerModel, writerProvider, agenticOptions } = context;
     const warnings: string[] = [];
@@ -366,12 +382,21 @@ export class TestCaseAgenticPipeline {
       concurrencyUsed: concurrency,
     });
 
+    progressCallback?.({ type: 'writer:start', totalSlices: plan.length, concurrency });
+
     const runSlice = async (
       planItem: GenerationPlanItem,
-      existingCases: any[]
-    ): Promise<{ planItem: GenerationPlanItem; cases: any[]; durationMs: number; warnings: string[] }> => {
+      existingCases: any[],
+      index: number
+    ): Promise<{ planItem: GenerationPlanItem; cases: any[]; durationMs: number; warnings: string[]; index: number }> => {
       console.log('[Agentic] Writer slice started', {
         planId: planItem.id,
+      });
+      progressCallback?.({
+        type: 'writer:slice-start',
+        planId: planItem.id,
+        index,
+        totalSlices: plan.length,
       });
       const prompt = this.buildWriterPrompt(request, planItem, existingCases);
       const model = resolveLanguageModel({ provider: writerProvider, model: writerModel });
@@ -405,7 +430,14 @@ export class TestCaseAgenticPipeline {
           cases: cases.length,
           durationMs,
         });
-        return { planItem, cases, durationMs, warnings: sliceWarnings };
+        progressCallback?.({
+          type: 'writer:slice-complete',
+          planId: planItem.id,
+          index,
+          totalSlices: plan.length,
+          cases: cases.length,
+        });
+        return { planItem, cases, durationMs, warnings: sliceWarnings, index };
       } catch (error) {
         const durationMs = Date.now() - sliceStart;
         const message = error instanceof Error ? error.message : 'Unknown generation error';
@@ -415,11 +447,18 @@ export class TestCaseAgenticPipeline {
           planId: planItem.id,
           error: message,
         });
-        return { planItem, cases: [], durationMs, warnings: sliceWarnings };
+        progressCallback?.({
+          type: 'writer:slice-complete',
+          planId: planItem.id,
+          index,
+          totalSlices: plan.length,
+          cases: 0,
+        });
+        return { planItem, cases: [], durationMs, warnings: sliceWarnings, index };
       }
     };
 
-    const mergeSliceResult = (result: { planItem: GenerationPlanItem; cases: any[]; durationMs: number; warnings: string[] }) => {
+    const mergeSliceResult = (result: { planItem: GenerationPlanItem; cases: any[]; durationMs: number; warnings: string[]; index: number }) => {
       const sliceWarnings = [...result.warnings];
       result.cases.forEach((testCase, index) => {
         const caseId = testCase.id || this.generateCaseId(request.mode, casesById.size + index + 1);
@@ -444,12 +483,13 @@ export class TestCaseAgenticPipeline {
     };
 
     if (concurrency <= 1) {
-      for (const planItem of plan) {
-        const result = await runSlice(planItem, Array.from(casesById.values()));
+      for (let i = 0; i < plan.length; i += 1) {
+        const planItem = plan[i];
+        const result = await runSlice(planItem, Array.from(casesById.values()), i);
         mergeSliceResult(result);
       }
     } else {
-      const results: Array<{ planItem: GenerationPlanItem; cases: any[]; durationMs: number; warnings: string[] }> =
+      const results: Array<{ planItem: GenerationPlanItem; cases: any[]; durationMs: number; warnings: string[]; index: number }> =
         new Array(plan.length);
       let nextIndex = 0;
 
@@ -460,7 +500,7 @@ export class TestCaseAgenticPipeline {
             break;
           }
           const planItem = plan[current];
-          const result = await runSlice(planItem, []);
+          const result = await runSlice(planItem, [], current);
           results[current] = result;
         }
       };
@@ -480,13 +520,20 @@ export class TestCaseAgenticPipeline {
       totalCases: casesById.size,
     });
 
+    progressCallback?.({
+      type: 'writer:complete',
+      totalSlices: plan.length,
+      totalCases: casesById.size,
+    });
+
     return { rawCases: Array.from(casesById.values()), warnings, slices, concurrencyUsed: concurrency };
   }
 
   private async runReviewer(
     context: PipelineContext,
     rawCases: any[],
-    plan: GenerationPlanItem[]
+    plan: GenerationPlanItem[],
+    progressCallback?: (event: AgenticProgressEvent) => void
   ): Promise<{ feedback: ReviewFeedbackItem[]; passesExecuted: number; reviewTelemetry: ReviewPassTelemetry[]; warnings: string[] }> {
     const { request, reviewerModel, reviewerProvider, writerModel, writerProvider, agenticOptions } = context;
     const maxPasses = agenticOptions?.maxReviewPasses ?? 0;
@@ -510,6 +557,7 @@ export class TestCaseAgenticPipeline {
       const passStart = Date.now();
 
       let reviewResult;
+      progressCallback?.({ type: 'review:pass-start', pass, maxPasses });
       console.log('[Agentic] Reviewer pass started', {
         pass,
         provider: reviewerProvider,
@@ -571,6 +619,13 @@ export class TestCaseAgenticPipeline {
         feedbackCount: feedback.length,
         blockingCount: blocking.length,
       });
+      progressCallback?.({
+        type: 'review:pass-complete',
+        pass,
+        feedbackCount: normalizedFeedback.length,
+        blockingCount: blocking.length,
+        maxPasses,
+      });
       console.log('[Agentic] Reviewer pass completed', {
         pass,
         durationMs,
@@ -589,6 +644,7 @@ export class TestCaseAgenticPipeline {
 
       let revisionResult;
       try {
+        progressCallback?.({ type: 'revision:start', pass });
         console.log('[Agentic] Revision run started', {
           pass,
           provider: writerProvider,
@@ -635,6 +691,7 @@ export class TestCaseAgenticPipeline {
         pass,
         updatedCases: revisions.length,
       });
+      progressCallback?.({ type: 'revision:complete', pass, updatedCases: revisions.length });
     }
 
     rawCases.splice(0, rawCases.length, ...mutableCases);

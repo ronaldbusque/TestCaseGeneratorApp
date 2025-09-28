@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
       .filter((segment): segment is string => Boolean(segment && segment.trim()))
       .join('\n\n');
 
-    const result = await aiService.generateTestCases({
+    const generationRequest: TestCaseGenerationRequest = {
       requirements: combinedRequirements || requirements,
       mode,
       priorityMode,
@@ -58,8 +58,51 @@ export async function POST(request: NextRequest) {
       provider,
       model,
       agenticOptions,
-    });
-    
+    };
+
+    const shouldStream = Boolean(agenticOptions?.streamProgress);
+    console.log(`[API] Stream progress: ${shouldStream}`);
+
+    if (shouldStream) {
+      const encoder = new TextEncoder();
+
+      const stream = new ReadableStream({
+        start(controller) {
+          const send = (event: any) => {
+            try {
+              controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+            } catch (error) {
+              console.error('[API] Failed to enqueue progress event', error);
+            }
+          };
+
+          (async () => {
+            try {
+              await aiService.generateTestCases(generationRequest, send);
+              controller.close();
+            } catch (error) {
+              console.error('Error generating test cases (stream)', error);
+              send({
+                type: 'error',
+                message: error instanceof Error ? error.message : 'Unknown error',
+              });
+              controller.close();
+            }
+          })();
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'application/x-ndjson',
+          'Cache-Control': 'no-cache, no-transform',
+          Connection: 'keep-alive',
+        },
+      });
+    }
+
+    const result = await aiService.generateTestCases(generationRequest);
+
     console.log(`[API] Generated ${result.testCases?.length || 0} test cases`);
     
     return NextResponse.json(result);

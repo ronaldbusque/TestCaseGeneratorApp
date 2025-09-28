@@ -112,6 +112,20 @@ export interface AgenticTelemetry {
   warnings?: string[];
 }
 
+export type AgenticProgressEvent =
+  | { type: 'planner:start' }
+  | { type: 'planner:complete'; planItems: number }
+  | { type: 'writer:start'; totalSlices: number; concurrency: number }
+  | { type: 'writer:slice-start'; planId: string; index: number; totalSlices: number }
+  | { type: 'writer:slice-complete'; planId: string; index: number; totalSlices: number; cases: number }
+  | { type: 'writer:complete'; totalSlices: number; totalCases: number }
+  | { type: 'review:pass-start'; pass: number; maxPasses: number }
+  | { type: 'review:pass-complete'; pass: number; feedbackCount: number; blockingCount: number; maxPasses: number }
+  | { type: 'revision:start'; pass: number }
+  | { type: 'revision:complete'; pass: number; updatedCases: number }
+  | { type: 'final'; result: TestCaseGenerationResponse }
+  | { type: 'error'; message: string };
+
 export interface UploadedFilePayload {
   name: string;
   type: string;
@@ -173,7 +187,10 @@ export interface TestCaseGenerationResponse {
 }
 
 export interface AIService {
-  generateTestCases(request: TestCaseGenerationRequest): Promise<TestCaseGenerationResponse>;
+  generateTestCases(
+    request: TestCaseGenerationRequest,
+    progressCallback?: (event: AgenticProgressEvent) => void
+  ): Promise<TestCaseGenerationResponse>;
   generateContent(prompt: string, model?: ModelType): Promise<string>;
 }
 

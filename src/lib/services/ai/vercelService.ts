@@ -1,6 +1,7 @@
 import { generateText } from 'ai';
 import {
   AIService,
+  AgenticProgressEvent,
   LLMProvider,
   ModelType,
   TestCaseGenerationRequest,
@@ -16,7 +17,8 @@ export class VercelAIService implements AIService {
   constructor(private readonly defaultProvider: LLMProvider = 'openai') {}
 
   async generateTestCases(
-    request: TestCaseGenerationRequest
+    request: TestCaseGenerationRequest,
+    progressCallback?: (event: AgenticProgressEvent) => void
   ): Promise<TestCaseGenerationResponse> {
     const provider = request.provider ?? this.defaultProvider;
 
@@ -32,7 +34,7 @@ export class VercelAIService implements AIService {
       provider,
     };
 
-    return this.pipeline.generate(normalizedRequest);
+    return this.pipeline.generate(normalizedRequest, progressCallback);
   }
 
   async generateContent(prompt: string, model?: ModelType): Promise<string> {
