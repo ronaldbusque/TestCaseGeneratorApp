@@ -30,11 +30,11 @@ const PlannerItemSchema = z.object({
   estimatedCases: z.number().int().positive().optional(),
   chunkRefs: z.array(z.string().min(1)).optional(),
   notes: z.string().optional(),
-});
+}).strict();
 
 const PlannerSchema = z.object({
   items: z.array(PlannerItemSchema),
-});
+}).strict();
 
 const ReviewFeedbackSchema = z.object({
   caseId: z.string().min(1),
@@ -61,27 +61,27 @@ const DetailedTestCaseItemSchema = z.object({
       z.object({
         number: z.coerce.number().int().positive(),
         description: z.string().min(1),
-      })
+      }).strict()
     )
     .default([]),
   expectedResult: z.string().default(''),
-});
+}).strict();
 
 const DetailedTestCaseSchema = z.object({
   items: z.array(DetailedTestCaseItemSchema),
-});
+}).strict();
 
 const HighLevelTestCaseItemSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
   area: z.string().min(1),
   scenario: z.string().min(1),
-  description: z.string().optional(),
-});
+  description: z.string().default(''),
+}).strict();
 
 const HighLevelTestCaseSchema = z.object({
   items: z.array(HighLevelTestCaseItemSchema),
-});
+}).strict();
 
 interface PipelineContext {
   request: TestCaseGenerationRequest;
