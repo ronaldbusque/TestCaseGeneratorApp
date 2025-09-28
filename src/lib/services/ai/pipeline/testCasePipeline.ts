@@ -53,7 +53,7 @@ const DetailedTestCaseItemSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
   area: z.string().min(1),
-  description: z.string().default(''),
+  description: z.string(),
   preconditions: z.array(z.string()).default([]),
   testData: z.array(z.string()).default([]),
   steps: z
@@ -76,7 +76,7 @@ const HighLevelTestCaseItemSchema = z.object({
   title: z.string().min(1),
   area: z.string().min(1),
   scenario: z.string().min(1),
-  description: z.string().default(''),
+  description: z.string(),
 }).strict();
 
 const HighLevelTestCaseSchema = z.object({
