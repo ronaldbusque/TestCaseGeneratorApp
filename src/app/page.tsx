@@ -636,6 +636,12 @@ export default function Home() {
 
       const agenticOptions = buildAgenticOptions();
 
+      if (agenticEnabled) {
+        setTimeout(() => {
+          setGenerationStep((prev) => (prev === 'planning' ? 'generating' : prev));
+        }, 150);
+      }
+
       const filePayloads = preparedFilePayloads.length === uploadedFiles.length
         ? preparedFilePayloads
         : await buildFilePayloads(uploadedFiles);
