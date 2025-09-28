@@ -229,9 +229,9 @@ export default function Home() {
       key: 'planning',
       label: 'Planning',
       status: plannerStatus,
-      completed: generationTelemetry ? planTotal : undefined,
+      completed: planTotal || undefined,
       total: planTotal,
-      remaining: generationTelemetry ? 0 : undefined,
+      remaining: planTotal ? 0 : undefined,
     });
 
     const writerStatus = (() => {
@@ -245,9 +245,14 @@ export default function Home() {
       key: 'writer',
       label: 'Writer slices',
       status: writerStatus,
-      completed: writerCompleted,
+      completed: writerCompleted ?? (generationStep === 'generating' ? 0 : undefined),
       total: planTotal,
-      remaining: writerCompleted !== undefined && planTotal ? Math.max(planTotal - writerCompleted, 0) : undefined,
+      remaining:
+        planTotal && writerCompleted !== undefined
+          ? Math.max(planTotal - writerCompleted, 0)
+          : generationStep === 'generating'
+            ? Math.max(planTotal - (writerCompleted ?? 0), 0)
+            : undefined,
     });
 
     const reviewStatus = (() => {
