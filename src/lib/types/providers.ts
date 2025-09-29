@@ -17,7 +17,25 @@ export type ProviderSettings = {
   sql: ProviderSelection;
   data: ProviderSelection;
   quickSelections: QuickSelection[];
+  agenticDefaults?: AgenticDefaults;
 };
+
+export type StoredTestCaseMode = 'high-level' | 'detailed';
+export type StoredPriorityMode = 'comprehensive' | 'core-functionality';
+
+export interface AgenticModelOverrides {
+  planner?: ProviderSelection;
+  writer?: ProviderSelection;
+  reviewer?: ProviderSelection;
+}
+
+export interface AgenticDefaults {
+  mode?: StoredTestCaseMode;
+  priorityMode?: StoredPriorityMode;
+  reviewPasses?: number;
+  writerConcurrency?: number;
+  overrides?: AgenticModelOverrides;
+}
 
 export interface ProviderModelInfo {
   id: string;

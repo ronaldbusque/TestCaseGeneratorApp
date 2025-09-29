@@ -9,12 +9,14 @@ import {
   QuickSelection,
 } from '@/lib/types/providers';
 import {
+  DEFAULT_AGENTIC_DEFAULTS,
   DEFAULT_SETTINGS,
   FALLBACK_MODELS,
   buildDefaultSettings,
   ensureSettingsFallback,
   normalizeModelIdentifier,
 } from '@/lib/providerSettings';
+import { AgenticDefaults } from '@/lib/types/providers';
 
 type DomainKey = 'testCases' | 'sql' | 'data';
 
@@ -32,6 +34,7 @@ interface ProviderSettingsContextValue {
   updateQuickSelection: (id: string, updates: Partial<QuickSelection>) => void;
   removeQuickSelection: (id: string) => void;
   applyQuickSelection: (domain: DomainKey, selectionId: string) => void;
+  updateAgenticDefaults: (defaults: AgenticDefaults) => void;
   loading: boolean;
   providerError: string | null;
 }
@@ -239,6 +242,20 @@ export function ProviderSettingsProvider({ children }: { children: React.ReactNo
     }));
   }, []);
 
+  const updateAgenticDefaults = useCallback((defaults: AgenticDefaults) => {
+    setSettings((prev) => ensureSettingsFallback({
+      ...prev,
+      agenticDefaults: {
+        ...DEFAULT_AGENTIC_DEFAULTS,
+        ...defaults,
+        overrides: {
+          ...DEFAULT_AGENTIC_DEFAULTS.overrides,
+          ...(defaults.overrides ?? {}),
+        },
+      },
+    }, availableProviders));
+  }, [availableProviders]);
+
   const applyQuickSelection = useCallback((domain: DomainKey, selectionId: string) => {
     setSettings((prev) => {
       const selection = prev.quickSelections.find((item) => item.id === selectionId);
@@ -280,6 +297,7 @@ export function ProviderSettingsProvider({ children }: { children: React.ReactNo
       updateQuickSelection,
       removeQuickSelection,
       applyQuickSelection,
+      updateAgenticDefaults,
       loading,
       providerError,
     }),
@@ -293,6 +311,7 @@ export function ProviderSettingsProvider({ children }: { children: React.ReactNo
       updateQuickSelection,
       removeQuickSelection,
       applyQuickSelection,
+      updateAgenticDefaults,
       loading,
       providerError,
     ]

@@ -19,21 +19,8 @@ import { NavigationBar } from '@/components/NavigationBar';
 import { fetchApi, fetchApiStream } from '@/lib/utils/apiClient';
 import { useProviderSettings } from '@/lib/context/ProviderSettingsContext';
 import { QuickModelSwitcher } from '@/components/QuickModelSwitcher';
-import type { LLMProvider } from '@/lib/types/providers';
-
-const MODEL_OVERRIDE_STORAGE_KEY = 'tcg_agentic_model_overrides';
-const AGENTIC_SETTINGS_STORAGE_KEY = 'tcg_agentic_settings';
-
-type StoredModelOverrides = {
-  planner?: string;
-  writer?: string;
-  reviewer?: string;
-};
-
-type StoredAgenticSettings = {
-  reviewPasses?: number;
-  writerConcurrency?: number;
-};
+import type { LLMProvider, AgenticDefaults, AgenticModelOverrides } from '@/lib/types/providers';
+import { DEFAULT_AGENTIC_DEFAULTS, clampReviewPasses, clampWriterConcurrency } from '@/lib/providerSettings';
 
 const VALID_PROVIDERS: LLMProvider[] = ['openai', 'gemini', 'openrouter'];
 
@@ -62,30 +49,6 @@ const decodeModelSelectionValue = (
   return null;
 };
 
-const loadStoredJson = <T,>(key: string, fallback: T): T => {
-  if (typeof window === 'undefined') {
-    return fallback;
-  }
-
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) {
-      return fallback;
-    }
-    return JSON.parse(raw) as T;
-  } catch (error) {
-    console.warn('Failed to load stored JSON', { key, error });
-    return fallback;
-  }
-};
-
-const loadStoredOverrides = () => loadStoredJson<StoredModelOverrides>(MODEL_OVERRIDE_STORAGE_KEY, {});
-
-const loadStoredAgenticSettings = () => loadStoredJson<StoredAgenticSettings>(AGENTIC_SETTINGS_STORAGE_KEY, {});
-
-const clampReviewPasses = (value: number) => Math.max(0, Math.min(6, Math.floor(value)));
-const clampWriterConcurrency = (value: number) => Math.max(1, Math.min(6, Math.floor(value)));
-
 const isHighLevelTestCase = (testCase: TestCase): testCase is HighLevelTestCase => {
   return 'scenario' in testCase && 'area' in testCase;
 };
@@ -94,9 +57,7 @@ const MAX_FILE_CONTENT_LENGTH = 8000;
 const MAX_FILE_PREVIEW_LENGTH = 500;
 
 export default function Home() {
-  const { settings, availableProviders, quickSelections } = useProviderSettings();
-  const [testCaseMode, setTestCaseMode] = useState<TestCaseMode>('high-level');
-  const [testPriorityMode, setTestPriorityMode] = useState<TestPriorityMode>('comprehensive');
+  const { settings, availableProviders, quickSelections, updateAgenticDefaults } = useProviderSettings();
   const [requirements, setRequirements] = useState('');
   const [fileContent, setFileContent] = useState('');
   const [highLevelTestCases, setHighLevelTestCases] = useState<TestCase[]>([]);
@@ -128,12 +89,15 @@ export default function Home() {
   const agenticEnabled = true;
 
   const baseSelection = encodeModelSelection(settings.testCases.provider, settings.testCases.model);
-
-  const storedOverridesRef = useRef<StoredModelOverrides | null>(null);
-  if (storedOverridesRef.current === null) {
-    storedOverridesRef.current = loadStoredOverrides();
-  }
-  const initialOverrides = storedOverridesRef.current ?? {};
+  const agenticDefaults = useMemo<AgenticDefaults>(() => ({
+    ...DEFAULT_AGENTIC_DEFAULTS,
+    ...(settings.agenticDefaults ?? {}),
+    overrides: {
+      ...DEFAULT_AGENTIC_DEFAULTS.overrides,
+      ...(settings.agenticDefaults?.overrides ?? {}),
+    },
+  }), [settings.agenticDefaults]);
+  const agenticOverrides = useMemo<AgenticModelOverrides>(() => agenticDefaults.overrides ?? {}, [agenticDefaults]);
 
   const coerceSelection = (value?: string) => {
     const decoded = decodeModelSelectionValue(value);
@@ -143,35 +107,74 @@ export default function Home() {
     return encodeModelSelection(decoded.provider, decoded.model);
   };
 
+  const plannerOverrideSelection = agenticOverrides.planner
+    ? encodeModelSelection(agenticOverrides.planner.provider, agenticOverrides.planner.model)
+    : baseSelection;
+  const writerOverrideSelection = agenticOverrides.writer
+    ? encodeModelSelection(agenticOverrides.writer.provider, agenticOverrides.writer.model)
+    : baseSelection;
+  const reviewerOverrideSelection = agenticOverrides.reviewer
+    ? encodeModelSelection(agenticOverrides.reviewer.provider, agenticOverrides.reviewer.model)
+    : baseSelection;
+
   const [plannerModelSelection, setPlannerModelSelection] = useState<string>(() =>
-    coerceSelection(initialOverrides.planner)
+    coerceSelection(plannerOverrideSelection)
   );
   const [writerModelSelection, setWriterModelSelection] = useState<string>(() =>
-    coerceSelection(initialOverrides.writer)
+    coerceSelection(writerOverrideSelection)
   );
   const [reviewerModelSelection, setReviewerModelSelection] = useState<string>(() =>
-    coerceSelection(initialOverrides.reviewer)
+    coerceSelection(reviewerOverrideSelection)
   );
 
-  const storedAgenticSettingsRef = useRef<StoredAgenticSettings | null>(null);
-  if (storedAgenticSettingsRef.current === null) {
-    storedAgenticSettingsRef.current = loadStoredAgenticSettings();
-  }
-  const storedAgenticSettings = storedAgenticSettingsRef.current ?? {};
+  const [testCaseMode, setTestCaseMode] = useState<TestCaseMode>(
+    (agenticDefaults.mode ?? DEFAULT_AGENTIC_DEFAULTS.mode ?? 'high-level') as TestCaseMode
+  );
+  const [testPriorityMode, setTestPriorityMode] = useState<TestPriorityMode>(
+    (agenticDefaults.priorityMode ?? DEFAULT_AGENTIC_DEFAULTS.priorityMode ?? 'comprehensive') as TestPriorityMode
+  );
 
-  const [reviewPasses, setReviewPasses] = useState<number>(() => {
-    const value = storedAgenticSettings.reviewPasses;
-    return typeof value === 'number' && Number.isFinite(value)
-      ? clampReviewPasses(value)
-      : 0;
-  });
+  const [reviewPasses, setReviewPasses] = useState<number>(() =>
+    clampReviewPasses(
+      agenticDefaults.reviewPasses ?? DEFAULT_AGENTIC_DEFAULTS.reviewPasses ?? 0
+    )
+  );
 
-  const [writerConcurrency, setWriterConcurrency] = useState<number>(() => {
-    const value = storedAgenticSettings.writerConcurrency;
-    return typeof value === 'number' && Number.isFinite(value)
-      ? clampWriterConcurrency(value)
-      : 1;
-  });
+  const [writerConcurrency, setWriterConcurrency] = useState<number>(() =>
+    clampWriterConcurrency(
+      agenticDefaults.writerConcurrency ?? DEFAULT_AGENTIC_DEFAULTS.writerConcurrency ?? 1
+    )
+  );
+  const persistAgenticDefaults = useCallback((patch: Partial<AgenticDefaults>) => {
+    const mergedOverrides: AgenticModelOverrides = {
+      ...(agenticDefaults.overrides ?? {}),
+      ...(patch.overrides ?? {}),
+    };
+
+    (Object.keys(mergedOverrides) as Array<keyof AgenticModelOverrides>).forEach((key) => {
+      const value = mergedOverrides[key];
+      if (!value || !value.model) {
+        delete mergedOverrides[key];
+      }
+    });
+
+    updateAgenticDefaults({
+      ...DEFAULT_AGENTIC_DEFAULTS,
+      ...agenticDefaults,
+      ...patch,
+      overrides: mergedOverrides,
+    });
+  }, [agenticDefaults, updateAgenticDefaults]);
+
+  const handleModeChange = useCallback((mode: TestCaseMode) => {
+    setTestCaseMode(mode);
+    persistAgenticDefaults({ mode });
+  }, [persistAgenticDefaults]);
+
+  const handlePriorityChange = useCallback((priority: TestPriorityMode) => {
+    setTestPriorityMode(priority);
+    persistAgenticDefaults({ priorityMode: priority });
+  }, [persistAgenticDefaults]);
   const [generationPlan, setGenerationPlan] = useState<GenerationPlanItem[]>([]);
   const [reviewFeedback, setReviewFeedback] = useState<ReviewFeedbackItem[]>([]);
   const [generationWarnings, setGenerationWarnings] = useState<string[]>([]);
@@ -203,72 +206,66 @@ export default function Home() {
     focusCaseCount: 0,
   });
   const progressRef = useRef<HTMLDivElement | null>(null);
-  const previousBaseSelectionRef = useRef(baseSelection);
-  const isInitialSyncRef = useRef(true);
 
   useEffect(() => {
-    if (isInitialSyncRef.current) {
-      isInitialSyncRef.current = false;
-      previousBaseSelectionRef.current = baseSelection;
-      return;
-    }
-
-    setPlannerModelSelection(baseSelection);
-    setWriterModelSelection(baseSelection);
-    setReviewerModelSelection(baseSelection);
-
-    previousBaseSelectionRef.current = baseSelection;
-  }, [baseSelection]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
     const baseDecoded = decodeModelSelectionValue(baseSelection);
-    const payload: StoredModelOverrides = {};
 
-    const plannerDecoded = decodeModelSelectionValue(plannerModelSelection);
-    if (
-      plannerDecoded &&
-      (!baseDecoded ||
-        plannerDecoded.provider !== baseDecoded.provider ||
-        plannerDecoded.model !== baseDecoded.model)
-    ) {
-      payload.planner = encodeModelSelection(plannerDecoded.provider, plannerDecoded.model);
+    if (baseDecoded) {
+      if (
+        agenticOverrides.planner &&
+        agenticOverrides.planner.provider === baseDecoded.provider &&
+        agenticOverrides.planner.model === baseDecoded.model
+      ) {
+        persistAgenticDefaults({ overrides: { planner: undefined } });
+      }
+
+      if (
+        agenticOverrides.writer &&
+        agenticOverrides.writer.provider === baseDecoded.provider &&
+        agenticOverrides.writer.model === baseDecoded.model
+      ) {
+        persistAgenticDefaults({ overrides: { writer: undefined } });
+      }
+
+      if (
+        agenticOverrides.reviewer &&
+        agenticOverrides.reviewer.provider === baseDecoded.provider &&
+        agenticOverrides.reviewer.model === baseDecoded.model
+      ) {
+        persistAgenticDefaults({ overrides: { reviewer: undefined } });
+      }
     }
 
-    const writerDecoded = decodeModelSelectionValue(writerModelSelection);
-    if (
-      writerDecoded &&
-      (!baseDecoded ||
-        writerDecoded.provider !== baseDecoded.provider ||
-        writerDecoded.model !== baseDecoded.model)
-    ) {
-      payload.writer = encodeModelSelection(writerDecoded.provider, writerDecoded.model);
-    }
+    const desiredPlanner = agenticOverrides.planner
+      ? encodeModelSelection(agenticOverrides.planner.provider, agenticOverrides.planner.model)
+      : baseSelection;
+    setPlannerModelSelection(desiredPlanner);
 
-    const reviewerDecoded = decodeModelSelectionValue(reviewerModelSelection);
-    if (
-      reviewerDecoded &&
-      (!baseDecoded ||
-        reviewerDecoded.provider !== baseDecoded.provider ||
-        reviewerDecoded.model !== baseDecoded.model)
-    ) {
-      payload.reviewer = encodeModelSelection(reviewerDecoded.provider, reviewerDecoded.model);
-    }
-    window.localStorage.setItem(MODEL_OVERRIDE_STORAGE_KEY, JSON.stringify(payload));
-  }, [plannerModelSelection, writerModelSelection, reviewerModelSelection, baseSelection]);
+    const desiredWriter = agenticOverrides.writer
+      ? encodeModelSelection(agenticOverrides.writer.provider, agenticOverrides.writer.model)
+      : baseSelection;
+    setWriterModelSelection(desiredWriter);
+
+    const desiredReviewer = agenticOverrides.reviewer
+      ? encodeModelSelection(agenticOverrides.reviewer.provider, agenticOverrides.reviewer.model)
+      : baseSelection;
+    setReviewerModelSelection(desiredReviewer);
+  }, [agenticOverrides, baseSelection, persistAgenticDefaults]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    const payload: StoredAgenticSettings = {
-      reviewPasses,
-      writerConcurrency,
-    };
-    window.localStorage.setItem(AGENTIC_SETTINGS_STORAGE_KEY, JSON.stringify(payload));
-  }, [reviewPasses, writerConcurrency]);
+    setTestCaseMode((agenticDefaults.mode ?? DEFAULT_AGENTIC_DEFAULTS.mode ?? 'high-level') as TestCaseMode);
+    setTestPriorityMode((agenticDefaults.priorityMode ?? DEFAULT_AGENTIC_DEFAULTS.priorityMode ?? 'comprehensive') as TestPriorityMode);
+    setReviewPasses(
+      clampReviewPasses(
+        agenticDefaults.reviewPasses ?? DEFAULT_AGENTIC_DEFAULTS.reviewPasses ?? 0
+      )
+    );
+    setWriterConcurrency(
+      clampWriterConcurrency(
+        agenticDefaults.writerConcurrency ?? DEFAULT_AGENTIC_DEFAULTS.writerConcurrency ?? 1
+      )
+    );
+  }, [agenticDefaults]);
 
   const providerLabelMap = useMemo(() => {
     const map = new Map<LLMProvider, string>();
@@ -1568,13 +1565,13 @@ export default function Home() {
                 <div className="flex-1">
                   <TestCaseModeToggle 
                     mode={testCaseMode} 
-                    onModeChange={setTestCaseMode}
+                    onModeChange={handleModeChange}
                   />
                 </div>
                 <div className="flex-1">
                   <TestPriorityToggle
                     priorityMode={testPriorityMode}
-                    onPriorityChange={setTestPriorityMode}
+                    onPriorityChange={handlePriorityChange}
                     testCaseMode={testCaseMode}
                   />
                 </div>
@@ -1602,7 +1599,9 @@ export default function Home() {
                 value={reviewPasses}
                 onChange={(event) => {
                   const value = Number(event.target.value);
-                  setReviewPasses(Number.isNaN(value) ? 0 : clampReviewPasses(value));
+                  const next = Number.isNaN(value) ? 0 : clampReviewPasses(value);
+                  setReviewPasses(next);
+                  persistAgenticDefaults({ reviewPasses: next });
                 }}
                 className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -1620,7 +1619,9 @@ export default function Home() {
                 value={writerConcurrency}
                 onChange={(event) => {
                   const value = Number(event.target.value);
-                  setWriterConcurrency(Number.isNaN(value) ? 1 : clampWriterConcurrency(value));
+                  const next = Number.isNaN(value) ? 1 : clampWriterConcurrency(value);
+                  setWriterConcurrency(next);
+                  persistAgenticDefaults({ writerConcurrency: next });
                 }}
                 className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -1634,7 +1635,18 @@ export default function Home() {
               <select
                 value={plannerModelSelection}
                 onChange={(event) => {
-                  setPlannerModelSelection(event.target.value);
+                  const value = event.target.value;
+                  setPlannerModelSelection(value);
+                  const decoded = decodeModelSelectionValue(value);
+                  if (!decoded) {
+                    return;
+                  }
+                  const isBase = decoded.provider === settings.testCases.provider && decoded.model === settings.testCases.model;
+                  persistAgenticDefaults({
+                    overrides: {
+                      planner: isBase ? undefined : decoded,
+                    },
+                  });
                 }}
                 className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
@@ -1654,7 +1666,18 @@ export default function Home() {
               <select
                 value={writerModelSelection}
                 onChange={(event) => {
-                  setWriterModelSelection(event.target.value);
+                  const value = event.target.value;
+                  setWriterModelSelection(value);
+                  const decoded = decodeModelSelectionValue(value);
+                  if (!decoded) {
+                    return;
+                  }
+                  const isBase = decoded.provider === settings.testCases.provider && decoded.model === settings.testCases.model;
+                  persistAgenticDefaults({
+                    overrides: {
+                      writer: isBase ? undefined : decoded,
+                    },
+                  });
                 }}
                 className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
@@ -1674,7 +1697,18 @@ export default function Home() {
               <select
                 value={reviewerModelSelection}
                 onChange={(event) => {
-                  setReviewerModelSelection(event.target.value);
+                  const value = event.target.value;
+                  setReviewerModelSelection(value);
+                  const decoded = decodeModelSelectionValue(value);
+                  if (!decoded) {
+                    return;
+                  }
+                  const isBase = decoded.provider === settings.testCases.provider && decoded.model === settings.testCases.model;
+                  persistAgenticDefaults({
+                    overrides: {
+                      reviewer: isBase ? undefined : decoded,
+                    },
+                  });
                 }}
                 className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >

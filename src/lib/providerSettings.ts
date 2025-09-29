@@ -1,4 +1,6 @@
 import {
+  AgenticDefaults,
+  AgenticModelOverrides,
   LLMProvider,
   ProviderDescriptor,
   ProviderSelection,
@@ -76,12 +78,24 @@ const DEFAULT_QUICK_SELECTIONS: QuickSelection[] = [
   },
 ];
 
+export const DEFAULT_AGENTIC_DEFAULTS: AgenticDefaults = {
+  mode: 'high-level',
+  priorityMode: 'comprehensive',
+  reviewPasses: 1,
+  writerConcurrency: 3,
+  overrides: {},
+};
+
 export const DEFAULT_SETTINGS: ProviderSettings = {
   testCases: { provider: 'openai', model: FALLBACK_MODELS.openai },
   sql: { provider: 'openai', model: FALLBACK_MODELS.openai },
   data: { provider: 'openai', model: FALLBACK_MODELS.openai },
   quickSelections: DEFAULT_QUICK_SELECTIONS.map((selection) => ({ ...selection })),
+  agenticDefaults: { ...DEFAULT_AGENTIC_DEFAULTS },
 };
+
+export const clampReviewPasses = (value: number) => Math.max(0, Math.min(6, Math.floor(value)));
+export const clampWriterConcurrency = (value: number) => Math.max(1, Math.min(6, Math.floor(value)));
 
 export function coerceStoredSettings(raw: any): ProviderSettings {
   const normalize = (selection: any, domain: 'testCases' | 'sql' | 'data'): ProviderSelection => {
@@ -135,11 +149,52 @@ export function coerceStoredSettings(raw: any): ProviderSettings {
       : DEFAULT_SETTINGS.quickSelections.map((selection) => ({ ...selection }));
   };
 
+  const normalizeAgenticDefaults = (rawDefaults: any): AgenticDefaults => {
+    if (!rawDefaults || typeof rawDefaults !== 'object') {
+      return { ...DEFAULT_AGENTIC_DEFAULTS, overrides: {} };
+    }
+
+    const mode = rawDefaults.mode === 'detailed' ? 'detailed' : 'high-level';
+    const priorityMode = rawDefaults.priorityMode === 'core-functionality' ? 'core-functionality' : 'comprehensive';
+    const reviewPasses = clampReviewPasses(Number(rawDefaults.reviewPasses ?? DEFAULT_AGENTIC_DEFAULTS.reviewPasses));
+    const writerConcurrency = clampWriterConcurrency(Number(rawDefaults.writerConcurrency ?? DEFAULT_AGENTIC_DEFAULTS.writerConcurrency));
+
+    const normalizeOverride = (value: any): ProviderSelection | undefined => {
+      if (value && typeof value === 'object' && isValidProvider(value.provider) && typeof value.model === 'string' && value.model.trim()) {
+        return {
+          provider: value.provider,
+          model: value.model.trim(),
+        };
+      }
+      return undefined;
+    };
+
+    const overrides: AgenticModelOverrides = {};
+    const rawOverrides = rawDefaults.overrides;
+    if (rawOverrides && typeof rawOverrides === 'object') {
+      const planner = normalizeOverride(rawOverrides.planner);
+      if (planner) overrides.planner = planner;
+      const writer = normalizeOverride(rawOverrides.writer);
+      if (writer) overrides.writer = writer;
+      const reviewer = normalizeOverride(rawOverrides.reviewer);
+      if (reviewer) overrides.reviewer = reviewer;
+    }
+
+    return {
+      mode,
+      priorityMode,
+      reviewPasses,
+      writerConcurrency,
+      overrides,
+    };
+  };
+
   return {
     testCases: normalize(raw?.testCases, 'testCases'),
     sql: normalize(raw?.sql, 'sql'),
     data: normalize(raw?.data, 'data'),
     quickSelections: normalizeQuickSelections(raw?.quickSelections),
+    agenticDefaults: normalizeAgenticDefaults(raw?.agenticDefaults),
   };
 }
 
@@ -208,11 +263,62 @@ export function ensureSettingsFallback(
     : DEFAULT_SETTINGS.quickSelections)
     .map((selection, index) => normalizeQuickSelection(selection, index));
 
+  const fallbackSelection = normalize(current.testCases);
+  const agenticDefaults = current.agenticDefaults ?? DEFAULT_AGENTIC_DEFAULTS;
+
+  const normalizeAgenticOverride = (
+    override: ProviderSelection | undefined,
+    fallback: ProviderSelection
+  ): ProviderSelection | undefined => {
+    if (!override) {
+      return undefined;
+    }
+
+    const providerId = providerMap.has(override.provider)
+      ? override.provider
+      : fallback.provider;
+    const descriptor = providerMap.get(providerId) ?? fallbackProvider;
+    const defaultModel = descriptor.defaultModel
+      ?? descriptor.models?.[0]?.id
+      ?? FALLBACK_MODELS[providerId];
+    const candidateModel = normalizeModelIdentifier(providerId, override.model);
+    const allowCustom = providerId === 'openrouter' || !descriptor.models || descriptor.models.length === 0;
+    const modelExists = descriptor.models?.some((model) => model.id === candidateModel) ?? false;
+    const normalizedModel = candidateModel && (modelExists || allowCustom)
+      ? candidateModel
+      : defaultModel;
+
+    return {
+      provider: providerId,
+      model: normalizedModel,
+    };
+  };
+
+  const overrides: AgenticModelOverrides = {};
+  const rawOverrides = agenticDefaults.overrides ?? {};
+  const plannerOverride = normalizeAgenticOverride(rawOverrides.planner, fallbackSelection);
+  if (plannerOverride) overrides.planner = plannerOverride;
+  const writerOverride = normalizeAgenticOverride(rawOverrides.writer, fallbackSelection);
+  if (writerOverride) overrides.writer = writerOverride;
+  const reviewerOverride = normalizeAgenticOverride(rawOverrides.reviewer, fallbackSelection);
+  if (reviewerOverride) overrides.reviewer = reviewerOverride;
+
   return {
     testCases: normalize(current.testCases),
     sql: normalize(current.sql),
     data: normalize(current.data),
     quickSelections,
+    agenticDefaults: {
+      mode: agenticDefaults.mode ?? DEFAULT_AGENTIC_DEFAULTS.mode,
+      priorityMode: agenticDefaults.priorityMode ?? DEFAULT_AGENTIC_DEFAULTS.priorityMode,
+      reviewPasses: clampReviewPasses(
+        agenticDefaults.reviewPasses ?? DEFAULT_AGENTIC_DEFAULTS.reviewPasses ?? 0
+      ),
+      writerConcurrency: clampWriterConcurrency(
+        agenticDefaults.writerConcurrency ?? DEFAULT_AGENTIC_DEFAULTS.writerConcurrency ?? 1
+      ),
+      overrides,
+    },
   };
 }
 
