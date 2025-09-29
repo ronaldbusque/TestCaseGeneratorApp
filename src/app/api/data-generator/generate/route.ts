@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { TestDataGeneratorService } from '@/lib/services/ai/testDataGenerator';
 import { createAIService } from '@/lib/services/ai/factory';
 import { LLMProvider } from '@/lib/types';
+import usageTracker from '@/lib/server/usageTracker';
 
 interface FieldDefinition {
   name: string;
@@ -48,6 +49,7 @@ export async function POST(request: NextRequest) {
     }
     
     const coreAIService = createAIService(provider);
+    const userIdentifier = request.headers.get('X-User-Identifier') ?? undefined;
     console.log(`Core AI Service created: ${coreAIService.constructor.name}`);
     
     const dataGeneratorService = new TestDataGeneratorService(coreAIService);
@@ -70,6 +72,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(result);
     }
     
+    if (userIdentifier && !result.error) {
+      console.log('[API][Test Data Generate] Recording usage', {
+        userIdentifier,
+        provider: provider ?? 'openai',
+        model,
+        count,
+        format,
+      });
+      await usageTracker.recordUsage({
+        userIdentifier,
+        feature: 'test-data-generator',
+        provider: provider ?? 'openai',
+        model: model ?? null,
+        metadata: { count, format },
+      });
+    }
+
     return NextResponse.json(result);
   } catch (error) {
     console.error('Error generating test data:', error);

@@ -1,4 +1,5 @@
 import { generateObject, generateText } from 'ai';
+import type { LanguageModelV1 } from 'ai';
 import { z } from 'zod';
 import {
   AgenticGenerationOptions,
@@ -23,15 +24,20 @@ import {
 import { logAIInteraction } from '@/lib/utils/aiLogger';
 import { JsonCleaner } from '@/lib/utils/jsonCleaner';
 
-const PlannerItemSchema = z.object({
-  id: z.string().min(1),
-  title: z.string().min(1),
-  area: z.string().min(1),
-  focus: z.string().optional(),
-  estimatedCases: z.number().int().positive().optional(),
-  chunkRefs: z.array(z.string().min(1)).optional(),
-  notes: z.string().optional(),
-}).strict();
+const PlannerItemSchema = z
+  .object({
+    id: z.string().min(1),
+    title: z.string().min(1),
+    area: z.string().min(1),
+    focus: z.string({ required_error: 'Focus is required' }).min(1, 'Focus is required'),
+    estimatedCases: z
+      .number({ invalid_type_error: 'estimatedCases must be a positive integer' })
+      .int()
+      .positive(),
+    chunkRefs: z.array(z.string().min(1)).default([]),
+    notes: z.string().default(''),
+  })
+  .strict();
 
 const PlannerSchema = z.object({
   items: z.array(PlannerItemSchema),
@@ -314,9 +320,14 @@ export class TestCaseAgenticPipeline {
       priorityMode,
     });
 
+    const priorityGuidance =
+      priorityMode === 'core-functionality'
+        ? 'When priority mode is core-functionality, limit the plan to smoke-level, business-critical scenarios that would block release if they failed. Skip cosmetic, edge, or nice-to-have coverage. Think in terms of regression blockers, P0 flows, and regulatory “must-pass” checks only.'
+        : 'When priority mode is comprehensive, aim for broad coverage across happy, alternate, and negative flows, including boundary conditions and resilience checks.';
+
     const promptSections = [
       'You are an expert QA strategist. Break the supplied materials into a concise execution plan for generating test cases.',
-      `Priority mode: ${priorityMode}. If comprehensive, ensure broad coverage including edge cases. If core-functionality, focus on critical user journeys and regulatory must-haves. Produce a JSON object with an "items" array of plan entries (id, title, area, focus, estimatedCases, chunkRefs when applicable).`,
+      `Priority mode: ${priorityMode}. ${priorityGuidance} Produce a JSON object with an "items" array of plan entries (id, title, area, focus, estimatedCases, chunkRefs when applicable).`,
       'Keep each focus under 160 characters and notes under 220 characters. Do not enumerate every acceptance criterion; summarize only the key goals for coverage.',
       requirements ? `Requirements:\n${requirements}` : 'No requirements provided.',
       filesSummary ? `Reference documents:\n${filesSummary}` : '',
@@ -330,25 +341,60 @@ export class TestCaseAgenticPipeline {
       model: plannerModel,
     });
 
-    const result = await safeGenerateObject({
-      model,
-      schema: PlannerSchema,
-      prompt,
-      retryInstruction: 'Return ONLY a JSON object with an "items" array of plan entries matching the schema. Do not repeat phrases or include commentary.',
-    });
+    let result;
+    let planItems: GenerationPlanItem[] = [];
+    let loggedPrompt = prompt;
+
+    if (this.shouldUseStructuredPlanner(plannerProvider, plannerModel)) {
+      try {
+        result = await safeGenerateObject({
+          model,
+          schema: PlannerSchema,
+          prompt,
+          retryInstruction: 'Return ONLY a JSON object with an "items" array of plan entries matching the schema. Do not repeat phrases or include commentary.',
+        });
+        planItems = this.normalizePlannerItems(result.object.items ?? []);
+      } catch (error: any) {
+        if (!this.isPlannerSchemaError(error)) {
+          throw error;
+        }
+
+        console.warn('[Agentic] Planner schema strict parse failed, switching to text parsing', {
+          provider: plannerProvider,
+          model: plannerModel,
+          error: error?.message,
+        });
+
+        const fallback = await this.generatePlannerViaText(model, prompt);
+        planItems = fallback.items;
+        result = { object: { items: planItems }, text: fallback.rawText } as any;
+        loggedPrompt = fallback.prompt;
+
+        console.info('[Agentic] Planner text parsing succeeded', {
+          provider: plannerProvider,
+          model: plannerModel,
+          planItems: planItems.length,
+        });
+      }
+    } else {
+      const fallback = await this.generatePlannerViaText(model, prompt);
+      planItems = fallback.items;
+      result = { object: { items: planItems }, text: fallback.rawText } as any;
+      loggedPrompt = fallback.prompt;
+      console.info('[Agentic] Planner text parsing used by default', {
+        provider: plannerProvider,
+        model: plannerModel,
+        planItems: planItems.length,
+      });
+    }
 
     logAIInteraction({
       provider: plannerProvider,
       model: plannerModel,
-      prompt,
+      prompt: loggedPrompt,
       response: result.text ?? JSON.stringify(result.object),
-      context: { type: 'test-case-generation', stage: 'planner' },
+      context: this.withUserContext(context, { type: 'test-case-generation', stage: 'planner' }),
     });
-
-    const planItems = (result.object.items ?? []).map((item, index) => ({
-      ...item,
-      id: item.id || `PLAN-${index + 1}`,
-    }));
 
     console.log('[Agentic] Planner completed', {
       provider: plannerProvider,
@@ -359,6 +405,126 @@ export class TestCaseAgenticPipeline {
     progressCallback?.({ type: 'planner:complete', planItems: planItems.length });
 
     return planItems;
+  }
+
+  private isPlannerSchemaError(error: any) {
+    if (!error) {
+      return false;
+    }
+    const message = typeof error.message === 'string' ? error.message : '';
+    return message.includes("Invalid schema for response_format 'response'");
+  }
+
+  private normalizePlannerItems(items: any[]): GenerationPlanItem[] {
+    return items.map((item: any, index: number) => {
+      const id = typeof item?.id === 'string' && item.id.trim() ? item.id.trim() : `PLAN-${index + 1}`;
+      const title = typeof item?.title === 'string' && item.title.trim() ? item.title.trim() : `Plan ${index + 1}`;
+      const area = typeof item?.area === 'string' && item.area.trim() ? item.area.trim() : 'General';
+      const focus = typeof item?.focus === 'string' && item.focus.trim() ? item.focus.trim() : 'General coverage';
+      const estimatedCases =
+        typeof item?.estimatedCases === 'number' && Number.isFinite(item.estimatedCases) && item.estimatedCases > 0
+          ? Math.floor(item.estimatedCases)
+          : 1;
+      const chunkRefs = Array.isArray(item?.chunkRefs)
+        ? item.chunkRefs.filter((ref: any) => typeof ref === 'string' && ref.trim())
+        : undefined;
+      const notes = typeof item?.notes === 'string' && item.notes.trim() ? item.notes.trim() : undefined;
+
+      return {
+        id,
+        title,
+        area,
+        focus,
+        estimatedCases,
+        chunkRefs,
+        notes,
+      } satisfies GenerationPlanItem;
+    });
+  }
+
+  private cleanPlannerJson(raw: string): string {
+    let content = raw.trim();
+
+    const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced) {
+      content = fenced[1].trim();
+    }
+
+    const firstBrace = content.indexOf('{');
+    const lastBrace = content.lastIndexOf('}');
+
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+      throw new Error('Planner response did not include a JSON object');
+    }
+
+    return content.slice(firstBrace, lastBrace + 1);
+  }
+
+  private withUserContext(context: PipelineContext, base: Record<string, any>): Record<string, any> {
+    return this.applyUserContext(context.request.userIdentifier, base);
+  }
+
+  private applyUserContext(userIdentifier: string | undefined, base: Record<string, any>): Record<string, any> {
+    return userIdentifier ? { ...base, userIdentifier } : base;
+  }
+
+  private shouldUseStructuredPlanner(provider: LLMProvider, _model: string): boolean {
+    if (provider === 'openai') {
+      return false;
+    }
+
+    return true;
+  }
+
+  private async generatePlannerViaText(model: LanguageModelV1, basePrompt: string): Promise<{
+    items: GenerationPlanItem[];
+    rawText: string;
+    prompt: string;
+  }> {
+    const relaxedPrompt = `${basePrompt}\n\nIMPORTANT: Return JSON with an "items" array where each entry includes id, title, area, focus, estimatedCases (positive integer), chunkRefs (array of strings when applicable), and notes (optional).`;
+
+    const textResult = await generateText({
+      model,
+      prompt: relaxedPrompt,
+    });
+
+    const cleaned = this.cleanPlannerJson(textResult.text);
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch (parseError) {
+      throw new Error(`Planner text parse failed: ${parseError instanceof Error ? parseError.message : 'Unknown parse error'}`);
+    }
+
+    const relaxedSchema = z
+      .object({
+        items: z
+          .array(
+            z
+              .object({
+                id: z.string(),
+                title: z.string(),
+                area: z.string(),
+                focus: z.string().optional(),
+                estimatedCases: z.number().optional(),
+                chunkRefs: z.array(z.string()).optional(),
+                notes: z.string().optional(),
+              })
+              .strict()
+          )
+          .optional(),
+      })
+      .strict();
+
+    const relaxed = relaxedSchema.parse(parsed);
+    const items = this.normalizePlannerItems(relaxed.items ?? []);
+
+    return {
+      items,
+      rawText: cleaned,
+      prompt: relaxedPrompt,
+    };
   }
 
   private async runWriter(
@@ -417,11 +583,11 @@ export class TestCaseAgenticPipeline {
           model: writerModel,
           prompt,
           response: result.text ?? JSON.stringify(result.object),
-          context: {
+          context: this.withUserContext(context, {
             type: 'test-case-generation',
             stage: 'writer',
             planId: planItem.id,
-          },
+          }),
         });
 
         const cases = result.object.items ?? [];
@@ -594,11 +760,11 @@ export class TestCaseAgenticPipeline {
         model: reviewerModel,
         prompt,
         response: reviewResult.text ?? JSON.stringify(reviewResult.object),
-        context: {
+        context: this.withUserContext(context, {
           type: 'test-case-generation',
           stage: 'reviewer',
           pass,
-        },
+        }),
       });
 
       const feedback = reviewResult.object.feedback ?? [];
@@ -702,13 +868,13 @@ export class TestCaseAgenticPipeline {
             model: writerModel,
             prompt: revisionPrompt,
             response: revisionResult.text ?? JSON.stringify(revisionResult.object),
-            context: {
+            context: this.withUserContext(context, {
               type: 'test-case-generation',
               stage: 'writer-revision',
               pass,
               chunk: chunkIndex + 1,
               totalChunks,
-            },
+            }),
           });
 
           const revisions = revisionResult.object.items ?? [];
@@ -946,10 +1112,16 @@ export class TestCaseAgenticPipeline {
     const scenarioSummary = summarizeScenarios(request.selectedScenarios);
     const priorityMode = request.priorityMode ?? 'comprehensive';
 
+    const priorityInstruction =
+      priorityMode === 'core-functionality'
+        ? 'Core-functionality mode: deliver only P0/P1 regression coverage—smoke checks, critical user journeys, compliance gates, and failure paths that would block release. Exclude exploratory edge cases, cosmetic behavior, or anything that would be a nice-to-have.'
+        : 'Comprehensive mode: include happy, alternate, and negative flows plus boundary and resilience checks.';
+
     const sections = [
       'You are a senior QA engineer. Generate additional test cases for the provided plan item.',
       `Plan item: ${planItem.id} - ${planItem.title} (${planItem.area}). Focus: ${planItem.focus ?? 'General coverage'} `,
-      `Mode: ${request.mode}. Priority: ${priorityMode}. If comprehensive, include happy, alternate, and negative flows. If core-functionality, concentrate on essential success paths and blockers.`,
+      `Mode: ${request.mode}. Priority: ${priorityMode}. ${priorityInstruction}`,
+      'All produced test cases MUST keep the original plan area unchanged. Use the exact plan area value for every case. Keep titles concise and free of requirement identifiers; mention requirement codes inside notes or descriptions instead.',
       'Group closely-related validations into the same test case when they belong to one workflow. Only split cases when outcomes or personas differ materially (e.g., happy vs negative vs edge). Use the description to summarize key checks in a single paragraph separated by semicolons.',
       requirements ? `Requirements:\n${requirements}` : '',
       filesSummary ? `Reference documents:\n${filesSummary}` : '',
@@ -969,9 +1141,15 @@ export class TestCaseAgenticPipeline {
     cases: any[],
     passNumber: number
   ): string {
+    const priorityInstruction =
+      (request.priorityMode ?? 'comprehensive') === 'core-functionality'
+        ? 'Core-functionality mode: treat the scope as P0/P1 regression coverage only. Recommend additional cases solely when a release-blocking path, compliance obligation, or critical negative scenario is missing.'
+        : 'Comprehensive mode: expect broad coverage across happy, alternate, negative, and edge scenarios.';
+
     const sections = [
       `You are reviewing generated ${request.mode} test cases. Pass number: ${passNumber}.`,
       'Assess coverage completeness, edge cases, and alignment with the plan. Identify missing or incorrect validations.',
+      priorityInstruction,
       `Plan:\n${JSON.stringify(plan, null, 2)}`,
       `Current test cases:\n${JSON.stringify(cases, null, 2)}`,
       'Return JSON with a "feedback" array of issues (caseId, issueType, severity, summary, suggestion) and a top-level "summary" string. Always supply issueType (e.g., coverage-gap, duplication, formatting) and a suggestion string (use "No suggestion provided." if none). Severity must be one of info, minor, major, critical.',
@@ -1047,7 +1225,7 @@ export class TestCaseAgenticPipeline {
       model: modelId,
       prompt,
       response: rawOutput,
-      context: { type: 'test-case-generation', stage: 'single-shot' },
+      context: this.applyUserContext(request.userIdentifier, { type: 'test-case-generation', stage: 'single-shot' }),
     });
 
     if (!rawOutput) {

@@ -3,7 +3,6 @@
 import { Switch } from '@headlessui/react';
 import { TestPriorityMode, TestCaseMode } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { InformationCircleIcon } from '@heroicons/react/24/outline';
 
 interface TestPriorityToggleProps {
   priorityMode: TestPriorityMode;
@@ -19,7 +18,6 @@ export function TestPriorityToggle({
   className
 }: TestPriorityToggleProps) {
   const isComprehensive = priorityMode === 'comprehensive';
-  const isDetailedMode = testCaseMode === 'detailed';
 
   return (
     <div className={cn('space-y-3', className)}>
@@ -55,16 +53,8 @@ export function TestPriorityToggle({
               : 'Focus on essential functionality and critical path testing'
             }
           </p>
-          {isDetailedMode && isComprehensive && (
-            <div className="flex items-start gap-2 p-2 rounded bg-yellow-500/10 border border-yellow-500/20">
-              <InformationCircleIcon className="h-4 w-4 text-yellow-400 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-yellow-200">
-                Note: When using detailed test generation, comprehensive coverage may be limited by token constraints. Consider using core functionality mode for more efficient token usage.
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </div>
   );
-} 
+}

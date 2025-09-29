@@ -21,6 +21,71 @@ import { useProviderSettings } from '@/lib/context/ProviderSettingsContext';
 import { QuickModelSwitcher } from '@/components/QuickModelSwitcher';
 import type { LLMProvider } from '@/lib/types/providers';
 
+const MODEL_OVERRIDE_STORAGE_KEY = 'tcg_agentic_model_overrides';
+const AGENTIC_SETTINGS_STORAGE_KEY = 'tcg_agentic_settings';
+
+type StoredModelOverrides = {
+  planner?: string;
+  writer?: string;
+  reviewer?: string;
+};
+
+type StoredAgenticSettings = {
+  reviewPasses?: number;
+  writerConcurrency?: number;
+};
+
+const VALID_PROVIDERS: LLMProvider[] = ['openai', 'gemini', 'openrouter'];
+
+const isValidProviderId = (value: any): value is LLMProvider =>
+  VALID_PROVIDERS.includes(value);
+
+const encodeModelSelection = (provider: LLMProvider, model: string) =>
+  JSON.stringify({ provider, model });
+
+const decodeModelSelectionValue = (
+  value?: string
+): { provider: LLMProvider; model: string } | null => {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    if (isValidProviderId(parsed?.provider) && typeof parsed?.model === 'string' && parsed.model) {
+      return { provider: parsed.provider, model: parsed.model } as const;
+    }
+  } catch (error) {
+    console.warn('Failed to decode model selection', { value, error });
+  }
+
+  return null;
+};
+
+const loadStoredJson = <T,>(key: string, fallback: T): T => {
+  if (typeof window === 'undefined') {
+    return fallback;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) {
+      return fallback;
+    }
+    return JSON.parse(raw) as T;
+  } catch (error) {
+    console.warn('Failed to load stored JSON', { key, error });
+    return fallback;
+  }
+};
+
+const loadStoredOverrides = () => loadStoredJson<StoredModelOverrides>(MODEL_OVERRIDE_STORAGE_KEY, {});
+
+const loadStoredAgenticSettings = () => loadStoredJson<StoredAgenticSettings>(AGENTIC_SETTINGS_STORAGE_KEY, {});
+
+const clampReviewPasses = (value: number) => Math.max(0, Math.min(6, Math.floor(value)));
+const clampWriterConcurrency = (value: number) => Math.max(1, Math.min(6, Math.floor(value)));
+
 const isHighLevelTestCase = (testCase: TestCase): testCase is HighLevelTestCase => {
   return 'scenario' in testCase && 'area' in testCase;
 };
@@ -60,13 +125,53 @@ export default function Home() {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [confirmationType, setConfirmationType] = useState<'new_session' | null>(null);
   const [shouldResetFiles, setShouldResetFiles] = useState(false);
-  const [agenticEnabled, setAgenticEnabled] = useState(false);
-  const [reviewPasses, setReviewPasses] = useState(1);
-  const [plannerModelOverride, setPlannerModelOverride] = useState('');
-  const [writerModelOverride, setWriterModelOverride] = useState('');
-  const [reviewerProviderOverride, setReviewerProviderOverride] = useState<'same' | LLMProvider>('same');
-  const [reviewerModelOverride, setReviewerModelOverride] = useState('');
-  const [writerConcurrency, setWriterConcurrency] = useState(1);
+  const agenticEnabled = true;
+
+  const baseSelection = encodeModelSelection(settings.testCases.provider, settings.testCases.model);
+
+  const storedOverridesRef = useRef<StoredModelOverrides | null>(null);
+  if (storedOverridesRef.current === null) {
+    storedOverridesRef.current = loadStoredOverrides();
+  }
+  const initialOverrides = storedOverridesRef.current ?? {};
+
+  const coerceSelection = (value?: string) => {
+    const decoded = decodeModelSelectionValue(value);
+    if (!decoded) {
+      return baseSelection;
+    }
+    return encodeModelSelection(decoded.provider, decoded.model);
+  };
+
+  const [plannerModelSelection, setPlannerModelSelection] = useState<string>(() =>
+    coerceSelection(initialOverrides.planner)
+  );
+  const [writerModelSelection, setWriterModelSelection] = useState<string>(() =>
+    coerceSelection(initialOverrides.writer)
+  );
+  const [reviewerModelSelection, setReviewerModelSelection] = useState<string>(() =>
+    coerceSelection(initialOverrides.reviewer)
+  );
+
+  const storedAgenticSettingsRef = useRef<StoredAgenticSettings | null>(null);
+  if (storedAgenticSettingsRef.current === null) {
+    storedAgenticSettingsRef.current = loadStoredAgenticSettings();
+  }
+  const storedAgenticSettings = storedAgenticSettingsRef.current ?? {};
+
+  const [reviewPasses, setReviewPasses] = useState<number>(() => {
+    const value = storedAgenticSettings.reviewPasses;
+    return typeof value === 'number' && Number.isFinite(value)
+      ? clampReviewPasses(value)
+      : 0;
+  });
+
+  const [writerConcurrency, setWriterConcurrency] = useState<number>(() => {
+    const value = storedAgenticSettings.writerConcurrency;
+    return typeof value === 'number' && Number.isFinite(value)
+      ? clampWriterConcurrency(value)
+      : 1;
+  });
   const [generationPlan, setGenerationPlan] = useState<GenerationPlanItem[]>([]);
   const [reviewFeedback, setReviewFeedback] = useState<ReviewFeedbackItem[]>([]);
   const [generationWarnings, setGenerationWarnings] = useState<string[]>([]);
@@ -98,93 +203,125 @@ export default function Home() {
     focusCaseCount: 0,
   });
   const progressRef = useRef<HTMLDivElement | null>(null);
+  const previousBaseSelectionRef = useRef(baseSelection);
+  const isInitialSyncRef = useRef(true);
 
-  const reviewerProviderOptions = useMemo(
-    () => [
-      { value: 'same' as const, label: 'Same as generator' },
-      ...availableProviders.map((provider) => ({
-        value: provider.id,
-        label: provider.label,
-      })),
-    ],
-    [availableProviders]
-  );
-
-  const plannerModelOptions = useMemo(() => {
-    const options: { model: string; label: string }[] = [];
-    const seen = new Set<string>();
-    const addOption = (model: string, label?: string) => {
-      if (!model || seen.has(model)) return;
-      options.push({ model, label: label ?? model });
-      seen.add(model);
-    };
-
-    addOption(settings.testCases.model, settings.testCases.model);
-    quickSelections
-      .filter((qs) => qs.provider === settings.testCases.provider)
-      .forEach((qs) => addOption(qs.model, qs.label ?? qs.model));
-
-    return options;
-  }, [quickSelections, settings.testCases.model, settings.testCases.provider]);
-
-  const writerModelOptions = useMemo(() => {
-    const options: { model: string; label: string }[] = [];
-    const seen = new Set<string>();
-    const addOption = (model: string, label?: string) => {
-      if (!model || seen.has(model)) return;
-      options.push({ model, label: label ?? model });
-      seen.add(model);
-    };
-
-    addOption(settings.testCases.model, settings.testCases.model);
-    quickSelections
-      .filter((qs) => qs.provider === settings.testCases.provider)
-      .forEach((qs) => addOption(qs.model, qs.label ?? qs.model));
-
-    return options;
-  }, [quickSelections, settings.testCases.model, settings.testCases.provider]);
-
-  const reviewerProviderResolved: LLMProvider = reviewerProviderOverride === 'same'
-    ? settings.testCases.provider
-    : reviewerProviderOverride;
-
-  const reviewerDefaultModel = useMemo(() => {
-    if (reviewerProviderOverride === 'same') {
-      return settings.testCases.model;
+  useEffect(() => {
+    if (isInitialSyncRef.current) {
+      isInitialSyncRef.current = false;
+      previousBaseSelectionRef.current = baseSelection;
+      return;
     }
-    const descriptor = availableProviders.find((provider) => provider.id === reviewerProviderResolved);
-    return descriptor?.defaultModel ?? descriptor?.models?.[0]?.id ?? settings.testCases.model;
-  }, [availableProviders, reviewerProviderOverride, reviewerProviderResolved, settings.testCases.model]);
 
-  const reviewerModelOptions = useMemo(() => {
-    const options: { model: string; label: string }[] = [];
-    const seen = new Set<string>();
-    const addOption = (model: string | undefined, label?: string) => {
-      if (!model || seen.has(model)) return;
-      options.push({ model, label: label ?? model });
-      seen.add(model);
+    setPlannerModelSelection(baseSelection);
+    setWriterModelSelection(baseSelection);
+    setReviewerModelSelection(baseSelection);
+
+    previousBaseSelectionRef.current = baseSelection;
+  }, [baseSelection]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const baseDecoded = decodeModelSelectionValue(baseSelection);
+    const payload: StoredModelOverrides = {};
+
+    const plannerDecoded = decodeModelSelectionValue(plannerModelSelection);
+    if (
+      plannerDecoded &&
+      (!baseDecoded ||
+        plannerDecoded.provider !== baseDecoded.provider ||
+        plannerDecoded.model !== baseDecoded.model)
+    ) {
+      payload.planner = encodeModelSelection(plannerDecoded.provider, plannerDecoded.model);
+    }
+
+    const writerDecoded = decodeModelSelectionValue(writerModelSelection);
+    if (
+      writerDecoded &&
+      (!baseDecoded ||
+        writerDecoded.provider !== baseDecoded.provider ||
+        writerDecoded.model !== baseDecoded.model)
+    ) {
+      payload.writer = encodeModelSelection(writerDecoded.provider, writerDecoded.model);
+    }
+
+    const reviewerDecoded = decodeModelSelectionValue(reviewerModelSelection);
+    if (
+      reviewerDecoded &&
+      (!baseDecoded ||
+        reviewerDecoded.provider !== baseDecoded.provider ||
+        reviewerDecoded.model !== baseDecoded.model)
+    ) {
+      payload.reviewer = encodeModelSelection(reviewerDecoded.provider, reviewerDecoded.model);
+    }
+    window.localStorage.setItem(MODEL_OVERRIDE_STORAGE_KEY, JSON.stringify(payload));
+  }, [plannerModelSelection, writerModelSelection, reviewerModelSelection, baseSelection]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const payload: StoredAgenticSettings = {
+      reviewPasses,
+      writerConcurrency,
+    };
+    window.localStorage.setItem(AGENTIC_SETTINGS_STORAGE_KEY, JSON.stringify(payload));
+  }, [reviewPasses, writerConcurrency]);
+
+  const providerLabelMap = useMemo(() => {
+    const map = new Map<LLMProvider, string>();
+    availableProviders.forEach((descriptor) => {
+      map.set(descriptor.id, descriptor.label);
+    });
+    return map;
+  }, [availableProviders]);
+
+  const quickSelectionLabelMap = useMemo(() => {
+    const map = new Map<string, string>();
+    quickSelections.forEach((qs) => {
+      const label = qs.label?.trim();
+      if (label) {
+        map.set(encodeModelSelection(qs.provider, qs.model), label);
+      }
+    });
+    return map;
+  }, [quickSelections]);
+
+  const modelOptions = useMemo(() => {
+    const options: Array<{ value: string; label: string; provider: LLMProvider }> = [];
+    const upsert = (provider: LLMProvider, model: string) => {
+      const value = encodeModelSelection(provider, model);
+      let providerLabel = providerLabelMap.get(provider) ?? provider;
+      if (provider === 'openrouter') {
+        providerLabel = 'OpenRouter';
+      }
+      const label = quickSelectionLabelMap.get(value) ?? `${providerLabel} · ${model}`;
+      const existingIndex = options.findIndex((option) => option.value === value);
+      if (existingIndex >= 0) {
+        options[existingIndex] = { value, label, provider };
+      } else {
+        options.push({ value, label, provider });
+      }
     };
 
-    addOption(reviewerDefaultModel, reviewerDefaultModel);
-    quickSelections
-      .filter((qs) => qs.provider === reviewerProviderResolved)
-      .forEach((qs) => addOption(qs.model, qs.label ?? qs.model));
+    upsert(settings.testCases.provider, settings.testCases.model);
+    quickSelections.forEach((qs) => upsert(qs.provider, qs.model));
 
     return options;
-  }, [quickSelections, reviewerDefaultModel, reviewerProviderResolved]);
+  }, [providerLabelMap, quickSelectionLabelMap, quickSelections, settings.testCases.model, settings.testCases.provider]);
 
   const generationStepMessages = useMemo(() => ({
     idle: 'Idle',
     analyzing: 'Analyzing uploaded materials and estimating token usage',
     planning: 'Planning coverage with QA best practices',
-    generating: agenticEnabled
-      ? 'Expanding each coverage area into test cases'
-      : 'Generating test cases',
+    generating: 'Test case writer expanding each coverage area into test cases',
     reviewing: 'Reviewer evaluating coverage and identifying gaps',
     revising: 'Revision agent applying reviewer feedback',
     finalizing: 'Finalizing results and telemetry',
     complete: 'Generation complete',
-  }), [agenticEnabled]);
+  }), []);
 
   const loadingMessage = generationStepMessages[generationStep] ?? generationStep;
 
@@ -195,13 +332,11 @@ export default function Home() {
       case 'planning':
         return 'Drafting a coverage blueprint that aligns with the selected priority mode.';
       case 'generating':
-        return agenticEnabled
-      ? 'Authoring test cases for each planned coverage slice.'
-      : 'Authoring the requested test cases based on the supplied requirements.';
-    case 'revising':
-      return 'Revision agent is updating the generated cases to address reviewer findings.';
-    case 'reviewing':
-      return 'Reviewer agent is assessing coverage and flagging any gaps or issues.';
+        return 'Test case writer agent is expanding each planned coverage slice.';
+      case 'revising':
+        return 'Revision agent is updating the generated cases to address reviewer findings.';
+      case 'reviewing':
+        return 'Reviewer agent is assessing coverage and flagging any gaps or issues.';
       case 'finalizing':
         return 'Applying final formatting, compiling telemetry, and preparing the response.';
       case 'complete':
@@ -209,7 +344,7 @@ export default function Home() {
       default:
         return '';
     }
-  }, [generationStep, agenticEnabled]);
+  }, [generationStep]);
 
   const shouldRenderProgressCard = generationStep !== 'idle' || Boolean(generationTelemetry);
   useEffect(() => {
@@ -324,7 +459,7 @@ export default function Home() {
 
     register({
       key: 'writer',
-      label: 'Writer slices',
+      label: 'Test case writer',
       status: writerStatus,
       completed: writerTotal > 0 ? writerCompletedCount : undefined,
       total: writerTotal || undefined,
@@ -332,6 +467,7 @@ export default function Home() {
         ? Math.max(writerTotal - writerCompletedCount, 0)
         : undefined,
       progress: writerProgressValue,
+      note: writerTotal ? 'slices' : undefined,
     });
 
     const executedReviewPasses = generationTelemetry?.reviewPasses?.length ?? reviewProgress.completedPasses ?? 0;
@@ -728,41 +864,42 @@ export default function Home() {
   };
 
   const buildAgenticOptions = useCallback(() => {
-    if (!agenticEnabled) {
-      return undefined;
-    }
+    const fallbackSelection =
+      decodeModelSelectionValue(baseSelection) ?? ({
+        provider: settings.testCases.provider,
+        model: settings.testCases.model,
+      } as const);
 
-    const writerProvider = settings.testCases.provider;
-    const writerModel = writerModelOverride.trim() || settings.testCases.model;
-    const plannerModel = plannerModelOverride.trim() || settings.testCases.model;
-    const reviewerModel = reviewerModelOverride.trim() || reviewerDefaultModel;
-
-    const reviewerProvider = reviewerProviderOverride === 'same'
-      ? writerProvider
-      : reviewerProviderOverride;
-
-    const normalizedPasses = Number.isFinite(reviewPasses)
-      ? Math.max(0, Math.min(6, Math.floor(reviewPasses)))
-      : 0;
-
-    const normalizedConcurrency = Number.isFinite(writerConcurrency)
-      ? Math.max(1, Math.min(6, Math.floor(writerConcurrency)))
-      : 1;
+    const plannerSelection =
+      decodeModelSelectionValue(plannerModelSelection) ?? fallbackSelection;
+    const writerSelection =
+      decodeModelSelectionValue(writerModelSelection) ?? fallbackSelection;
+    const reviewerSelection =
+      decodeModelSelectionValue(reviewerModelSelection) ?? fallbackSelection;
 
     return {
       enableAgentic: true,
-      plannerProvider: writerProvider,
-      plannerModel,
-      writerProvider,
-      writerModel,
-      reviewerProvider,
-      reviewerModel,
-      maxReviewPasses: normalizedPasses,
+      plannerProvider: plannerSelection.provider,
+      plannerModel: plannerSelection.model,
+      writerProvider: writerSelection.provider,
+      writerModel: writerSelection.model,
+      reviewerProvider: reviewerSelection.provider,
+      reviewerModel: reviewerSelection.model,
+      maxReviewPasses: clampReviewPasses(reviewPasses),
       chunkStrategy: 'auto',
-      writerConcurrency: normalizedConcurrency,
+      writerConcurrency: clampWriterConcurrency(writerConcurrency),
       streamProgress: true,
     } as const;
-  }, [agenticEnabled, plannerModelOverride, reviewerModelOverride, writerModelOverride, reviewerDefaultModel, reviewerProviderOverride, reviewPasses, writerConcurrency, settings.testCases.model, settings.testCases.provider]);
+  }, [
+    baseSelection,
+    plannerModelSelection,
+    reviewerModelSelection,
+    reviewPasses,
+    settings.testCases.model,
+    settings.testCases.provider,
+    writerConcurrency,
+    writerModelSelection,
+  ]);
 
   const fetchFileTokenSummary = useCallback(async (
     payloads: UploadedFilePayload[],
@@ -905,15 +1042,11 @@ export default function Home() {
         focusCaseCount: 0,
       });
 
-      if (agenticEnabled) {
-        setGenerationStep('planning');
-        if (!shouldStream) {
-          setTimeout(() => {
-            setGenerationStep((prev) => (prev === 'planning' ? 'generating' : prev));
-          }, 150);
-        }
-      } else {
-        setGenerationStep('generating');
+      setGenerationStep('planning');
+      if (!shouldStream) {
+        setTimeout(() => {
+          setGenerationStep((prev) => (prev === 'planning' ? 'generating' : prev));
+        }, 150);
       }
 
       const filePayloads = preparedFilePayloads.length === uploadedFiles.length
@@ -978,9 +1111,9 @@ export default function Home() {
           }));
         }
 
-        if (agenticOptions?.enableAgentic && (result.passesExecuted ?? 0) > 0) {
-          setGenerationStep('reviewing');
-        }
+      if (agenticOptions?.enableAgentic && (result.passesExecuted ?? 0) > 0) {
+        setGenerationStep('reviewing');
+      }
 
         setCurrentTestCases(result.testCases ?? []);
         setGenerationPlan(result.plan ?? []);
@@ -1450,22 +1583,11 @@ export default function Home() {
         </div>
 
         <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl p-6 sm:p-8 border border-white/20">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-blue-50">Agentic Workflow</h2>
-              <p className="text-sm text-blue-200/80">
-                Enable planner, writer, and reviewer passes for broader coverage.
-              </p>
-            </div>
-            <label className="inline-flex items-center gap-2 text-sm text-blue-100">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-white/20 bg-slate-900 text-blue-500 focus:ring-blue-500"
-                checked={agenticEnabled}
-                onChange={(event) => setAgenticEnabled(event.target.checked)}
-              />
-              <span>Enable agentic mode</span>
-            </label>
+          <div className="flex flex-col gap-2">
+            <h2 className="text-lg font-semibold text-blue-50">Agentic Workflow</h2>
+            <p className="text-sm text-blue-200/80">
+              Planner, test case writer, and reviewer agents run together for broader coverage. Tune their settings below.
+            </p>
           </div>
 
           <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -1480,17 +1602,16 @@ export default function Home() {
                 value={reviewPasses}
                 onChange={(event) => {
                   const value = Number(event.target.value);
-                  setReviewPasses(Number.isNaN(value) ? 0 : value);
+                  setReviewPasses(Number.isNaN(value) ? 0 : clampReviewPasses(value));
                 }}
-                disabled={!agenticEnabled}
-                className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <p className="mt-1 text-[0.7rem] text-blue-200/60">Set to 0 to skip reviewer passes.</p>
+              <p className="mt-1 text-[0.7rem] text-blue-200/60">Each reviewer pass can trigger a revision run when issues are found. Set to 0 to skip reviewer and revision stages.</p>
             </div>
 
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wide text-blue-200/80 mb-2">
-                Writer concurrency
+                Test case writer concurrency
               </label>
               <input
                 type="number"
@@ -1499,12 +1620,11 @@ export default function Home() {
                 value={writerConcurrency}
                 onChange={(event) => {
                   const value = Number(event.target.value);
-                  setWriterConcurrency(Number.isNaN(value) ? 1 : value);
+                  setWriterConcurrency(Number.isNaN(value) ? 1 : clampWriterConcurrency(value));
                 }}
-                disabled={!agenticEnabled}
-                className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <p className="mt-1 text-[0.7rem] text-blue-200/60">Increase to run multiple plan slices in parallel (may raise duplicate risk).</p>
+              <p className="mt-1 text-[0.7rem] text-blue-200/60">Increase to run multiple slices in parallel when you expect large plans.</p>
             </div>
 
             <div>
@@ -1512,62 +1632,39 @@ export default function Home() {
                 Planner model override
               </label>
               <select
-                value={plannerModelOverride || settings.testCases.model}
+                value={plannerModelSelection}
                 onChange={(event) => {
-                  const value = event.target.value;
-                  setPlannerModelOverride(value === settings.testCases.model ? '' : value);
+                  setPlannerModelSelection(event.target.value);
                 }}
-                disabled={!agenticEnabled}
-                className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {plannerModelOptions.map((option) => (
-                  <option key={option.model} value={option.model} className="bg-slate-900 text-blue-50">
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-[0.7rem] text-blue-200/60">Choose a planner model; defaults to the main generator model.</p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wide text-blue-200/80 mb-2">
-                Writer model override
-              </label>
-              <select
-                value={writerModelOverride || settings.testCases.model}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setWriterModelOverride(value === settings.testCases.model ? '' : value);
-                }}
-                disabled={!agenticEnabled}
-                className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {writerModelOptions.map((option) => (
-                  <option key={option.model} value={option.model} className="bg-slate-900 text-blue-50">
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-[0.7rem] text-blue-200/60">Select the test case writer model; defaults to the main generator model.</p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wide text-blue-200/80 mb-2">
-                Reviewer provider
-              </label>
-              <select
-                value={reviewerProviderOverride}
-                onChange={(event) => setReviewerProviderOverride(event.target.value as 'same' | LLMProvider)}
-                disabled={!agenticEnabled}
-                className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {reviewerProviderOptions.map((option) => (
+                {modelOptions.map((option) => (
                   <option key={option.value} value={option.value} className="bg-slate-900 text-blue-50">
                     {option.label}
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-[0.7rem] text-blue-200/60">Default uses the same provider as the writer.</p>
+              <p className="mt-1 text-[0.7rem] text-blue-200/60">Select an AI model for planning; defaults to the main generator model.</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-blue-200/80 mb-2">
+                Test case writer model override
+              </label>
+              <select
+                value={writerModelSelection}
+                onChange={(event) => {
+                  setWriterModelSelection(event.target.value);
+                }}
+                className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {modelOptions.map((option) => (
+                  <option key={option.value} value={option.value} className="bg-slate-900 text-blue-50">
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[0.7rem] text-blue-200/60">Select an AI model for the test case writer; defaults to the main generator model.</p>
             </div>
 
             <div>
@@ -1575,21 +1672,19 @@ export default function Home() {
                 Reviewer model override
               </label>
               <select
-                value={reviewerModelOverride || reviewerDefaultModel}
+                value={reviewerModelSelection}
                 onChange={(event) => {
-                  const value = event.target.value;
-                  setReviewerModelOverride(value === reviewerDefaultModel ? '' : value);
+                  setReviewerModelSelection(event.target.value);
                 }}
-                disabled={!agenticEnabled}
-                className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full h-10 rounded-xl border border-white/10 bg-slate-900/80 px-3 text-sm text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {reviewerModelOptions.map((option) => (
-                  <option key={option.model} value={option.model} className="bg-slate-900 text-blue-50">
+                {modelOptions.map((option) => (
+                  <option key={option.value} value={option.value} className="bg-slate-900 text-blue-50">
                     {option.label}
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-[0.7rem] text-blue-200/60">Select a reviewer model; defaults to the writer model.</p>
+              <p className="mt-1 text-[0.7rem] text-blue-200/60">Select an AI model for the reviewer; defaults to the main generator model.</p>
             </div>
           </div>
         </div>
@@ -1798,7 +1893,7 @@ export default function Home() {
                       <dd className="font-semibold">{formatDuration(generationTelemetry.plannerDurationMs)}</dd>
                     </div>
                     <div>
-                      <dt className="text-blue-200/70">Writer</dt>
+                      <dt className="text-blue-200/70">Test case writer</dt>
                       <dd className="font-semibold">{formatDuration(generationTelemetry.writerDurationMs)}</dd>
                     </div>
                     <div>
@@ -1806,7 +1901,7 @@ export default function Home() {
                       <dd className="font-semibold">{formatDuration(generationTelemetry.reviewerDurationMs)}</dd>
                     </div>
                     <div>
-                      <dt className="text-blue-200/70">Writer concurrency</dt>
+                      <dt className="text-blue-200/70">Test case writer concurrency</dt>
                       <dd className="font-semibold">{generationTelemetry.writerConcurrency ?? 1}</dd>
                     </div>
                     <div>
@@ -1829,7 +1924,7 @@ export default function Home() {
 
                   {(generationTelemetry.writerSlices?.length ?? 0) > 0 && (
                     <div className="mt-4">
-                      <h4 className="text-xs font-semibold uppercase tracking-wide text-blue-200/70">Writer slices</h4>
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-blue-200/70">Test case writer slices</h4>
                       <ul className="mt-2 grid gap-2 text-xs text-blue-200/80">
                         {generationTelemetry.writerSlices?.map((slice) => (
                           <li key={slice.planId} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">

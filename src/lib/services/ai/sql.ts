@@ -13,11 +13,17 @@ import { logAIInteraction } from '@/lib/utils/aiLogger';
 
 export class SQLAIService {
   private aiService: AIService; // Add private member for the core AI service
+  private readonly userIdentifier?: string;
 
   // Inject AIService via constructor
-  constructor(aiService: AIService) {
+  constructor(aiService: AIService, userIdentifier?: string) {
     this.aiService = aiService;
+    this.userIdentifier = userIdentifier;
     console.log('[SQLAIService] initialized with underlying AI Service:', { serviceType: aiService.constructor.name });
+  }
+
+  private withUserContext(base: Record<string, any>): Record<string, any> {
+    return this.userIdentifier ? { ...base, userIdentifier: this.userIdentifier } : base;
   }
 
   async generateSQLQuery(request: SQLGenerationRequest): Promise<SQLResponse> {
@@ -126,7 +132,7 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
         model,
         prompt,
         response,
-        context: { type: 'sql-generate', dialect: targetDialect },
+        context: this.withUserContext({ type: 'sql-generate', dialect: targetDialect }),
       });
       
       try {
@@ -343,7 +349,7 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
         model,
         prompt,
         response,
-        context: { type: 'sql-validate', dialect },
+        context: this.withUserContext({ type: 'sql-validate', dialect }),
       });
       
       try {
@@ -510,7 +516,7 @@ DO NOT wrap your response in markdown code blocks or any other formatting. Retur
         model,
         prompt,
         response,
-        context: { type: 'sql-convert', sourceDialect, targetDialect },
+        context: this.withUserContext({ type: 'sql-convert', sourceDialect, targetDialect }),
       });
       
       try {

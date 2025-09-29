@@ -63,25 +63,50 @@ export function QuickModelSwitcher({ domain, className }: QuickModelSwitcherProp
 
   const providerLabel = useMemo(() => {
     const provider = availableProviders.find((item) => item.id === domainSelection.provider);
+    if (provider?.id === 'openrouter') {
+      return 'OpenRouter';
+    }
     return provider?.label ?? domainSelection.provider;
   }, [availableProviders, domainSelection.provider]);
 
-  const formattedSelectionLabel = `${providerLabel} · ${domainSelection.model}`;
+  const quickSelectionLabelMap = useMemo(() => {
+    const map = new Map<string, string>();
+    quickSelections.forEach((selection) => {
+      const label = selection.label?.trim();
+      if (label) {
+        const value = `${selection.provider}::${selection.model}`;
+        map.set(value, label);
+      }
+    });
+    return map;
+  }, [quickSelections]);
+
+  const formattedSelectionLabel = useMemo(() => {
+    const key = `${domainSelection.provider}::${domainSelection.model}`;
+    const quickLabel = quickSelectionLabelMap.get(key);
+    if (quickLabel) {
+      return quickLabel;
+    }
+    return `${providerLabel} · ${domainSelection.model}`;
+  }, [domainSelection.model, domainSelection.provider, providerLabel, quickSelectionLabelMap]);
 
   const formattedQuickSelections = useMemo(() => {
     return quickSelections.map((selection) => {
       const provider = availableProviders.find((item) => item.id === selection.provider);
+      const providerDisplay = provider?.id === 'openrouter'
+        ? 'OpenRouter'
+        : provider?.label ?? selection.provider.toUpperCase();
       const label = selection.label?.trim()
         ? selection.label.trim()
-        : `${provider?.label ?? selection.provider.toUpperCase()} · ${selection.model}`;
-      const helper = `${provider?.label ?? selection.provider} · ${selection.model}`;
+        : `${providerDisplay} · ${selection.model}`;
+      const helper = `${providerDisplay} · ${selection.model}`;
       return {
         ...selection,
         displayLabel: label,
         helper,
       };
     });
-  }, [quickSelections, availableProviders]);
+  }, [availableProviders, quickSelections]);
 
   const handleSelect = (selection: QuickSelection) => {
     applyQuickSelection(domain, selection.id);

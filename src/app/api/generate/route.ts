@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAIService } from '@/lib/services/ai/factory';
 import { extractFullTextFromFiles } from '@/lib/server/fileTextExtraction';
 import { TestCaseGenerationRequest, UploadedFilePayload } from '@/lib/types';
+import usageTracker from '@/lib/server/usageTracker';
 
 export async function POST(request: NextRequest) {
   try {
@@ -58,6 +59,7 @@ export async function POST(request: NextRequest) {
       provider,
       model,
       agenticOptions,
+      userIdentifier: userIdentifier ?? undefined,
     };
 
     const shouldStream = Boolean(agenticOptions?.streamProgress);
@@ -78,7 +80,28 @@ export async function POST(request: NextRequest) {
 
           (async () => {
             try {
-              await aiService.generateTestCases(generationRequest, send);
+              const result = await aiService.generateTestCases(generationRequest, send);
+              if (userIdentifier) {
+                console.log('[API] Recording test-case usage (stream)', {
+                  userIdentifier,
+                  provider: provider ?? 'openai',
+                  model,
+                  priorityMode,
+                });
+                await usageTracker.recordUsage({
+                  userIdentifier,
+                  feature: 'test-case-generator',
+                  provider: provider ?? 'openai',
+                  model: model ?? contextDefaultModel(agenticOptions),
+                  priorityMode: priorityMode ?? 'comprehensive',
+                  metadata: {
+                    mode,
+                    plannerProvider: agenticOptions?.plannerProvider,
+                    writerProvider: agenticOptions?.writerProvider,
+                    reviewerProvider: agenticOptions?.reviewerProvider,
+                  },
+                });
+              }
               controller.close();
             } catch (error) {
               console.error('Error generating test cases (stream)', error);
@@ -103,6 +126,28 @@ export async function POST(request: NextRequest) {
 
     const result = await aiService.generateTestCases(generationRequest);
 
+    if (userIdentifier) {
+      console.log('[API] Recording test-case usage', {
+        userIdentifier,
+        provider: provider ?? 'openai',
+        model,
+        priorityMode,
+      });
+      await usageTracker.recordUsage({
+        userIdentifier,
+        feature: 'test-case-generator',
+        provider: provider ?? 'openai',
+        model: model ?? contextDefaultModel(agenticOptions),
+        priorityMode: priorityMode ?? 'comprehensive',
+        metadata: {
+          mode,
+          plannerProvider: agenticOptions?.plannerProvider,
+          writerProvider: agenticOptions?.writerProvider,
+          reviewerProvider: agenticOptions?.reviewerProvider,
+        },
+      });
+    }
+
     console.log(`[API] Generated ${result.testCases?.length || 0} test cases`);
     
     return NextResponse.json(result);
@@ -113,4 +158,16 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}
+
+function contextDefaultModel(agenticOptions: TestCaseGenerationRequest['agenticOptions']): string | null {
+  if (!agenticOptions) {
+    return null;
+  }
+  return (
+    agenticOptions.writerModel ||
+    agenticOptions.plannerModel ||
+    agenticOptions.reviewerModel ||
+    null
+  );
+}

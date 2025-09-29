@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { TestDataGeneratorService } from '@/lib/services/ai/testDataGenerator';
 import { createAIService } from '@/lib/services/ai/factory';
 import { LLMProvider } from '@/lib/types';
+import usageTracker from '@/lib/server/usageTracker';
 
 interface FieldDefinition {
   name: string;
@@ -50,6 +51,7 @@ export async function POST(request: NextRequest) {
     }
     
     const coreAIService = createAIService(provider);
+    const userIdentifier = request.headers.get('X-User-Identifier') ?? undefined;
     console.log(`Core AI Service created: ${coreAIService.constructor.name}`);
     
     const dataGeneratorService = new TestDataGeneratorService(coreAIService);
@@ -67,6 +69,22 @@ export async function POST(request: NextRequest) {
     if (result.error) {
       console.warn(`Test data enhancement encountered an issue: ${result.error}`);
       return NextResponse.json(result);
+    }
+
+    if (userIdentifier) {
+      console.log('[API][Test Data Enhance] Recording usage', {
+        userIdentifier,
+        provider: provider ?? 'openai',
+        model,
+        records: data.length,
+      });
+      await usageTracker.recordUsage({
+        userIdentifier,
+        feature: 'test-data-enhance',
+        provider: provider ?? 'openai',
+        model: model ?? null,
+        metadata: { fields: fields.length, records: data.length },
+      });
     }
     
     return NextResponse.json(result);

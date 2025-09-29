@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { SQLAIService } from '@/lib/services/ai/sql';
 import { createAIService } from '@/lib/services/ai/factory';
 import { SQLConversionRequest, LLMProvider } from '@/lib/types';
+import usageTracker from '@/lib/server/usageTracker';
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,12 +21,30 @@ export async function POST(request: NextRequest) {
     }
     
     const coreAIService = createAIService(provider);
+    const userIdentifier = request.headers.get('X-User-Identifier') ?? undefined;
     console.log(`Core AI Service created: ${coreAIService.constructor.name}`);
-    
-    const sqlService = new SQLAIService(coreAIService);
+
+    const sqlService = new SQLAIService(coreAIService, userIdentifier);
     console.log('SQLAIService instantiated with the core AI service');
     
     const result = await sqlService.convertSQLQuery({ query, sourceDialect, targetDialect, model });
+
+    if (userIdentifier) {
+      console.log('[API][SQL Convert] Recording usage', {
+        userIdentifier,
+        provider: provider ?? 'openai',
+        model,
+        sourceDialect,
+        targetDialect,
+      });
+      await usageTracker.recordUsage({
+        userIdentifier,
+        feature: 'sql-convert',
+        provider: provider ?? 'openai',
+        model: model ?? null,
+        metadata: { sourceDialect, targetDialect },
+      });
+    }
     
     console.log("=== SQL CONVERSION API RESPONSE ===");
     console.log(JSON.stringify(result, null, 2));

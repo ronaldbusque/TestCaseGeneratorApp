@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["id", "title", "area", "focus"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "area": { "type": "string" },
+          "focus": { "type": "string" },
+          "estimatedCases": { "type": "integer", "minimum": 1 },
+          "chunkRefs": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "notes": { "type": "string" }
+        }
+      }
+    }
+  },
+  "required": ["items"],
+  "additionalProperties": false
+}

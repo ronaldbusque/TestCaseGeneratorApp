@@ -17,13 +17,17 @@ function getTokenMap(): Record<string, string> {
       tokenMap = {}; // Set empty map to avoid retrying parse
       return tokenMap;
     }
-    const parsed = JSON.parse(tokensEnv);
+    const parsed = JSON.parse(tokensEnv) as Record<string, string>;
     // Basic validation: Ensure it's a non-null object
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
       logWarning('ACCESS_TOKENS environment variable is not a valid JSON object.');
       console.warn('[TokenUtils] ACCESS_TOKENS environment variable is not a valid JSON object.');
       tokenMap = {};
       return tokenMap;
+    }
+    const adminToken = process.env.ADMIN_ACCESS_TOKEN;
+    if (adminToken) {
+      parsed[adminToken] = '__admin__';
     }
     tokenMap = parsed;
     logInfo('Successfully loaded ACCESS_TOKENS mapping.');

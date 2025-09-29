@@ -9,7 +9,6 @@ import {
   CommandLineIcon,
   TableCellsIcon,
   Cog6ToothIcon,
-  QueueListIcon,
 } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/Button';
 
@@ -25,7 +24,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/', label: 'Test Case Generator', icon: DocumentCheckIcon, iconClass: 'h-8 w-8' },
   { href: '/sql', label: 'SQL Assistant', icon: CommandLineIcon, iconClass: 'h-8 w-8' },
   { href: '/data-generator', label: 'Test Data Generator', icon: TableCellsIcon, iconClass: 'h-8 w-8' },
-  { href: '/logs', label: 'AI Logs', icon: QueueListIcon, iconClass: 'h-8 w-8' },
   { href: '/settings', label: 'Settings', icon: Cog6ToothIcon, hideLabel: true, iconClass: 'h-6 w-6' },
 ];
 

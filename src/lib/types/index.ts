@@ -165,6 +165,7 @@ export interface TestCaseGenerationRequest {
   provider?: LLMProvider;
   model?: string;
   agenticOptions?: AgenticGenerationOptions;
+  userIdentifier?: string;
 }
 
 export interface TestCaseGenerationResponse {
