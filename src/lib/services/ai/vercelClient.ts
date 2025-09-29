@@ -1,7 +1,7 @@
 import { createGateway } from '@ai-sdk/gateway';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModel } from 'ai';
 import { LLMProvider } from '@/lib/types';
 
 interface ResolveModelOptions {
@@ -15,7 +15,7 @@ const gatewayApiKey = process.env.AI_GATEWAY_API_KEY;
 
 const gatewayClient = gatewayUrl && gatewayApiKey
   ? createGateway({
-      url: gatewayUrl,
+      baseURL: gatewayUrl,
       apiKey: gatewayApiKey,
     })
   : null;
@@ -73,7 +73,7 @@ function buildGatewayModelId(options: ResolveModelOptions): string | null {
   return `${options.provider}/${targetModel}`;
 }
 
-export function resolveLanguageModel(options: ResolveModelOptions): LanguageModelV1 {
+export function resolveLanguageModel(options: ResolveModelOptions): LanguageModel {
   const provider = options.provider ?? 'openai';
   const desiredModel = inferDefaultModel(provider, options.model);
 
@@ -83,7 +83,7 @@ export function resolveLanguageModel(options: ResolveModelOptions): LanguageMode
       throw new Error('Failed to resolve gateway model identifier');
     }
 
-    return gatewayClient(modelId);
+    return gatewayClient(modelId) as unknown as LanguageModel;
   }
 
   switch (provider) {
@@ -94,20 +94,20 @@ export function resolveLanguageModel(options: ResolveModelOptions): LanguageMode
       const normalized = desiredModel.startsWith('models/')
         ? desiredModel
         : `models/${desiredModel}`;
-      return geminiClient(normalized);
+      return geminiClient(normalized) as unknown as LanguageModel;
     }
     case 'openrouter': {
       if (!openRouterClient) {
         throw new Error('OPENROUTER_API_KEY is not configured');
       }
-      return openRouterClient(desiredModel);
+      return openRouterClient(desiredModel) as unknown as LanguageModel;
     }
     case 'openai':
     default: {
       if (!openaiClient) {
         throw new Error('OPENAI_API_KEY is not configured');
       }
-      return openaiClient(desiredModel);
+      return openaiClient(desiredModel) as unknown as LanguageModel;
     }
   }
 }

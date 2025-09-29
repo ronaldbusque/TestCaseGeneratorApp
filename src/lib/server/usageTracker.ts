@@ -80,7 +80,9 @@ export async function fetchUsageRows(limit = 2000, userIdentifier?: string): Pro
   return data ?? [];
 }
 
-export default {
+const usageTracker = {
   recordUsage,
   fetchUsageRows,
 };
+
+export default usageTracker;

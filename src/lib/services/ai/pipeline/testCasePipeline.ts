@@ -1,11 +1,12 @@
 import { generateObject, generateText } from 'ai';
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModel } from 'ai';
 import { z } from 'zod';
 import {
   AgenticGenerationOptions,
   AgenticTelemetry,
   GenerationPlanItem,
   LLMProvider,
+  AgenticProgressEvent,
   ReviewFeedbackItem,
   ReviewPassTelemetry,
   ReviewSeverity,
@@ -123,10 +124,12 @@ interface GenerationArtifacts {
   telemetry: AgenticTelemetry;
 }
 
-type GenerateObjectOptions<T> = Parameters<typeof generateObject<T>>[0] & {
+interface GenerateObjectOptions<T> {
+  model: LanguageModel;
+  prompt: string;
   schema: z.ZodType<T>;
   retryInstruction?: string;
-};
+}
 
 function tryParseCleaned<T>(error: any, schema: z.ZodType<T>) {
   if (error?.name === 'AI_JSONParseError' && typeof error?.text === 'string') {
@@ -392,7 +395,7 @@ export class TestCaseAgenticPipeline {
       provider: plannerProvider,
       model: plannerModel,
       prompt: loggedPrompt,
-      response: result.text ?? JSON.stringify(result.object),
+    response: JSON.stringify(result.object),
       context: this.withUserContext(context, { type: 'test-case-generation', stage: 'planner' }),
     });
 
@@ -476,7 +479,7 @@ export class TestCaseAgenticPipeline {
     return true;
   }
 
-  private async generatePlannerViaText(model: LanguageModelV1, basePrompt: string): Promise<{
+  private async generatePlannerViaText(model: LanguageModel, basePrompt: string): Promise<{
     items: GenerationPlanItem[];
     rawText: string;
     prompt: string;
@@ -582,7 +585,7 @@ export class TestCaseAgenticPipeline {
           provider: writerProvider,
           model: writerModel,
           prompt,
-          response: result.text ?? JSON.stringify(result.object),
+          response: JSON.stringify(result.object),
           context: this.withUserContext(context, {
             type: 'test-case-generation',
             stage: 'writer',
@@ -759,7 +762,7 @@ export class TestCaseAgenticPipeline {
         provider: reviewerProvider,
         model: reviewerModel,
         prompt,
-        response: reviewResult.text ?? JSON.stringify(reviewResult.object),
+          response: JSON.stringify(reviewResult.object),
         context: this.withUserContext(context, {
           type: 'test-case-generation',
           stage: 'reviewer',
@@ -867,7 +870,7 @@ export class TestCaseAgenticPipeline {
             provider: writerProvider,
             model: writerModel,
             prompt: revisionPrompt,
-            response: revisionResult.text ?? JSON.stringify(revisionResult.object),
+          response: JSON.stringify(revisionResult.object),
             context: this.withUserContext(context, {
               type: 'test-case-generation',
               stage: 'writer-revision',
