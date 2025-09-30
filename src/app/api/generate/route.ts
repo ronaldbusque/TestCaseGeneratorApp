@@ -4,6 +4,8 @@ import { extractFullTextFromFiles } from '@/lib/server/fileTextExtraction';
 import { TestCaseGenerationRequest, UploadedFilePayload } from '@/lib/types';
 import usageTracker from '@/lib/server/usageTracker';
 
+const IS_VERCEL = process.env.VERCEL === '1';
+
 export async function POST(request: NextRequest) {
   try {
     console.log('[API] Test case generation endpoint called');
@@ -24,11 +26,9 @@ export async function POST(request: NextRequest) {
       files?: UploadedFilePayload[];
     };
     
-    // Get the user identifier from the headers (added by middleware)
     const userIdentifier = request.headers.get('X-User-Identifier');
     console.log(`[API] User identifier from middleware: ${userIdentifier}`);
     
-    // Log safely without exposing the entire content of requirements or fileContent
     console.log(`[API] Request details - Mode: ${mode}, Provider: ${provider ?? 'openai'}, Model: ${model ?? 'default'}, Requirements: ${requirements ? `${requirements.substring(0, 50)}...` : 'None'}, File content: ${fileContent ? 'Provided' : 'None'}, Files: ${files.length}`);
     
     const hasFiles = Array.isArray(files) && files.length > 0;
@@ -45,10 +45,23 @@ export async function POST(request: NextRequest) {
     const aiService = createAIService(provider);
     console.log(`[API] Created AI service: ${aiService.constructor.name}`);
 
-    // Combine file content, extracted text, and requirements if present
     const combinedRequirements = [fileContent, combinedText, requirements]
       .filter((segment): segment is string => Boolean(segment && segment.trim()))
       .join('\n\n');
+
+    const effectiveAgenticOptions = (() => {
+      if (!agenticOptions?.enableAgentic) {
+        return undefined;
+      }
+      if (IS_VERCEL) {
+        console.warn('[API] Agentic workflow disabled in serverless runtime; falling back to single-shot generation');
+        return undefined;
+      }
+      return {
+        ...agenticOptions,
+        streamProgress: true,
+      } as TestCaseGenerationRequest['agenticOptions'];
+    })();
 
     const generationRequest: TestCaseGenerationRequest = {
       requirements: combinedRequirements || requirements,
@@ -58,16 +71,11 @@ export async function POST(request: NextRequest) {
       files: enrichedFiles,
       provider,
       model,
-      agenticOptions: agenticOptions?.enableAgentic
-        ? {
-            ...agenticOptions,
-            streamProgress: true,
-          }
-        : undefined,
+      agenticOptions: effectiveAgenticOptions,
       userIdentifier: userIdentifier ?? undefined,
     };
 
-    const shouldStream = Boolean(generationRequest.agenticOptions?.streamProgress);
+    const shouldStream = Boolean(effectiveAgenticOptions?.streamProgress);
     console.log(`[API] Stream progress: ${shouldStream}`);
 
     if (shouldStream) {
@@ -85,7 +93,7 @@ export async function POST(request: NextRequest) {
 
           (async () => {
             try {
-              const result = await aiService.generateTestCases(generationRequest, send);
+              await aiService.generateTestCases(generationRequest, send);
               if (userIdentifier) {
                 console.log('[API] Recording test-case usage (stream)', {
                   userIdentifier,
