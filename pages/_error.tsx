@@ -1,5 +1,3 @@
-"use client";
-
 import React from 'react';
 import Link from 'next/link';
 import type { NextPageContext } from 'next';
@@ -18,22 +16,21 @@ function ErrorPage({ statusCode }: ErrorPageProps) {
         <p className="text-sm uppercase tracking-wide text-blue-300/70">Error {code}</p>
         <h1 className="text-3xl font-semibold text-white">{description}</h1>
         <p className="max-w-md text-sm text-blue-200">
-          Try refreshing the page, or head back to the home screen to continue exploring the app.
+          Try heading back to the home screen, or visit our help center if you need assistance.
         </p>
       </div>
       <div className="flex gap-3">
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="rounded-full bg-blue-600/80 px-6 py-2 text-sm font-medium text-white shadow hover:bg-blue-600"
-        >
-          Reload
-        </button>
         <Link
           href="/"
           className="rounded-full border border-white/20 px-6 py-2 text-sm font-medium text-white hover:bg-white/10"
         >
           Home
+        </Link>
+        <Link
+          href="/help"
+          className="rounded-full bg-blue-600/80 px-6 py-2 text-sm font-medium text-white shadow hover:bg-blue-600"
+        >
+          Help Center
         </Link>
       </div>
     </main>
