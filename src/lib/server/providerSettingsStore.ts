@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import { ProviderSettings } from '@/lib/types/providers';
+import { ProviderSettings, AgenticDefaults, ProviderSelection } from '@/lib/types/providers';
+import { DEFAULT_AGENTIC_DEFAULTS } from '@/lib/providerSettings';
 
 const STORE_DIR = path.join(process.cwd(), 'data');
 const STORE_PATH = path.join(STORE_DIR, 'provider-settings.json');
@@ -53,11 +54,25 @@ export async function loadProviderSettings(userId: string): Promise<ProviderSett
     return store[userId] ?? globalSettings ?? null;
   }
 
-  if (globalSettings) {
-    return globalSettings;
+  const userSettings = store[userId];
+  if (!globalSettings && !userSettings) {
+    return null;
   }
 
-  return store[userId] ?? null;
+  if (!globalSettings) {
+    return userSettings ?? null;
+  }
+
+  const merged: ProviderSettings = {
+    ...globalSettings,
+    testCases: userSettings?.testCases ?? globalSettings.testCases,
+    sql: userSettings?.sql ?? globalSettings.sql,
+    data: userSettings?.data ?? globalSettings.data,
+    quickSelections: globalSettings.quickSelections,
+    agenticDefaults: mergeAgenticDefaults(globalSettings.agenticDefaults, userSettings?.agenticDefaults),
+  };
+
+  return merged;
 }
 
 export async function saveProviderSettings(userId: string, settings: ProviderSettings): Promise<void> {
@@ -66,7 +81,13 @@ export async function saveProviderSettings(userId: string, settings: ProviderSet
     store[GLOBAL_KEY] = settings;
     store[userId] = settings;
   } else {
-    store[userId] = settings;
+    store[userId] = {
+      testCases: settings.testCases,
+      sql: settings.sql,
+      data: settings.data,
+      quickSelections: [],
+      agenticDefaults: settings.agenticDefaults,
+    };
   }
   await writeStore(store);
 }
@@ -85,4 +106,34 @@ export async function deleteProviderSettings(userId: string): Promise<void> {
   if (changed) {
     await writeStore(store);
   }
+}
+
+function mergeAgenticDefaults(
+  base: AgenticDefaults | undefined,
+  override: AgenticDefaults | undefined
+): AgenticDefaults {
+  const resolvedBase = base ?? DEFAULT_AGENTIC_DEFAULTS;
+  const resolvedOverride = override ?? {};
+
+  const mergeOverrideSelection = (
+    fallback: ProviderSelection | undefined,
+    custom: ProviderSelection | undefined
+  ): ProviderSelection | undefined => {
+    if (!custom || !custom.model) {
+      return fallback;
+    }
+    return custom;
+  };
+
+  return {
+    mode: resolvedOverride.mode ?? resolvedBase.mode ?? DEFAULT_AGENTIC_DEFAULTS.mode,
+    priorityMode: resolvedOverride.priorityMode ?? resolvedBase.priorityMode ?? DEFAULT_AGENTIC_DEFAULTS.priorityMode,
+    reviewPasses: resolvedOverride.reviewPasses ?? resolvedBase.reviewPasses ?? DEFAULT_AGENTIC_DEFAULTS.reviewPasses,
+    writerConcurrency: resolvedOverride.writerConcurrency ?? resolvedBase.writerConcurrency ?? DEFAULT_AGENTIC_DEFAULTS.writerConcurrency,
+    overrides: {
+      planner: mergeOverrideSelection(resolvedBase.overrides?.planner, resolvedOverride.overrides?.planner),
+      writer: mergeOverrideSelection(resolvedBase.overrides?.writer, resolvedOverride.overrides?.writer),
+      reviewer: mergeOverrideSelection(resolvedBase.overrides?.reviewer, resolvedOverride.overrides?.reviewer),
+    },
+  };
 }
