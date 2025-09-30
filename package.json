@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "cross-env NODE_ENV=production next build",
     "start": "next start",
     "lint": "next lint",
     "test": "jest",
@@ -61,6 +61,7 @@
     "@testing-library/user-event": "^14.6.1",
     "@types/jest": "^29.5.12",
     "@types/uuid": "^9.0.7",
+    "cross-env": "^10.1.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
     "whatwg-fetch": "^3.6.20"
