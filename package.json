@@ -39,7 +39,7 @@
     "keyv": "^4.5.4",
     "lodash.merge": "^4.6.2",
     "mammoth": "^1.11.0",
-    "next": "^14.2.25",
+    "next": "14.2.25",
     "object-keys": "^1.1.1",
     "pdf-parse": "^1.1.1",
     "postcss": "8.4.35",
