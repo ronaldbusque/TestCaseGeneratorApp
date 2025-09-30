@@ -1,5 +1,3 @@
-import React from 'react';
-import Link from 'next/link';
 import type { NextPageContext } from 'next';
 
 interface ErrorPageProps {
@@ -20,18 +18,18 @@ function ErrorPage({ statusCode }: ErrorPageProps) {
         </p>
       </div>
       <div className="flex gap-3">
-        <Link
+        <a
           href="/"
           className="rounded-full border border-white/20 px-6 py-2 text-sm font-medium text-white hover:bg-white/10"
         >
           Home
-        </Link>
-        <Link
+        </a>
+        <a
           href="/help"
           className="rounded-full bg-blue-600/80 px-6 py-2 text-sm font-medium text-white shadow hover:bg-blue-600"
         >
           Help Center
-        </Link>
+        </a>
       </div>
     </main>
   );
