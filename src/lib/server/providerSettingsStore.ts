@@ -1,7 +1,9 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { ProviderSettings, AgenticDefaults, ProviderSelection } from '@/lib/types/providers';
-import { DEFAULT_AGENTIC_DEFAULTS } from '@/lib/providerSettings';
+import { DEFAULT_AGENTIC_DEFAULTS, coerceStoredSettings } from '@/lib/providerSettings';
+import { getServiceSupabaseClient } from './supabaseClient';
 
 const STORE_DIR = path.join(process.cwd(), 'data');
 const STORE_PATH = path.join(STORE_DIR, 'provider-settings.json');
@@ -47,52 +49,51 @@ async function writeStore(store: ProviderSettingsStore): Promise<void> {
 }
 
 export async function loadProviderSettings(userId: string): Promise<ProviderSettings | null> {
+  const supabase = getServiceSupabaseClient();
+  if (supabase) {
+    const globalSettings = await fetchSupabaseSettings(supabase, GLOBAL_KEY);
+    const userSettings = await fetchSupabaseSettings(supabase, userId);
+    return mergeSettings(userId, userSettings, globalSettings);
+  }
+
   const store = await readStore();
   const globalSettings = store[GLOBAL_KEY];
-
-  if (userId === '__admin__') {
-    return store[userId] ?? globalSettings ?? null;
-  }
-
   const userSettings = store[userId];
-  if (!globalSettings && !userSettings) {
-    return null;
-  }
-
-  if (!globalSettings) {
-    return userSettings ?? null;
-  }
-
-  const merged: ProviderSettings = {
-    ...globalSettings,
-    testCases: userSettings?.testCases ?? globalSettings.testCases,
-    sql: userSettings?.sql ?? globalSettings.sql,
-    data: userSettings?.data ?? globalSettings.data,
-    quickSelections: globalSettings.quickSelections,
-    agenticDefaults: mergeAgenticDefaults(globalSettings.agenticDefaults, userSettings?.agenticDefaults),
-  };
-
-  return merged;
+  return mergeSettings(userId, userSettings ?? null, globalSettings ?? null);
 }
 
 export async function saveProviderSettings(userId: string, settings: ProviderSettings): Promise<void> {
+  const supabase = getServiceSupabaseClient();
+  if (supabase) {
+    if (userId === '__admin__') {
+      await upsertSupabaseSettings(supabase, GLOBAL_KEY, settings);
+      await upsertSupabaseSettings(supabase, userId, settings);
+    } else {
+      await upsertSupabaseSettings(supabase, userId, settings);
+    }
+    return;
+  }
+
   const store = await readStore();
   if (userId === '__admin__') {
     store[GLOBAL_KEY] = settings;
     store[userId] = settings;
   } else {
-    store[userId] = {
-      testCases: settings.testCases,
-      sql: settings.sql,
-      data: settings.data,
-      quickSelections: [],
-      agenticDefaults: settings.agenticDefaults,
-    };
+    store[userId] = settings;
   }
   await writeStore(store);
 }
 
 export async function deleteProviderSettings(userId: string): Promise<void> {
+  const supabase = getServiceSupabaseClient();
+  if (supabase) {
+    await deleteSupabaseSettings(supabase, userId);
+    if (userId === '__admin__') {
+      await deleteSupabaseSettings(supabase, GLOBAL_KEY);
+    }
+    return;
+  }
+
   const store = await readStore();
   let changed = false;
   if (store[userId]) {
@@ -106,6 +107,81 @@ export async function deleteProviderSettings(userId: string): Promise<void> {
   if (changed) {
     await writeStore(store);
   }
+}
+
+async function fetchSupabaseSettings(client: SupabaseClient, userId: string): Promise<ProviderSettings | null> {
+  const { data, error } = await client
+    .from('provider_settings')
+    .select('settings')
+    .eq('user_identifier', userId)
+    .maybeSingle();
+
+  if (error) {
+    console.warn('[providerSettingsStore] Failed to fetch provider settings from Supabase', { userId, error });
+    return null;
+  }
+
+  if (!data?.settings) {
+    return null;
+  }
+
+  return coerceStoredSettings(data.settings);
+}
+
+async function upsertSupabaseSettings(client: SupabaseClient, userId: string, settings: ProviderSettings): Promise<void> {
+  const { error } = await client
+    .from('provider_settings')
+    .upsert({
+      user_identifier: userId,
+      settings,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_identifier' });
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function deleteSupabaseSettings(client: SupabaseClient, userId: string): Promise<void> {
+  const { error } = await client
+    .from('provider_settings')
+    .delete()
+    .eq('user_identifier', userId);
+
+  if (error) {
+    console.warn('[providerSettingsStore] Failed to delete provider settings from Supabase', { userId, error });
+  }
+}
+
+function mergeSettings(
+  userId: string,
+  userSettings: ProviderSettings | null,
+  globalSettings: ProviderSettings | null
+): ProviderSettings | null {
+  if (userId === '__admin__') {
+    return userSettings ?? globalSettings ?? null;
+  }
+
+  if (!globalSettings && !userSettings) {
+    return null;
+  }
+
+  if (!globalSettings) {
+    return userSettings;
+  }
+
+  if (!userSettings) {
+    return globalSettings;
+  }
+
+  return {
+    ...globalSettings,
+    testCases: userSettings.testCases ?? globalSettings.testCases,
+    sql: userSettings.sql ?? globalSettings.sql,
+    data: userSettings.data ?? globalSettings.data,
+    quickSelections: globalSettings.quickSelections,
+    agenticDefaults: mergeAgenticDefaults(globalSettings.agenticDefaults, userSettings.agenticDefaults),
+  };
 }
 
 function mergeAgenticDefaults(
