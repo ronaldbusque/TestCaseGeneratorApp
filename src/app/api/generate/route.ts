@@ -58,11 +58,16 @@ export async function POST(request: NextRequest) {
       files: enrichedFiles,
       provider,
       model,
-      agenticOptions,
+      agenticOptions: agenticOptions?.enableAgentic
+        ? {
+            ...agenticOptions,
+            streamProgress: true,
+          }
+        : undefined,
       userIdentifier: userIdentifier ?? undefined,
     };
 
-    const shouldStream = Boolean(agenticOptions?.streamProgress);
+    const shouldStream = Boolean(generationRequest.agenticOptions?.streamProgress);
     console.log(`[API] Stream progress: ${shouldStream}`);
 
     if (shouldStream) {
