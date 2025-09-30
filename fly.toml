@@ -4,6 +4,9 @@ primary_region = "syd"
 [build]
   builder = "paketobuildpacks/builder-jammy-base"
 
+[env]
+  NODE_ENV = "production"
+
 [http_service]
 auto_start_machines = true
 auto_stop_machines = true
