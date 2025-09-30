@@ -11,3 +11,4 @@ date: 2025-09-30
 - Running `NODE_ENV=development npm run build` locally reproduces Fly's failure, confirming the builder executes `next build` with `NODE_ENV` set to `development`. Next.js only supports `next build` with `NODE_ENV=production`, which is why the export step blows up.
 - Forcing `NODE_ENV=production` inside the `build` script (via `cross-env`) should stabilize both local and Fly builds regardless of the outer environment variables.
 - Added `[env] NODE_ENV="production"` to `fly.toml` so Fly deployments use the same runtime mode as local builds.
+- Re-ran `fly launch --no-deploy` after removing the old config; Fly generated a Next.js-aware Dockerfile, entrypoint, and fly.toml that align with the app's launch manifest.
