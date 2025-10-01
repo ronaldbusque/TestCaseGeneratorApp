@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { SchemaBuilder } from '@/components/data-generator/SchemaBuilder';
 import { ExportOptions } from '@/components/data-generator/ExportOptions';
 import { DataPreviewTable } from '@/components/data-generator/DataPreviewTable';
-import { LoadingAnimation } from '@/components/LoadingAnimation';
 import { v4 as uuidv4 } from 'uuid';
 import { RawDataPreview } from '@/components/data-generator/RawDataPreview';
 import { Tab } from '@headlessui/react';
@@ -13,6 +12,10 @@ import { DataGeneratorLoading } from '@/components/data-generator/DataGeneratorL
 import { fetchApi } from '@/lib/utils/apiClient';
 import { useProviderSettings } from '@/lib/context/ProviderSettingsContext';
 import { QuickModelSwitcher } from '@/components/QuickModelSwitcher';
+
+const DEFAULT_SQL_TABLE_NAME = 'test_data';
+const DEFAULT_FILE_PREFIX = 'test-data';
+const PREVIEW_ROW_COUNT = 10;
 
 interface FieldDefinition {
   id: string;
@@ -30,6 +33,23 @@ interface ExportConfig {
   applyAIEnhancement: boolean;
   enhancementPrompt: string;
 }
+
+const createDefaultField = (): FieldDefinition => ({
+  id: uuidv4(),
+  name: 'id',
+  type: 'Number',
+  options: { min: 1, max: 1000, decimals: 0 },
+});
+
+const DEFAULT_EXPORT_CONFIG: ExportConfig = {
+  rowCount: 100,
+  format: 'CSV',
+  lineEnding: 'Unix (LF)',
+  includeHeader: true,
+  includeBOM: false,
+  applyAIEnhancement: false,
+  enhancementPrompt: '',
+};
 
 // Simple toast implementation since we don't have the actual Toast component
 interface Toast {
@@ -50,25 +70,10 @@ const useToast = () => {
 export default function TestDataGeneratorPage() {
   const { settings } = useProviderSettings();
   // Field definitions for the schema builder
-  const [fields, setFields] = useState<FieldDefinition[]>([
-    {
-      id: uuidv4(),
-      name: 'id',
-      type: 'Number',
-      options: { min: 1, max: 1000, decimals: 0 }
-    }
-  ]);
+  const [fields, setFields] = useState<FieldDefinition[]>([createDefaultField()]);
   
   // Export configuration
-  const [exportConfig, setExportConfig] = useState<ExportConfig>({
-    rowCount: 100,
-    format: 'CSV',
-    lineEnding: 'Unix (LF)',
-    includeHeader: true,
-    includeBOM: false,
-    applyAIEnhancement: false,
-    enhancementPrompt: ''
-  });
+  const [exportConfig, setExportConfig] = useState<ExportConfig>({ ...DEFAULT_EXPORT_CONFIG });
   
   // Data generation state
   const [previewDataRows, setPreviewDataRows] = useState<any[]>([]);
@@ -155,11 +160,11 @@ export default function TestDataGeneratorPage() {
       
       // Create a download based on the format
       let fileContent = '';
-      let fileName = `test-data-${new Date().toISOString().slice(0, 10)}`;
+      let fileName = `${DEFAULT_FILE_PREFIX}-${new Date().toISOString().slice(0, 10)}`;
       let fileType = '';
       
       if (exportConfig.format === 'CSV') {
-        const { data, fields: csvFields } = generatedData;
+        const { data } = generatedData;
         // Create header row
         const header = exportConfig.includeHeader 
           ? Object.keys(data[0]).join(',') + (exportConfig.lineEnding === 'Windows (CRLF)' ? '\r\n' : '\n')
@@ -187,7 +192,7 @@ export default function TestDataGeneratorPage() {
       } else if (exportConfig.format === 'SQL') {
         // Build SQL insert statements
         const { data } = generatedData;
-        const tableName = 'test_data';
+        const tableName = DEFAULT_SQL_TABLE_NAME;
         const columns = Object.keys(data[0]);
         
         fileContent = data.map((row: any) => {
@@ -292,7 +297,7 @@ export default function TestDataGeneratorPage() {
         method: 'POST',
         body: JSON.stringify({
           fields: mapFieldsToAPI(),
-          count: 10, // Just generate 10 rows for preview
+          count: PREVIEW_ROW_COUNT,
           format: 'JSON',
           // Include AI enhancement if there's a prompt
           ...(exportConfig.enhancementPrompt.trim() 
