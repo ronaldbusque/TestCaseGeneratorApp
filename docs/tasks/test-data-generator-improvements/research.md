@@ -52,3 +52,4 @@ Assessing the Test Data Generator page (`src/app/data-generator/page.tsx`) to su
 - Expanded unit coverage for new generators including range formatting and locale-specific options.
 - Introduced seeded date/time anchors so Copycat keeps future/past/DOB outputs stable when a seed is provided.
 - Added schemaActions helpers so add/duplicate/move logic is reusable outside SchemaBuilder.
+- SchemaBuilder consumes hook actions so other surfaces can reuse add/remove/duplicate/reorder logic without reimplementing array math.

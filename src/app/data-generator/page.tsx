@@ -75,7 +75,17 @@ export default function TestDataGeneratorPage() {
       <div className="space-y-6">
         <div>
           <h2 className="text-2xl font-semibold text-white mb-4">Define Your Schema</h2>
-          <SchemaBuilder fields={schema.fields} onChange={schema.setFields} />
+          <SchemaBuilder
+            fields={schema.fields}
+            onChange={schema.setFields}
+            onAddField={schema.addField}
+            onRemoveField={schema.removeField}
+            onDuplicateField={schema.duplicateField}
+            onMoveField={schema.reorderField}
+            onFieldUpdate={schema.updateField}
+            onFieldOptionsUpdate={schema.updateFieldOptions}
+            onReplaceAll={schema.setFields}
+          />
         </div>
 
         <div>

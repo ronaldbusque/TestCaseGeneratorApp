@@ -80,4 +80,39 @@ describe('useSchemaBuilder', () => {
     expect(validation.ok).toBe(false);
     expect(validation.error).toEqual({ type: 'invalid', fields: [''] });
   });
+
+  it('supports field mutations via helper actions', () => {
+    const { result } = renderHook(() => useSchemaBuilder());
+
+    act(() => {
+      result.current.addField();
+    });
+    expect(result.current.fields).toHaveLength(2);
+
+    act(() => {
+      result.current.updateField(0, { name: 'userId' });
+    });
+    expect(result.current.fields[0].name).toBe('userId');
+
+    act(() => {
+      result.current.updateFieldOptions(0, { min: 10 });
+    });
+    expect(result.current.fields[0].options.min).toBe(10);
+
+    act(() => {
+      result.current.duplicateField(0);
+    });
+    expect(result.current.fields).toHaveLength(3);
+    expect(result.current.fields[1].name).toMatch(/^userId_copy/);
+
+    act(() => {
+      result.current.reorderField(0, 2);
+    });
+    expect(result.current.fields[2].name).toBe('userId');
+
+    act(() => {
+      result.current.removeField(2);
+    });
+    expect(result.current.fields).toHaveLength(2);
+  });
 });

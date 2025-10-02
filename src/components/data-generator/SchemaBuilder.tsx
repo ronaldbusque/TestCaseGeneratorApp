@@ -21,9 +21,26 @@ import { SCHEMA_TEMPLATES } from '@/lib/data-generator/templates';
 interface SchemaBuilderProps {
   fields: FieldDefinition[];
   onChange: (fields: FieldDefinition[]) => void;
+  onAddField?: () => void;
+  onRemoveField?: (index: number) => void;
+  onDuplicateField?: (index: number) => void;
+  onMoveField?: (fromIndex: number, toIndex: number) => void;
+  onFieldUpdate?: (index: number, patch: Partial<FieldDefinition>) => void;
+  onFieldOptionsUpdate?: (index: number, optionsPatch: FieldOptions) => void;
+  onReplaceAll?: (fields: FieldDefinition[]) => void;
 }
 
-export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
+export function SchemaBuilder({
+  fields,
+  onChange,
+  onAddField,
+  onRemoveField,
+  onDuplicateField,
+  onMoveField,
+  onFieldUpdate,
+  onFieldOptionsUpdate,
+  onReplaceAll,
+}: SchemaBuilderProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [activeFieldIndex, setActiveFieldIndex] = useState<number | null>(null);
   const [savedSchemas, setSavedSchemas] = useState(() => listSchemas());
@@ -49,25 +66,45 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
   }, [fields]);
 
   const handleAddField = () => {
+    if (onAddField) {
+      onAddField();
+      return;
+    }
     onChange(addBlankField(fields));
   };
   
   const handleRemoveField = (index: number) => {
+    if (onRemoveField) {
+      onRemoveField(index);
+      return;
+    }
     onChange(removeFieldAt(fields, index));
   };
   
   const handleFieldNameChange = (index: number, name: string) => {
-    const newFields = [...fields];
-    newFields[index].name = name;
-    onChange(newFields);
+    if (onFieldUpdate) {
+      onFieldUpdate(index, { name });
+      return;
+    }
+    const next = [...fields];
+    next[index] = { ...next[index], name };
+    onChange(next);
   };
 
   const handleDuplicateField = (index: number) => {
+    if (onDuplicateField) {
+      onDuplicateField(index);
+      return;
+    }
     onChange(duplicateFieldAt(fields, index));
   };
 
   const handleMoveField = (index: number, direction: 'up' | 'down') => {
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (onMoveField) {
+      onMoveField(index, targetIndex);
+      return;
+    }
     onChange(moveFieldAction(fields, index, targetIndex));
   };
 
@@ -90,7 +127,12 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
     setSelectedSchemaId(schemaId);
     const schema = savedSchemas.find((entry) => entry.id === schemaId);
     if (!schema) return;
-    onChange(withFreshIds(schema.fields));
+    const restored = withFreshIds(schema.fields);
+    if (onReplaceAll) {
+      onReplaceAll(restored);
+    } else {
+      onChange(restored);
+    }
     setSchemaName(schema.name);
   };
 
@@ -167,7 +209,12 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
       return nextField;
     });
 
-    onChange([...fields, ...templateFields]);
+    const nextFields = [...fields, ...templateFields];
+    if (onReplaceAll) {
+      onReplaceAll(nextFields);
+    } else {
+      onChange(nextFields);
+    }
     setSelectedTemplateKey('');
   };
   
@@ -178,9 +225,6 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
   
   const handleTypeChange = (typeName: string) => {
     if (activeFieldIndex === null) return;
-
-    const newFields = [...fields];
-    newFields[activeFieldIndex].type = typeName;
 
     // Initialize options with default values from the type definition
     const typeDefinition = fakerTypeDefinitions[typeName];
@@ -198,18 +242,38 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
       defaultOptions.sourceField = '';
     }
     
-    // Set the options with defaults
-    newFields[activeFieldIndex].options = defaultOptions;
-    onChange(newFields);
+    if (onFieldUpdate) {
+      onFieldUpdate(activeFieldIndex, {
+        type: typeName,
+        options: defaultOptions,
+      });
+      return;
+    }
+
+    const next = [...fields];
+    next[activeFieldIndex] = {
+      ...next[activeFieldIndex],
+      type: typeName,
+      options: defaultOptions,
+    };
+    onChange(next);
   };
   
   const handleOptionChange = (index: number, optionName: string, value: FieldOptionValue) => {
-    const newFields = [...fields];
-    newFields[index].options = {
-      ...newFields[index].options,
-      [optionName]: value,
+    if (onFieldOptionsUpdate) {
+      const patch = { [optionName]: value } as FieldOptions;
+      onFieldOptionsUpdate(index, patch);
+      return;
+    }
+    const next = [...fields];
+    next[index] = {
+      ...next[index],
+      options: {
+        ...next[index].options,
+        [optionName]: value,
+      },
     };
-    onChange(newFields);
+    onChange(next);
   };
 
   const resolveOptionValue = (value: FieldOptionValue | undefined): string | number => {
