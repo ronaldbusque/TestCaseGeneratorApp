@@ -494,7 +494,7 @@ export class TestDataGeneratorService {
         case 'Number': {
           const min = this.toNumber(options.min, 1);
           const max = this.toNumber(options.max, 1000);
-          return fakerInstance.number.int({ min, max });
+          return this.faker.number.int({ min, max });
         }
 
         case 'Decimal Number':

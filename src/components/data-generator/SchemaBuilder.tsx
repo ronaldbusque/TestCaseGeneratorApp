@@ -808,7 +808,8 @@ const SortableFieldRow = ({
       style={style}
       className={`border-b border-slate-700/50 ${isDragging ? 'bg-slate-800/80 shadow-lg' : ''}`}
     >
-      <td className="px-3 py-2 flex items-center">
+      <td className="px-3 py-2 align-top">
+        <div className="flex items-center">
         <input
           type="text"
           value={field.name}
@@ -816,8 +817,9 @@ const SortableFieldRow = ({
           className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm"
           placeholder="Field name"
         />
+        </div>
       </td>
-      <td className="px-3 py-2">
+      <td className="px-3 py-2 align-top">
         <button
           onClick={() => onTypeSelect(index)}
           className="w-full flex justify-between items-center bg-slate-700 hover:bg-slate-600 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm transition-colors"
@@ -828,10 +830,10 @@ const SortableFieldRow = ({
           </svg>
         </button>
       </td>
-      <td className="px-3 py-2">
+      <td className="px-3 py-2 align-top">
         {renderOptions(field, index)}
       </td>
-      <td className="px-3 py-2">
+      <td className="px-3 py-2 align-top">
         <div className="flex flex-col items-center space-y-2">
           <button
             className="p-1 rounded-lg text-slate-400 hover:bg-slate-600 transition-colors cursor-grab active:cursor-grabbing"
