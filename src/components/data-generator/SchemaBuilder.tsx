@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline';
 import { TypeSelectionDialog } from './TypeSelectionDialog';
 import { fakerTypeDefinitions } from '@/lib/data/faker-type-definitions';
 import { TypeOption } from '@/lib/types/testData';
@@ -34,6 +34,32 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
   const handleFieldNameChange = (index: number, name: string) => {
     const newFields = [...fields];
     newFields[index].name = name;
+    onChange(newFields);
+  };
+
+  const handleDuplicateField = (index: number) => {
+    const source = fields[index];
+    if (!source) return;
+    const duplicateName = source.name ? `${source.name}_copy` : `field_${fields.length + 1}`;
+    const duplicatedField: FieldDefinition = {
+      ...source,
+      id: uuidv4(),
+      name: duplicateName,
+      options: { ...source.options },
+    };
+    const newFields = [...fields];
+    newFields.splice(index + 1, 0, duplicatedField);
+    onChange(newFields);
+  };
+
+  const handleMoveField = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= fields.length) {
+      return;
+    }
+    const newFields = [...fields];
+    const [moved] = newFields.splice(index, 1);
+    newFields.splice(targetIndex, 0, moved);
     onChange(newFields);
   };
   
@@ -312,12 +338,50 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
                   {renderOptions(field, index)}
                 </td>
                 <td className="px-3 py-2">
-                  <button
-                    onClick={() => handleRemoveField(index)}
-                    className="p-1 rounded-lg hover:bg-slate-600 text-red-400 hover:text-red-300 transition-colors"
-                  >
-                    <TrashIcon className="h-4 w-4" />
-                  </button>
+                  <div className="flex flex-col items-center space-y-1">
+                    <div className="flex space-x-1">
+                      <button
+                        onClick={() => handleMoveField(index, 'up')}
+                        disabled={index === 0}
+                        className={`p-1 rounded-lg transition-colors ${
+                          index === 0
+                            ? 'text-slate-600 cursor-not-allowed'
+                            : 'text-slate-300 hover:bg-slate-600 hover:text-white'
+                        }`}
+                        aria-label="Move field up"
+                      >
+                        <ArrowUpIcon className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleMoveField(index, 'down')}
+                        disabled={index === fields.length - 1}
+                        className={`p-1 rounded-lg transition-colors ${
+                          index === fields.length - 1
+                            ? 'text-slate-600 cursor-not-allowed'
+                            : 'text-slate-300 hover:bg-slate-600 hover:text-white'
+                        }`}
+                        aria-label="Move field down"
+                      >
+                        <ArrowDownIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="flex space-x-1">
+                      <button
+                        onClick={() => handleDuplicateField(index)}
+                        className="p-1 rounded-lg text-slate-300 hover:bg-slate-600 hover:text-white transition-colors"
+                        aria-label="Duplicate field"
+                      >
+                        <DocumentDuplicateIcon className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleRemoveField(index)}
+                        className="p-1 rounded-lg hover:bg-slate-600 text-red-400 hover:text-red-300 transition-colors"
+                        aria-label="Remove field"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
                 </td>
               </tr>
             ))}

@@ -1,8 +1,13 @@
-import { useState, useEffect, Fragment } from 'react';
+'use client';
+
+import { useState, useEffect, Fragment, useCallback } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { fakerCategories } from '@/lib/data/faker-categories';
 import { fakerTypeDefinitions } from '@/lib/data/faker-type-definitions';
+
+const RECENT_TYPES_STORAGE_KEY = 'generator_recent_types';
+const MAX_RECENT_TYPES = 8;
 
 // Define type for a faker type with category information
 interface TypeWithCategory {
@@ -24,14 +29,31 @@ export function TypeSelectionDialog({
 }: TypeSelectionDialogProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
+  const [recentTypes, setRecentTypes] = useState<string[]>([]);
+
+  const loadRecentTypes = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const stored = window.localStorage.getItem(RECENT_TYPES_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setRecentTypes(parsed.filter((value): value is string => typeof value === 'string'));
+        }
+      }
+    } catch (error) {
+      console.warn('[TypeSelectionDialog] failed to read recent types', error);
+    }
+  }, []);
   
   // Reset search and category when dialog opens
   useEffect(() => {
     if (isOpen) {
       setSearchTerm('');
       setActiveCategory('All');
+      loadRecentTypes();
     }
-  }, [isOpen]);
+  }, [isOpen, loadRecentTypes]);
   
   // Filter types based on search term and active category
   const getFilteredTypes = (): TypeWithCategory[] => {
@@ -90,6 +112,18 @@ export function TypeSelectionDialog({
   };
   
   const filteredTypes = getFilteredTypes();
+
+  const handleSelect = (typeName: string) => {
+    setRecentTypes((prev) => {
+      const next = [typeName, ...prev.filter((value) => value !== typeName)].slice(0, MAX_RECENT_TYPES);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(RECENT_TYPES_STORAGE_KEY, JSON.stringify(next));
+      }
+      return next;
+    });
+    onSelectType(typeName);
+    onClose();
+  };
   
   // Count the number of valid types per category (those that exist in fakerTypeDefinitions)
   const getCategoryTypeCounts = () => {
@@ -186,7 +220,38 @@ export function TypeSelectionDialog({
                   </div>
                   
                   {/* Right Content - Type Grid */}
-                  <div className="flex-1 overflow-y-auto p-2">
+                  <div className="flex-1 overflow-y-auto p-2 space-y-3">
+                    {recentTypes.length > 0 && (
+                      <div className="border border-slate-700/70 rounded-lg bg-slate-800/60 p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-semibold text-slate-200 uppercase tracking-wide">
+                            Recently Used
+                          </span>
+                          <button
+                            className="text-xs text-slate-400 hover:text-slate-200"
+                            onClick={() => {
+                              setRecentTypes([]);
+                              if (typeof window !== 'undefined') {
+                                window.localStorage.removeItem(RECENT_TYPES_STORAGE_KEY);
+                              }
+                            }}
+                          >
+                            Clear
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {recentTypes.map((typeName) => (
+                            <button
+                              key={typeName}
+                              className="px-3 py-1.5 text-xs rounded-full bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600"
+                              onClick={() => handleSelect(typeName)}
+                            >
+                              {typeName}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div className="grid grid-cols-3 gap-2">
                       {filteredTypes.length === 0 ? (
                         <div className="col-span-3 p-4 text-center text-slate-400">
@@ -197,10 +262,7 @@ export function TypeSelectionDialog({
                           <button
                             key={type.name}
                             className="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg text-left transition-colors border border-slate-700 hover:border-blue-500"
-                            onClick={() => {
-                              onSelectType(type.name);
-                              onClose();
-                            }}
+                            onClick={() => handleSelect(type.name)}
                           >
                             <h4 className="text-white font-medium">{type.name}</h4>
                             <p className="text-xs text-slate-400 mt-1">
