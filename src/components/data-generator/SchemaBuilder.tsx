@@ -112,6 +112,7 @@ export function SchemaBuilder({
     setFieldErrors(errors);
   }, [fields]);
 
+
   const handleAddField = () => {
     if (onAddField) {
       onAddField();
@@ -609,17 +610,17 @@ export function SchemaBuilder({
   
   return (
     <div className="bg-slate-800/70 backdrop-blur-sm rounded-xl border border-slate-700">
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-slate-700">
-              <th className="px-3 py-2 text-left text-xs font-medium text-white w-1/5">Field Name</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-white w-1/5">Type</th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-white">Options</th>
-              <th className="px-3 py-2 w-10"></th>
-            </tr>
-          </thead>
-          <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-slate-700">
+                <th className="px-3 py-2 text-left text-xs font-medium text-white w-1/5">Field Name</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-white w-1/5">Type</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-white">Options</th>
+                <th className="px-3 py-2 w-10"></th>
+              </tr>
+            </thead>
             <SortableContext items={fields.map((field) => field.id)} strategy={verticalListSortingStrategy}>
               <tbody>
                 {fields.map((field, index) => (
@@ -636,9 +637,9 @@ export function SchemaBuilder({
                 ))}
               </tbody>
             </SortableContext>
-          </DndContext>
-        </table>
-      </div>
+          </table>
+        </div>
+      </DndContext>
       
       <div className="p-3 space-y-3">
         <div className="flex flex-wrap items-center gap-2">

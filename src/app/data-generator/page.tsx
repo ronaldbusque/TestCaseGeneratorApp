@@ -90,142 +90,143 @@ export default function TestDataGeneratorPage() {
         <QuickModelSwitcher domain="data" />
       </div>
 
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-semibold text-white mb-4">Define Your Schema</h2>
-          <SchemaBuilder
-            fields={schema.fields}
-            onChange={schema.setFields}
-            onAddField={schema.addField}
-            onRemoveField={schema.removeField}
-            onDuplicateField={schema.duplicateField}
-            onMoveField={schema.reorderField}
-            onFieldUpdate={schema.updateField}
-            onFieldOptionsUpdate={schema.updateFieldOptions}
-            onReplaceAll={schema.setFields}
+      <div className="grid xl:grid-cols-[3fr_2fr] gap-6 items-start">
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-2xl font-semibold text-white mb-4">Define Your Schema</h2>
+            <SchemaBuilder
+              fields={schema.fields}
+              onChange={schema.setFields}
+              onAddField={schema.addField}
+              onRemoveField={schema.removeField}
+              onDuplicateField={schema.duplicateField}
+              onMoveField={schema.reorderField}
+              onFieldUpdate={schema.updateField}
+              onFieldOptionsUpdate={schema.updateFieldOptions}
+              onReplaceAll={schema.setFields}
+            />
+          </div>
+
+          <div>
+            <h2 className="text-2xl font-semibold text-white mb-4">Export Options</h2>
+            <ExportOptions
+              config={exportConfig}
+              onConfigChange={setExportConfig}
+              onExport={exportData}
+              onPreview={generatePreview}
+              hasAIGeneratedFields={schema.hasAIGeneratedFields}
+            />
+          </div>
+
+          {isPreviewMode && previewDataRows.length > 0 && (
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-semibold text-white">Data Preview</h2>
+              </div>
+
+              <PreviewController
+                data={previewDataRows}
+                format={exportConfig.format}
+                options={{
+                  lineEnding: exportConfig.lineEnding,
+                  includeHeader: exportConfig.includeHeader,
+                  includeBOM: exportConfig.includeBOM,
+                }}
+                metadata={generationMetadata}
+                isRefreshing={isGenerating}
+                onRefresh={generatePreview}
+                onClose={clearPreview}
+                toast={toast}
+              />
+
+              <Tab.Group>
+                <Tab.List className="flex space-x-1 rounded-xl bg-slate-700/50 p-1 mb-4">
+                  <Tab
+                    className={({ selected }) =>
+                      `w-full rounded-lg py-2.5 text-sm font-medium leading-5 ${
+                        selected
+                          ? 'bg-blue-600 text-white shadow'
+                          : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                      } flex items-center justify-center`
+                    }
+                  >
+                    <TableCellsIcon className="h-5 w-5 mr-2" />
+                    Table View
+                  </Tab>
+                  <Tab
+                    className={({ selected }) =>
+                      `w-full rounded-lg py-2.5 text-sm font-medium leading-5 ${
+                        selected
+                          ? 'bg-blue-600 text-white shadow'
+                          : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                      } flex items-center justify-center`
+                    }
+                  >
+                    <CodeBracketIcon className="h-5 w-5 mr-2" />
+                    Raw Format ({exportConfig.format})
+                  </Tab>
+                  {referenceFields.length > 0 && (
+                    <Tab
+                      className={({ selected }) =>
+                        `w-full rounded-lg py-2.5 text-sm font-medium leading-5 ${
+                          selected
+                            ? 'bg-blue-600 text-white shadow'
+                            : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                        } flex items-center justify-center`
+                      }
+                    >
+                      Relationships
+                    </Tab>
+                  )}
+                </Tab.List>
+                <Tab.Panels>
+                  <Tab.Panel>
+                    <DataPreviewTable data={previewDataRows} />
+                  </Tab.Panel>
+                  <Tab.Panel>
+                    <RawDataPreview
+                      data={previewDataRows}
+                      format={exportConfig.format}
+                      options={{
+                        lineEnding: exportConfig.lineEnding,
+                        includeHeader: exportConfig.includeHeader,
+                        includeBOM: exportConfig.includeBOM,
+                      }}
+                    />
+                  </Tab.Panel>
+                  {referenceFields.length > 0 && (
+                    <Tab.Panel>
+                      <RelationalPreview data={previewDataRows} fields={referenceFields} />
+                    </Tab.Panel>
+                  )}
+                </Tab.Panels>
+              </Tab.Group>
+            </div>
+          )}
+
+          {isGenerating && (
+            <div className="flex justify-center items-center p-12 bg-slate-800/70 backdrop-blur-sm rounded-xl border border-slate-700">
+              <DataGeneratorLoading message="Generating test data..." />
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-6">
+          <AIPromptSuggestions
+            currentPrompt={exportConfig.enhancementPrompt}
+            disabled={!schema.hasAIGeneratedFields}
+            aiFieldNames={aiFieldNames}
+            sampleRow={aiSampleRow}
+            isSampleLoading={isFetchingAiSample}
+            onGenerateSample={generateAiSample}
+            onSelect={(prompt) =>
+              updateExportConfig({
+                enhancementPrompt: prompt,
+                applyAIEnhancement: true,
+              })
+            }
           />
         </div>
-
-        <div>
-          <h2 className="text-2xl font-semibold text-white mb-4">Export Options</h2>
-          <div className="grid lg:grid-cols-[2fr_1fr] gap-4">
-            <div>
-              <ExportOptions
-                config={exportConfig}
-                onConfigChange={setExportConfig}
-                onExport={exportData}
-                onPreview={generatePreview}
-                hasAIGeneratedFields={schema.hasAIGeneratedFields}
-              />
-            </div>
-            <AIPromptSuggestions
-              currentPrompt={exportConfig.enhancementPrompt}
-              disabled={!schema.hasAIGeneratedFields}
-              aiFieldNames={aiFieldNames}
-              sampleRow={aiSampleRow}
-              isSampleLoading={isFetchingAiSample}
-              onGenerateSample={generateAiSample}
-              onSelect={(prompt) =>
-                updateExportConfig({
-                  enhancementPrompt: prompt,
-                  applyAIEnhancement: true,
-                })
-              }
-            />
-          </div>
-        </div>
-
-        {isPreviewMode && previewDataRows.length > 0 && (
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-semibold text-white">Data Preview</h2>
-            </div>
-
-            <PreviewController
-              data={previewDataRows}
-              format={exportConfig.format}
-              options={{
-                lineEnding: exportConfig.lineEnding,
-                includeHeader: exportConfig.includeHeader,
-                includeBOM: exportConfig.includeBOM,
-              }}
-              metadata={generationMetadata}
-              isRefreshing={isGenerating}
-              onRefresh={generatePreview}
-              onClose={clearPreview}
-              toast={toast}
-            />
-
-            <Tab.Group>
-            <Tab.List className="flex space-x-1 rounded-xl bg-slate-700/50 p-1 mb-4">
-              <Tab
-                className={({ selected }) =>
-                  `w-full rounded-lg py-2.5 text-sm font-medium leading-5 ${
-                    selected
-                      ? 'bg-blue-600 text-white shadow'
-                        : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
-                    } flex items-center justify-center`
-                  }
-                >
-                  <TableCellsIcon className="h-5 w-5 mr-2" />
-                  Table View
-                </Tab>
-              <Tab
-                className={({ selected }) =>
-                  `w-full rounded-lg py-2.5 text-sm font-medium leading-5 ${
-                    selected
-                      ? 'bg-blue-600 text-white shadow'
-                      : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
-                  } flex items-center justify-center`
-                }
-              >
-                <CodeBracketIcon className="h-5 w-5 mr-2" />
-                Raw Format ({exportConfig.format})
-              </Tab>
-              {referenceFields.length > 0 && (
-                <Tab
-                  className={({ selected }) =>
-                    `w-full rounded-lg py-2.5 text-sm font-medium leading-5 ${
-                      selected
-                        ? 'bg-blue-600 text-white shadow'
-                        : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
-                    } flex items-center justify-center`
-                  }
-                >
-                  Relationships
-                </Tab>
-              )}
-            </Tab.List>
-            <Tab.Panels>
-              <Tab.Panel>
-                <DataPreviewTable data={previewDataRows} />
-              </Tab.Panel>
-              <Tab.Panel>
-                <RawDataPreview
-                  data={previewDataRows}
-                  format={exportConfig.format}
-                  options={{
-                    lineEnding: exportConfig.lineEnding,
-                    includeHeader: exportConfig.includeHeader,
-                    includeBOM: exportConfig.includeBOM,
-                  }}
-                />
-              </Tab.Panel>
-              {referenceFields.length > 0 && (
-                <Tab.Panel>
-                  <RelationalPreview data={previewDataRows} fields={referenceFields} />
-                </Tab.Panel>
-              )}
-            </Tab.Panels>
-          </Tab.Group>
-        </div>
-      )}
-
-        {isGenerating && (
-          <div className="flex justify-center items-center p-12 bg-slate-800/70 backdrop-blur-sm rounded-xl border border-slate-700">
-            <DataGeneratorLoading message="Generating test data..." />
-          </div>
-        )}
       </div>
     </main>
   );
