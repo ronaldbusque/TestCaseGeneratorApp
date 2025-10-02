@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { FieldDefinition } from '@/lib/data-generator/types';
 import type { StoredSchema } from '@/lib/data-generator/schemaStorage';
@@ -25,6 +25,8 @@ export const useSchemaTemplates = (options?: UseSchemaTemplatesOptions) => {
   );
   const [isLoading, setIsLoading] = useState<boolean>(!options?.initialSchemas);
   const [error, setError] = useState<string | null>(null);
+  const refreshRequestRef = useRef(0);
+  const stateVersionRef = useRef(0);
 
   const activeSchema = useMemo(
     () => schemas.find((schema) => schema.id === activeSchemaId) ?? null,
@@ -32,9 +34,18 @@ export const useSchemaTemplates = (options?: UseSchemaTemplatesOptions) => {
   );
 
   const refresh = useCallback(async () => {
+    const requestId = ++refreshRequestRef.current;
+    const stateVersionAtStart = stateVersionRef.current;
     setIsLoading(true);
     try {
       const result = await store.list();
+      if (refreshRequestRef.current !== requestId) {
+        return;
+      }
+      if (stateVersionRef.current !== stateVersionAtStart) {
+        setError(null);
+        return;
+      }
       setSchemas(result);
       setError(null);
       if (result.length === 0) {
@@ -46,7 +57,9 @@ export const useSchemaTemplates = (options?: UseSchemaTemplatesOptions) => {
       console.warn('[useSchemaTemplates] Failed to list templates', err);
       setError(err instanceof Error ? err.message : 'Failed to load templates');
     } finally {
-      setIsLoading(false);
+      if (refreshRequestRef.current === requestId) {
+        setIsLoading(false);
+      }
     }
   }, [activeSchemaId, store]);
 
@@ -68,6 +81,7 @@ export const useSchemaTemplates = (options?: UseSchemaTemplatesOptions) => {
             : [entry, ...previous];
         });
         setActiveSchemaId(entry.id);
+        stateVersionRef.current += 1;
         return entry;
       } catch (err) {
         console.warn('[useSchemaTemplates] Failed to save template', err);
@@ -84,6 +98,7 @@ export const useSchemaTemplates = (options?: UseSchemaTemplatesOptions) => {
         await store.delete(id);
         setSchemas((previous) => previous.filter((schema) => schema.id !== id));
         setActiveSchemaId((previous) => (previous === id ? null : previous));
+        stateVersionRef.current += 1;
       } catch (err) {
         console.warn('[useSchemaTemplates] Failed to delete template', err);
         setError(err instanceof Error ? err.message : 'Failed to delete template');
@@ -94,15 +109,16 @@ export const useSchemaTemplates = (options?: UseSchemaTemplatesOptions) => {
   );
 
   const clearAll = useCallback(async () => {
-    try {
-      await store.clear();
-      setSchemas([]);
-      setActiveSchemaId(null);
-    } catch (err) {
-      console.warn('[useSchemaTemplates] Failed to clear templates', err);
-      setError(err instanceof Error ? err.message : 'Failed to clear templates');
-      throw err;
-    }
+      try {
+        await store.clear();
+        setSchemas([]);
+        setActiveSchemaId(null);
+        stateVersionRef.current += 1;
+      } catch (err) {
+        console.warn('[useSchemaTemplates] Failed to clear templates', err);
+        setError(err instanceof Error ? err.message : 'Failed to clear templates');
+        throw err;
+      }
   }, [store]);
 
   return {
