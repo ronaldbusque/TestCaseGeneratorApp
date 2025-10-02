@@ -134,11 +134,13 @@ export const useDataGeneration = ({
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = `${DEFAULT_FILE_PREFIX}-${new Date().toISOString().slice(0, 10)}.${extension}`;
+      const filename = `${DEFAULT_FILE_PREFIX}-${new Date().toISOString().slice(0, 10)}.${extension}`;
+      anchor.download = filename;
       document.body.appendChild(anchor);
       anchor.click();
       window.URL.revokeObjectURL(url);
       anchor.remove();
+      return filename;
     },
     []
   );
@@ -188,7 +190,15 @@ export const useDataGeneration = ({
         return;
       }
 
+      const sample = generatedData.data.slice(0, PREVIEW_ROW_COUNT);
+      setPreviewDataRows(sample);
+      setIsPreviewMode(true);
+
       reportMetadata(generatedData.metadata);
+
+      let downloadedFilename: string | null = null;
+      const rowsGenerated = generatedData.data.length;
+      const usedAI = Boolean(exportConfig.enhancementPrompt.trim() && hasAIGeneratedFields);
 
       if (exportConfig.format === 'Excel') {
         const blob = await fetchApi<Blob>(
@@ -204,17 +214,16 @@ export const useDataGeneration = ({
         const url = window.URL.createObjectURL(blob);
         const anchor = document.createElement('a');
         anchor.href = url;
-        anchor.download = `${DEFAULT_FILE_PREFIX}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+        downloadedFilename = `${DEFAULT_FILE_PREFIX}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+        anchor.download = downloadedFilename;
         document.body.appendChild(anchor);
         anchor.click();
         window.URL.revokeObjectURL(url);
         anchor.remove();
 
         toast({
-          title: exportConfig.enhancementPrompt.trim() && hasAIGeneratedFields
-            ? 'Data Generated with AI Enhancement'
-            : 'Export Successful',
-          description: `Generated ${generatedData.data.length} rows of data.`,
+          title: usedAI ? 'Data Generated with AI Enhancement' : 'Export Successful',
+          description: `Downloaded ${downloadedFilename} with ${rowsGenerated} rows. Check your browser downloads.`,
           variant: 'default',
         });
         return;
@@ -238,9 +247,13 @@ export const useDataGeneration = ({
           .join(delimiter);
 
         const content = exportConfig.includeBOM ? `\ufeff${header}${rows}` : `${header}${rows}`;
-        downloadFile(content, 'text/csv', 'csv');
+        downloadedFilename = downloadFile(content, 'text/csv', 'csv');
       } else if (exportConfig.format === 'JSON') {
-        downloadFile(JSON.stringify(generatedData.data, null, 2), 'application/json', 'json');
+        downloadedFilename = downloadFile(
+          JSON.stringify(generatedData.data, null, 2),
+          'application/json',
+          'json'
+        );
       } else if (exportConfig.format === 'SQL') {
         const delimiter = getLineEnding(exportConfig.lineEnding);
         const data = generatedData.data;
@@ -259,14 +272,14 @@ export const useDataGeneration = ({
           })
           .join(delimiter);
 
-        downloadFile(sql, 'text/plain', 'sql');
+        downloadedFilename = downloadFile(sql, 'text/plain', 'sql');
       }
 
       toast({
-        title: exportConfig.enhancementPrompt.trim() && hasAIGeneratedFields
-          ? 'Data Generated with AI Enhancement'
-          : 'Export Successful',
-        description: `Generated ${generatedData.data.length} rows of data.`,
+        title: usedAI ? 'Data Generated with AI Enhancement' : 'Export Successful',
+        description: downloadedFilename
+          ? `Downloaded ${downloadedFilename} with ${rowsGenerated} rows. Check your browser downloads.`
+          : `Generated ${rowsGenerated} rows of data.`,
         variant: 'default',
       });
     } catch (error) {
