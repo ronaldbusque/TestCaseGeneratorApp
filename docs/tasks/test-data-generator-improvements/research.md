@@ -39,3 +39,15 @@ Assessing the Test Data Generator page (`src/app/data-generator/page.tsx`) to su
   - **`@snaplet/copycat`**: Focuses on realistic, deterministic data generation with referential integrity helpers. Strong for seeding/testing, integrates with Prisma, and exposes composable generators that we could map to UI types. Smaller ecosystem but active maintenance.
   - **External services (Mockaroo API, GenerateData.com)**: Provide rich templates and relationships but add cost, latency, and dependency on external availability, plus complications around auth and rate limits.
 - Recommendation: keep Faker for simple primitives but introduce a layered approach—use Copycat or mocker-data-generator as the “engine” behind our schema builder so we get relationships, deterministic seeding, and composable generators. Expose JSON Schema import to tap into json-schema-faker for advanced cases. This hybrid keeps compatibility while unlocking richer datasets without rewriting UI from scratch.
+
+## 2025-10-02 – Repo survey
+- Hooks exist for schema, export, generation; SchemaBuilder duplicates validation logic already present in hook.
+- Copycat mapping currently covers only a handful of types (number, decimal, boolean, names, email, city/country, phone, uuid, address). Any AI-generated or custom types force full faker fallback.
+- TestDataGeneratorService still contains large faker-based switch with dynamic paths; copycat path only runs when every field is supported.
+- UI exposes deterministic seed toggle; API forwards seed to service correctly. Additional copycat mappings would unlock deterministic coverage for more schemas.
+
+## 2025-10-02 – Implementation notes
+- Moved schema field validation rules into shared helper for hooks and components.
+- Added Copycat support for Date/Time, location, and network field types plus deterministic address line 2 + company samples.
+- Expanded unit coverage for new generators including range formatting and locale-specific options.
+- Introduced seeded date/time anchors so Copycat keeps future/past/DOB outputs stable when a seed is provided.
