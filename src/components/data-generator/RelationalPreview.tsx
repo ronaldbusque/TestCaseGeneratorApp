@@ -47,7 +47,7 @@ export function RelationalPreview({ data, fields }: RelationalPreviewProps) {
       data.forEach((row, rowIndex) => {
         const source = stringifyValue(row[sourceField]);
         const reference = stringifyValue(row[field.name]);
-        const key = `${source}|${reference}`;
+        const key = JSON.stringify([source, reference]);
 
         const mismatched = source !== reference;
         if (mismatched) {
