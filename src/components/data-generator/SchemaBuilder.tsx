@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PlusIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline';
 import { TypeSelectionDialog } from './TypeSelectionDialog';
 import { fakerTypeDefinitions } from '@/lib/data/faker-type-definitions';
@@ -49,15 +49,29 @@ export function SchemaBuilder({
   const [selectedTemplateKey, setSelectedTemplateKey] = useState<string>('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const enableRemoteTemplates = process.env.NEXT_PUBLIC_ENABLE_SCHEMA_SYNC === 'true';
+  type SyncStatus = 'local' | 'remote' | 'fallback';
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(enableRemoteTemplates ? 'remote' : 'local');
+
+  const handleRemoteFallback = useCallback(() => {
+    setSyncStatus('fallback');
+    console.info('[SchemaBuilder] Remote schema sync unavailable, using local storage.');
+  }, []);
+
+  useEffect(() => {
+    if (enableRemoteTemplates) {
+      setSyncStatus((previous) => (previous === 'fallback' ? previous : 'remote'));
+    } else {
+      setSyncStatus('local');
+    }
+  }, [enableRemoteTemplates]);
+
   const schemaStore = useMemo(
     () =>
       createHybridSchemaStore({
         enableRemote: enableRemoteTemplates,
-        onFallback: () => {
-          console.info('[SchemaBuilder] Falling back to local schema templates');
-        },
+        onFallback: handleRemoteFallback,
       }),
-    [enableRemoteTemplates]
+    [enableRemoteTemplates, handleRemoteFallback]
   );
 
   const {
@@ -683,9 +697,28 @@ export function SchemaBuilder({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <label className="text-xs text-slate-300" htmlFor="saved-schema-select">
-            Saved Schemas
-          </label>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-slate-300" htmlFor="saved-schema-select">
+              Saved Schemas
+            </label>
+            {enableRemoteTemplates && (
+              <span
+                className={`text-xs px-2 py-0.5 rounded-full border ${
+                  syncStatus === 'remote'
+                    ? 'border-green-500 text-green-300'
+                    : syncStatus === 'fallback'
+                      ? 'border-amber-500 text-amber-300'
+                      : 'border-slate-500 text-slate-300'
+                }`}
+              >
+                {syncStatus === 'remote'
+                  ? 'Cloud sync active'
+                  : syncStatus === 'fallback'
+                    ? 'Offline – using local copies'
+                    : 'Local only'}
+              </span>
+            )}
+          </div>
           <select
             id="saved-schema-select"
             className="bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm"

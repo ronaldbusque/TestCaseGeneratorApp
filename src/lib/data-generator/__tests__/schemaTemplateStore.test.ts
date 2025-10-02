@@ -15,11 +15,15 @@ const makeSchema = (overrides: Partial<StoredSchema>): StoredSchema => ({
 });
 
 describe('createHybridSchemaStore', () => {
-  const expectFallbackWarning = async (action: Promise<any>) => {
+  const expectFallbackWarning = async (action: Promise<any>, shouldWarn = true) => {
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       await action;
-      expect(warnSpy).toHaveBeenCalled();
+      if (shouldWarn) {
+        expect(warnSpy).toHaveBeenCalled();
+      } else {
+        expect(warnSpy).not.toHaveBeenCalled();
+      }
     } finally {
       warnSpy.mockRestore();
     }
@@ -78,15 +82,19 @@ describe('createHybridSchemaStore', () => {
     const store = createHybridSchemaStore({ enableRemote: true, remoteStore: remote, localStore: local });
 
     await expectFallbackWarning(store.list());
+    expect(remote.list).toHaveBeenCalledTimes(1);
     expect(local.list).toHaveBeenCalled();
 
-    await expectFallbackWarning(store.save({ name: 'Local Save', fields: sampleFields }));
+    await expectFallbackWarning(store.save({ name: 'Local Save', fields: sampleFields }), false);
+    expect(remote.save).toHaveBeenCalledTimes(0);
     expect(local.save).toHaveBeenCalled();
 
-    await expectFallbackWarning(store.delete('schema')); 
+    await expectFallbackWarning(store.delete('schema'), false);
+    expect(remote.delete).toHaveBeenCalledTimes(0);
     expect(local.delete).toHaveBeenCalled();
 
-    await expectFallbackWarning(store.clear());
+    await expectFallbackWarning(store.clear(), false);
+    expect(remote.clear).toHaveBeenCalledTimes(0);
     expect(local.clear).toHaveBeenCalled();
   });
 

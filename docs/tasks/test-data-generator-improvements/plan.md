@@ -37,7 +37,7 @@ Redesign the Test Data Generator experience to support richer schemas, clearer A
 2. **Field templates** *(in progress)*: base duplication + manual reorder available; quick-add templates (Person, Address, Company) wired to schema builder; follow-up for grouped templates and drag/drop.
 3. **Relationship support** *(in progress)*: reference field type duplicates values from other fields (UI + generator path); extend to relational datasets next.
 4. **Inline validation** *(in progress)*: numeric/date/custom list/phone validations with UI feedback shipped; next step is deeper format guidance + Playwright coverage.
-5. **Schema persistence** *(in progress)*: `useSchemaTemplates` uses a hybrid store that prefers Supabase when enabled and falls back to local storage gracefully; API endpoints ready once Supabase schema lands.
+5. **Schema persistence** *(done)*: `useSchemaTemplates` + hybrid store prefer Supabase when enabled, auto-fallback to local storage, and expose `/api/data-generator/templates` for future Supabase migrations.
 
 ### Phase 3 – AI Guidance & Preview Improvements (Pending Phase 1/2)
 1. **AI prompt panel** *(in progress)*: prompt suggestions surfaced in UI with quick-apply integration.

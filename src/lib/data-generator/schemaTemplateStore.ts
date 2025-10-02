@@ -84,8 +84,12 @@ export const createHybridSchemaStore = ({
   }
 
   const remote = remoteStore ?? createHttpSchemaStore(basePath);
+  let remoteDisabled = false;
 
   const withFallback = async <T>(primary: () => Promise<T>, fallback: () => Promise<T>): Promise<T> => {
+    if (remoteDisabled) {
+      return fallback();
+    }
     try {
       const result = await primary();
       return result;
@@ -93,6 +97,7 @@ export const createHybridSchemaStore = ({
       if (!shouldFallback(error)) {
         throw error;
       }
+      remoteDisabled = true;
       if (onFallback) {
         onFallback(error);
       } else {
