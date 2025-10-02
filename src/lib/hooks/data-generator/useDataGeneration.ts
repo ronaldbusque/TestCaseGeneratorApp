@@ -60,7 +60,8 @@ export const useDataGeneration = ({
   provider,
   model,
   toast,
-}: UseDataGenerationParams) => {
+  onGenerationStart,
+}: UseDataGenerationParams & { onGenerationStart?: () => void }) => {
   const [previewDataRows, setPreviewDataRows] = useState<Array<Record<string, unknown>>>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
@@ -151,6 +152,7 @@ export const useDataGeneration = ({
     }
 
     setIsGenerating(true);
+    onGenerationStart?.();
 
     try {
       const payload = {
@@ -334,6 +336,7 @@ export const useDataGeneration = ({
     }
 
     setIsGenerating(true);
+    onGenerationStart?.();
 
     try {
       const result = (await fetchApi(
@@ -418,6 +421,7 @@ export const useDataGeneration = ({
     }
 
     setIsFetchingAiSample(true);
+    onGenerationStart?.();
     try {
       const result = (await fetchApi(
         '/api/data-generator/generate',

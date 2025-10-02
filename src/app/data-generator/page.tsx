@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useRef, useCallback } from 'react';
 
 import { SchemaBuilder } from '@/components/data-generator/SchemaBuilder';
 import { ExportOptions } from '@/components/data-generator/ExportOptions';
@@ -54,6 +54,25 @@ export default function TestDataGeneratorPage() {
     isGenerating,
     isFetchingAiSample,
     isPreviewMode,
+  const progressRef = useRef<HTMLDivElement | null>(null);
+
+  const scrollToProgress = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      progressRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
+
+  const {
+    exportData,
+    generatePreview,
+    generateAiSample,
+    clearPreview,
+    previewDataRows,
+    aiSampleRow,
+    generationMetadata,
+    isGenerating,
+    isFetchingAiSample,
+    isPreviewMode,
   } = useDataGeneration({
     exportConfig,
     hasAIGeneratedFields: schema.hasAIGeneratedFields,
@@ -63,6 +82,7 @@ export default function TestDataGeneratorPage() {
     provider: settings.data.provider,
     model: settings.data.model,
     toast,
+    onGenerationStart: scrollToProgress,
   });
 
   const aiFieldNames = useMemo(
@@ -87,7 +107,7 @@ export default function TestDataGeneratorPage() {
         <QuickModelSwitcher domain="data" />
       </div>
 
-      <div className="space-y-8">
+      <div className="space-y-8" ref={progressRef}>
         <section>
           <h2 className="text-2xl font-semibold text-white mb-4">Define Your Schema</h2>
           <SchemaBuilder
