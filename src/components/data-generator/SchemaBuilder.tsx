@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PlusIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline';
 import { TypeSelectionDialog } from './TypeSelectionDialog';
+import { TypeOptionHint } from './TypeOptionHint';
 import { fakerTypeDefinitions } from '@/lib/data/faker-type-definitions';
 import { TypeOption } from '@/lib/types/testData';
 import type { FieldDefinition, FieldOptionValue, FieldOptions } from '@/lib/data-generator/types';
@@ -209,16 +210,14 @@ export function SchemaBuilder({
     const sourceField = typeof field.options.sourceField === 'string' ? field.options.sourceField : '';
     const errors = getFieldErrors(field.id);
 
-    if (availableFields.length === 0) {
-      return (
-        <div className="py-1 text-xs text-slate-400">
-          Add another field first, then select it as a reference.
-        </div>
-      );
-    }
-
     return (
       <div className="flex flex-col space-y-1 py-1">
+        {availableFields.length === 0 ? (
+          <TypeOptionHint title="No available fields" tone="warning">
+            Add another field first, then select it as a reference.
+          </TypeOptionHint>
+        ) : (
+          <>
         <div className="flex items-center gap-2">
           <span className="text-xs text-slate-300">Source field:</span>
           <select
@@ -240,6 +239,8 @@ export function SchemaBuilder({
               <li key={`${field.id}-reference-${idx}`}>{message}</li>
             ))}
           </ul>
+        )}
+          </>
         )}
       </div>
     );
@@ -333,6 +334,43 @@ export function SchemaBuilder({
     onChange(next);
   };
 
+  const renderTypeHint = (type: string, errors: string[]) => {
+    if (type === 'Number' || type === 'Decimal Number' || type === 'Car Model Year') {
+      return (
+        <TypeOptionHint title="Number tips" tone={errors.length ? 'warning' : 'info'}>
+          Ensure Min is less than or equal to Max. Leave fields blank to use defaults. <br />
+          {type === 'Decimal Number' && 'Use Multiple Of to control precision (e.g., 0.01).'}
+        </TypeOptionHint>
+      );
+    }
+
+    if (type === 'Date' || type === 'Future Date' || type === 'Past Date' || type === 'Date of Birth') {
+      return (
+        <TypeOptionHint title="Date tips" tone={errors.length ? 'warning' : 'info'}>
+          Dates accept ISO strings like 2024-06-01. When using ranges, From must be before To.
+        </TypeOptionHint>
+      );
+    }
+
+    if (type === 'Custom List') {
+      return (
+        <TypeOptionHint title="Custom list" tone={errors.length ? 'warning' : 'info'}>
+          Provide comma-separated values. Empty values are ignored.
+        </TypeOptionHint>
+      );
+    }
+
+    if (type === 'Phone Number') {
+      return (
+        <TypeOptionHint title="Phone format" tone={errors.length ? 'warning' : 'info'}>
+          Use # characters as digit placeholders (e.g., +1-###-###-####).
+        </TypeOptionHint>
+      );
+    }
+
+    return null;
+  };
+
   const resolveOptionValue = (value: FieldOptionValue | undefined): string | number => {
     if (typeof value === 'number') {
       return value;
@@ -363,9 +401,10 @@ export function SchemaBuilder({
     const errors = fieldErrors[field.id] ?? [];
     const hasError = errors.length > 0;
     const baseInputClass = hasError ? 'bg-slate-800 border border-red-500 text-white rounded-lg px-2 py-1 text-sm' : 'bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-sm';
+    const hint = renderTypeHint(type, errors);
 
     return (
-      <div className="flex flex-col space-y-1 py-1">
+      <div className="flex flex-col space-y-2 py-1">
         <div className="flex flex-nowrap items-center space-x-2 overflow-x-auto">
           {typeDefinition.options.map((option: TypeOption) => {
             switch (option.type) {
@@ -551,6 +590,7 @@ export function SchemaBuilder({
             ))}
           </ul>
         )}
+        {hint}
       </div>
     );
   };
