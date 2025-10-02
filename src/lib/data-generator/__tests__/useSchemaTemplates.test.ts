@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 
 import type { StoredSchema } from '@/lib/data-generator/schemaStorage';
 import { useSchemaTemplates, type SchemaTemplatesStore } from '@/lib/data-generator/useSchemaTemplates';
+import { createHybridSchemaStore } from '@/lib/data-generator/schemaTemplateStore';
 
 const mockSchemas: StoredSchema[] = [
   {
@@ -126,5 +127,42 @@ describe('useSchemaTemplates', () => {
       expect(result.current.schemas).toHaveLength(0);
     });
     expect(result.current.activeSchema).toBeNull();
+  });
+
+  it('falls back to local store when remote throws', async () => {
+    const failingRemote: SchemaTemplatesStore = {
+      list: async () => {
+        throw new Error('Supabase not configured');
+      },
+      save: async () => {
+        throw new Error('Supabase not configured');
+      },
+      delete: async () => {
+        throw new Error('Supabase not configured');
+      },
+      clear: async () => {
+        throw new Error('Supabase not configured');
+      },
+    };
+
+    const hybridStore = createHybridSchemaStore({
+      enableRemote: true,
+      remoteStore: failingRemote,
+      localStore: createMemoryStore(),
+    });
+
+    const { result } = renderHook(() => useSchemaTemplates({ store: hybridStore }));
+
+    await waitFor(() => {
+      expect(result.current.schemas).toEqual([]);
+    });
+
+    await act(async () => {
+      await result.current.saveTemplate({ name: 'Local Only', fields: [] });
+    });
+
+    await waitFor(() => {
+      expect(result.current.schemas).toHaveLength(1);
+    });
   });
 });

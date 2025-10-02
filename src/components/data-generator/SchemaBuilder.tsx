@@ -16,7 +16,7 @@ import {
   withFreshIds,
 } from '@/lib/data-generator/schemaActions';
 import { useSchemaTemplates } from '@/lib/data-generator/useSchemaTemplates';
-import { createHttpSchemaStore } from '@/lib/data-generator/schemaTemplateStore';
+import { createHybridSchemaStore } from '@/lib/data-generator/schemaTemplateStore';
 import { SCHEMA_TEMPLATES } from '@/lib/data-generator/templates';
 
 interface SchemaBuilderProps {
@@ -50,7 +50,13 @@ export function SchemaBuilder({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const enableRemoteTemplates = process.env.NEXT_PUBLIC_ENABLE_SCHEMA_SYNC === 'true';
   const schemaStore = useMemo(
-    () => (enableRemoteTemplates ? createHttpSchemaStore() : undefined),
+    () =>
+      createHybridSchemaStore({
+        enableRemote: enableRemoteTemplates,
+        onFallback: () => {
+          console.info('[SchemaBuilder] Falling back to local schema templates');
+        },
+      }),
     [enableRemoteTemplates]
   );
 

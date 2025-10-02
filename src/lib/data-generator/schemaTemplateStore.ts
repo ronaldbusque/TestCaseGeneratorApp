@@ -3,6 +3,10 @@ import type { FieldDefinition } from '@/lib/data-generator/types';
 import type { StoredSchema } from '@/lib/data-generator/schemaStorage';
 import { clearSchemas, deleteSchema, listSchemas, saveSchema } from '@/lib/data-generator/schemaStorage';
 
+type FetchError = Error & {
+  status?: number;
+};
+
 export interface SchemaTemplatesStore {
   list(): Promise<StoredSchema[]>;
   save(payload: { id?: string; name: string; fields: FieldDefinition[] }): Promise<StoredSchema>;
@@ -44,3 +48,64 @@ export const createHttpSchemaStore = (basePath = '/api/data-generator/templates'
     });
   },
 });
+
+const shouldFallback = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const typed = error as FetchError;
+  if (typed.status && [401, 403, 404, 500, 501].includes(typed.status)) {
+    return true;
+  }
+  if ('message' in typed && typeof typed.message === 'string') {
+    return /supabase/i.test(typed.message) || /not configured/i.test(typed.message);
+  }
+  return false;
+};
+
+export interface HybridStoreOptions {
+  enableRemote?: boolean;
+  basePath?: string;
+  onFallback?: (error: unknown) => void;
+  remoteStore?: SchemaTemplatesStore;
+  localStore?: SchemaTemplatesStore;
+}
+
+export const createHybridSchemaStore = ({
+  enableRemote = false,
+  basePath,
+  onFallback,
+  remoteStore,
+  localStore,
+}: HybridStoreOptions = {}): SchemaTemplatesStore => {
+  const local = localStore ?? createLocalSchemaStore();
+  if (!enableRemote) {
+    return local;
+  }
+
+  const remote = remoteStore ?? createHttpSchemaStore(basePath);
+
+  const withFallback = async <T>(primary: () => Promise<T>, fallback: () => Promise<T>): Promise<T> => {
+    try {
+      const result = await primary();
+      return result;
+    } catch (error) {
+      if (!shouldFallback(error)) {
+        throw error;
+      }
+      if (onFallback) {
+        onFallback(error);
+      } else {
+        console.warn('[schemaTemplateStore] Remote store failed, falling back to local store', error);
+      }
+      return fallback();
+    }
+  };
+
+  return {
+    list: () => withFallback(() => remote.list(), () => local.list()),
+    save: (payload) => withFallback(() => remote.save(payload), () => local.save(payload)),
+    delete: (id) => withFallback(() => remote.delete(id), () => local.delete(id)),
+    clear: () => withFallback(() => remote.clear(), () => local.clear()),
+  };
+};
