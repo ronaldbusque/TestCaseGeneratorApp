@@ -218,6 +218,25 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
       }
     }
 
+    if (type === 'Custom List') {
+      const raw = typeof options.values === 'string' ? options.values.trim() : '';
+      if (!raw) {
+        errors.push('Provide at least one value.');
+      } else {
+        const entries = raw.split(',').map((entry) => entry.trim()).filter(Boolean);
+        if (entries.length === 0) {
+          errors.push('Provide at least one value.');
+        }
+      }
+    }
+
+    if (type === 'Phone Number') {
+      const format = typeof options.format === 'string' ? options.format.trim() : '';
+      if (format && !format.includes('#')) {
+        errors.push('Custom phone formats must include # placeholders.');
+      }
+    }
+
     if (type === 'Reference') {
       const sourceField = typeof options.sourceField === 'string' ? options.sourceField : '';
       if (!sourceField) {

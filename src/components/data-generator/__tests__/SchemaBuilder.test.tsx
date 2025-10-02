@@ -97,4 +97,30 @@ describe('SchemaBuilder', () => {
 
     expect(screen.getByText('Min Age cannot exceed Max Age.')).toBeInTheDocument();
   });
+
+  it('validates custom list values', () => {
+    const field: FieldDefinition = {
+      id: 'list1',
+      name: 'choices',
+      type: 'Custom List',
+      options: { values: '   ' },
+    };
+
+    render(<SchemaBuilder fields={[field]} onChange={jest.fn()} />);
+
+    expect(screen.getByText('Provide at least one value.')).toBeInTheDocument();
+  });
+
+  it('validates phone format placeholders', () => {
+    const field: FieldDefinition = {
+      id: 'phone1',
+      name: 'phone',
+      type: 'Phone Number',
+      options: { format: '(555) 123-4567' },
+    };
+
+    render(<SchemaBuilder fields={[field]} onChange={jest.fn()} />);
+
+    expect(screen.getByText('Custom phone formats must include # placeholders.')).toBeInTheDocument();
+  });
 });

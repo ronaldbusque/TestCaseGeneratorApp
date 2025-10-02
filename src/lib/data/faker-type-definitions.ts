@@ -57,6 +57,18 @@ export const fakerTypeDefinitions: Record<string, FakerTypeDefinition> = {
     fakerMethod: null,
     options: []
   },
+  "Custom List": {
+    fakerMethod: null,
+    options: [
+      {
+        name: "values",
+        label: "Values",
+        type: "text",
+        default: '',
+        placeholder: 'apple, banana, cherry',
+      }
+    ]
+  },
   
   // Add Number type with range options
   "Number": {
