@@ -70,7 +70,9 @@ export const moveField = (fields: FieldDefinition[], fromIndex: number, toIndex:
   return next;
 };
 
-export const withFreshIds = (fields: FieldDefinition[]): FieldDefinition[] =>
+type CompatibleField = Omit<FieldDefinition, 'id'> & Partial<Pick<FieldDefinition, 'id'>>;
+
+export const withFreshIds = (fields: CompatibleField[]): FieldDefinition[] =>
   fields.map((field) => ({
     ...field,
     id: uuidv4(),
