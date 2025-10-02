@@ -1,31 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { FieldDefinition } from '@/lib/data-generator/types';
+import type { StoredSchema } from '@/lib/data-generator/schemaStorage';
 import {
-  StoredSchema,
-  clearSchemas,
-  deleteSchema,
-  listSchemas,
-  saveSchema,
-} from '@/lib/data-generator/schemaStorage';
-
-export interface SchemaTemplatesStore {
-  list(): Promise<StoredSchema[]>;
-  save(payload: { id?: string; name: string; fields: FieldDefinition[] }): Promise<StoredSchema>;
-  delete(id: string): Promise<void>;
-  clear(): Promise<void>;
-}
-
-const createLocalSchemaStore = (): SchemaTemplatesStore => ({
-  list: async () => listSchemas(),
-  save: async (payload) => saveSchema(payload),
-  delete: async (id) => {
-    deleteSchema(id);
-  },
-  clear: async () => {
-    clearSchemas();
-  },
-});
+  type SchemaTemplatesStore,
+  createLocalSchemaStore,
+} from '@/lib/data-generator/schemaTemplateStore';
 
 interface UseSchemaTemplatesOptions {
   initialSchemas?: StoredSchema[];

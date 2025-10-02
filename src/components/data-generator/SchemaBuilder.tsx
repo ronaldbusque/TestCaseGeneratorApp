@@ -16,6 +16,7 @@ import {
   withFreshIds,
 } from '@/lib/data-generator/schemaActions';
 import { useSchemaTemplates } from '@/lib/data-generator/useSchemaTemplates';
+import { createHttpSchemaStore } from '@/lib/data-generator/schemaTemplateStore';
 import { SCHEMA_TEMPLATES } from '@/lib/data-generator/templates';
 
 interface SchemaBuilderProps {
@@ -47,6 +48,12 @@ export function SchemaBuilder({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedTemplateKey, setSelectedTemplateKey] = useState<string>('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const enableRemoteTemplates = process.env.NEXT_PUBLIC_ENABLE_SCHEMA_SYNC === 'true';
+  const schemaStore = useMemo(
+    () => (enableRemoteTemplates ? createHttpSchemaStore() : undefined),
+    [enableRemoteTemplates]
+  );
+
   const {
     schemas,
     activeSchemaId,
@@ -58,7 +65,7 @@ export function SchemaBuilder({
     isLoading: templatesLoading,
     error: templatesError,
     activeSchema,
-  } = useSchemaTemplates();
+  } = useSchemaTemplates({ store: schemaStore });
 
   useEffect(() => {
     if (activeSchema) {
