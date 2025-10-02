@@ -8,6 +8,7 @@ import { TypeOption } from '@/lib/types/testData';
 import { v4 as uuidv4 } from 'uuid';
 import type { FieldDefinition, FieldOptionValue, FieldOptions } from '@/lib/data-generator/types';
 import { listSchemas, saveSchema as persistSchema, deleteSchema as removeSchema } from '@/lib/data-generator/schemaStorage';
+import { SCHEMA_TEMPLATES } from '@/lib/data-generator/templates';
 
 interface SchemaBuilderProps {
   fields: FieldDefinition[];
@@ -21,6 +22,7 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
   const [schemaName, setSchemaName] = useState('');
   const [selectedSchemaId, setSelectedSchemaId] = useState<string>('');
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [selectedTemplateKey, setSelectedTemplateKey] = useState<string>('');
 
   useEffect(() => {
     setSavedSchemas(listSchemas());
@@ -48,10 +50,22 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
     onChange(newFields);
   };
 
+  const makeUniqueFieldName = (baseName: string, existingNames: Set<string>) => {
+    let candidate = baseName;
+    let counter = 1;
+    while (existingNames.has(candidate)) {
+      candidate = `${baseName}_${counter++}`;
+    }
+    existingNames.add(candidate);
+    return candidate;
+  };
+
   const handleDuplicateField = (index: number) => {
     const source = fields[index];
     if (!source) return;
-    const duplicateName = source.name ? `${source.name}_copy` : `field_${fields.length + 1}`;
+    const existingNames = new Set(fields.map((field) => field.name));
+    const baseName = source.name ? `${source.name}_copy` : `field_${fields.length + 1}`;
+    const duplicateName = makeUniqueFieldName(baseName, existingNames);
     const duplicatedField: FieldDefinition = {
       ...source,
       id: uuidv4(),
@@ -111,6 +125,23 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
   };
 
   const hasSchemas = useMemo(() => savedSchemas.length > 0, [savedSchemas.length]);
+
+  const handleApplyTemplate = () => {
+    if (!selectedTemplateKey) return;
+    const template = SCHEMA_TEMPLATES.find((entry) => entry.key === selectedTemplateKey);
+    if (!template) return;
+
+    const existingNames = new Set(fields.map((field) => field.name));
+    const templateFields: FieldDefinition[] = template.fields.map((templateField) => ({
+      id: uuidv4(),
+      name: makeUniqueFieldName(templateField.name, existingNames),
+      type: templateField.type,
+      options: { ...templateField.options },
+    }));
+
+    onChange([...fields, ...templateFields]);
+    setSelectedTemplateKey('');
+  };
   
   const handleTypeSelect = (index: number) => {
     setActiveFieldIndex(index);
@@ -447,6 +478,31 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
             <PlusIcon className="h-4 w-4 mr-1" />
             Add Another Field
           </button>
+          <div className="flex items-center gap-2">
+            <select
+              className="bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm"
+              value={selectedTemplateKey}
+              onChange={(e) => setSelectedTemplateKey(e.target.value)}
+            >
+              <option value="">Add Template…</option>
+              {SCHEMA_TEMPLATES.map((template) => (
+                <option key={template.key} value={template.key}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleApplyTemplate}
+              disabled={!selectedTemplateKey}
+              className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                selectedTemplateKey
+                  ? 'border-slate-500 text-slate-200 hover:bg-slate-600/40'
+                  : 'border-slate-700 text-slate-500 cursor-not-allowed'
+              }`}
+            >
+              Apply Template
+            </button>
+          </div>
           <div className="flex items-center gap-2">
             <input
               type="text"

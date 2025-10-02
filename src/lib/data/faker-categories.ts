@@ -50,6 +50,7 @@ export const fakerCategories: FakerCategory[] = [
       { name: 'Address', description: 'Complete street address' },
       { name: 'Address Line 2', description: 'Room, Apt, Floor, Suite, or PO box number' },
       { name: 'Zip Code', description: 'Postal codes in various formats' },
+      { name: 'State', description: 'State or province names' },
       { name: 'Airport Code', description: 'LAX, NWR, JFK' },
       { name: 'Airport Continent', description: 'NA, AF, EU' },
       { name: 'Airport Country Code', description: 'US, CA, DE' },
@@ -77,6 +78,8 @@ export const fakerCategories: FakerCategory[] = [
       { name: 'App Version', description: 'Random 2 and 3 part app version numbers' },
       { name: 'Avatar', description: 'Random avatar image url from Robohash' },
       { name: 'Base64 Image URL', description: 'Base64 encoded image urls' },
+      { name: 'URL', description: 'Website addresses' },
+      { name: 'IPv4 Address', description: 'Network IP addresses' },
       { name: 'Bitcoin Address', description: 'Cryptocurrency wallet addresses' }
     ]
   },
@@ -120,6 +123,7 @@ export const fakerCategories: FakerCategory[] = [
       { name: 'Full Name', description: 'Complete name with title and suffix options' },
       { name: 'Email', description: 'Valid email addresses' },
       { name: 'Phone Number', description: 'Formatted phone numbers with various patterns' },
+      { name: 'Company Name', description: 'Business and organization names' },
       { name: 'Social Security Number', description: 'Formatted US SSN' },
       { name: 'Date of Birth', description: 'Dates within age ranges' }
     ]

@@ -289,7 +289,22 @@ export const fakerTypeDefinitions: Record<string, FakerTypeDefinition> = {
       }
     ]
   },
-  
+  "State": {
+    fakerMethod: "location.state",
+    options: [
+      {
+        name: "abbreviated",
+        label: "Use Abbreviation",
+        type: "boolean",
+        default: false
+      }
+    ]
+  },
+  "Country": {
+    fakerMethod: "location.country",
+    options: []
+  },
+
   // IT types
   "App Bundle ID": {
     fakerMethod: "system.fileName",
@@ -312,6 +327,14 @@ export const fakerTypeDefinitions: Record<string, FakerTypeDefinition> = {
         ]
       }
     ]
+  },
+  "URL": {
+    fakerMethod: "internet.url",
+    options: []
+  },
+  "IPv4 Address": {
+    fakerMethod: "internet.ip",
+    options: []
   },
   "App Version": {
     fakerMethod: "system.semver",
@@ -359,6 +382,10 @@ export const fakerTypeDefinitions: Record<string, FakerTypeDefinition> = {
         default: false
       }
     ]
+  },
+  "Company Name": {
+    fakerMethod: "company.name",
+    options: []
   },
   "Email": {
     fakerMethod: "internet.email",

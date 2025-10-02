@@ -43,4 +43,20 @@ describe('SchemaBuilder', () => {
     expect(updatedFields[0].name).toBe('name');
     expect(updatedFields[1].name).toBe('id');
   });
+
+  it('applies a template and adds all template fields', () => {
+    const handleChange = jest.fn();
+    render(<SchemaBuilder fields={[initialField]} onChange={handleChange} />);
+
+    const templateSelect = screen.getByDisplayValue('Add Template…');
+    fireEvent.change(templateSelect, { target: { value: 'person-basic' } });
+
+    const applyButton = screen.getByText('Apply Template');
+    fireEvent.click(applyButton);
+
+    expect(handleChange).toHaveBeenCalled();
+    const updated = handleChange.mock.calls[0][0] as FieldDefinition[];
+    expect(updated.length).toBeGreaterThan(1);
+    expect(updated.some((field) => field.name.startsWith('firstName'))).toBe(true);
+  });
 });
