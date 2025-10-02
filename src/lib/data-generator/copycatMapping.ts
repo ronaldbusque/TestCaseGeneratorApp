@@ -35,6 +35,12 @@ const emailGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed
 const phoneGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) =>
   copycat.phoneNumber(makeSeed(baseSeed, field.id, rowIndex));
 
+const fullNameGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) =>
+  copycat.fullName(makeSeed(baseSeed, field.id, rowIndex));
+
+const addressGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) =>
+  copycat.postalAddress(makeSeed(baseSeed, field.id, rowIndex));
+
 const genericStringGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) => {
   if (Array.isArray(field.options.examples) && field.options.examples.length > 0) {
     return copycat.oneOf(makeSeed(baseSeed, field.id, rowIndex), field.options.examples as unknown[]);
@@ -58,12 +64,14 @@ const FIELD_GENERATORS: Record<string, (field: FieldDefinition) => CopycatGenera
   Boolean: booleanGenerator,
   'First Name': (field) => ({ baseSeed, rowIndex }) => copycat.firstName(makeSeed(baseSeed, field.id, rowIndex)),
   'Last Name': (field) => ({ baseSeed, rowIndex }) => copycat.lastName(makeSeed(baseSeed, field.id, rowIndex)),
+  'Full Name': fullNameGenerator,
   Email: emailGenerator,
   City: (field) => ({ baseSeed, rowIndex }) => copycat.city(makeSeed(baseSeed, field.id, rowIndex)),
   Country: (field) => ({ baseSeed, rowIndex }) => copycat.country(makeSeed(baseSeed, field.id, rowIndex)),
   'Phone Number': phoneGenerator,
   UUID: (field) => ({ baseSeed, rowIndex }) => copycat.uuid(makeSeed(baseSeed, field.id, rowIndex)),
   'Character Sequence': characterSequenceGenerator,
+  Address: addressGenerator,
 };
 
 export const mapFieldToCopycat = (field: FieldDefinition): CopycatMapperResult => {
