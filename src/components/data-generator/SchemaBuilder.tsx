@@ -543,19 +543,28 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
             )}
 
           {type === 'Custom List' && (
-            <div className="flex items-center shrink-0">
-              <span className="text-xs text-slate-300 mr-1">values:</span>
-              <input
-                type="text"
-                value={options.values ?? ''}
-                onChange={(e) => handleOptionChange(index, 'values', e.target.value)}
-                placeholder="comma-separated values"
-                className={`w-40 ${baseInputClass}`}
-              />
+            <div className="flex flex-col space-y-1">
+              <div className="flex items-center shrink-0">
+                <span className="text-xs text-slate-300 mr-1">values:</span>
+                <input
+                  type="text"
+                  value={options.values ?? ''}
+                  onChange={(e) => handleOptionChange(index, 'values', e.target.value)}
+                  placeholder="apple, banana, cherry"
+                  className={`w-48 ${baseInputClass}`}
+                />
+              </div>
+              {errors.length > 0 && (
+                <ul className="text-xs text-red-400 space-y-0.5">
+                  {errors.map((message, idx) => (
+                    <li key={`${field.id}-custom-${idx}`}>{message}</li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
         </div>
-        {hasError && (
+        {hasError && type !== 'Custom List' && (
           <ul className="text-xs text-red-400 space-y-0.5">
             {errors.map((message, idx) => (
               <li key={`${field.id}-error-${idx}`}>{message}</li>
