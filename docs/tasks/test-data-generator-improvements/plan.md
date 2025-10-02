@@ -17,6 +17,9 @@ Redesign the Test Data Generator experience to support richer schemas, clearer A
 - **Type safety audit**: Shared field/option types in place, generate route validated via Zod, and Copycat-backed generation wired into `TestDataGeneratorService` with deterministic coverage (faker fallback still needs cleanup).
 - **Copycat engine rollout**: Service prefers Copycat for supported fields; deterministic seed control exposed via export options; fallback path active for unsupported types until mappings expand; new mapping coverage for full names + addresses delivered.
 - **Schema authoring UX**: Type picker now tracks “recently used” types and SchemaBuilder supports duplicating/reordering fields inline.
+- **AI preview UX**: Prompt sidebar now supports gated AI sample generation with loading/empty states and test coverage for generation hook + prompt panel interactions.
+- **Deterministic fallback**: Faker fallback now respects seeds via hash seeding, API responses expose engine metadata, and client toasts highlight when determinism isn’t guaranteed.
+- **Preview controller**: Dedicated toolbar manages refresh/copy/download/exit actions, surfaces engine + determinism metadata inline, and reuses shared preview formatting helpers.
 
 ## Pre-Implementation Checklist
 1. Review Supabase schema draft + resolve open questions (retention, workspace support).
@@ -41,9 +44,9 @@ Redesign the Test Data Generator experience to support richer schemas, clearer A
 
 ### Phase 3 – AI Guidance & Preview Improvements (Pending Phase 1/2)
 1. **AI prompt panel** *(done)*: searchable prompt library with custom prompts, copy-to-clipboard, and AI-field gating.
-2. **Sample AI preview**.
-3. **Deterministic generation** *(Copycat seed integration)*.
-4. **Preview controller**.
+2. **Sample AI preview** *(done)*: prompt sidebar now surfaces one-click AI sample generation with loading state, accessible status messaging, and table preview of returned values; disabled when schemas lack AI fields or validation fails.
+3. **Deterministic generation** *(done)*: Copycat and Faker engines both honour provided seeds, metadata surfaces engine + determinism state, and UI warns when AI or fallback disrupt predictable output.
+4. **Preview controller** *(done)*: unified toolbar lets users refresh previews, copy/download raw output, exit preview safely, and review engine determinism metadata without leaving the preview tab.
 
 ### Phase 4 – Export & History Enhancements (Pending architecture note)
 1. **Server-side export jobs** *(requires queue design and worker plan)*.

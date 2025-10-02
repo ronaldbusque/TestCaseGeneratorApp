@@ -1,12 +1,14 @@
 import { AIService } from '@/lib/types';
-import { 
-  TestDataGenerationRequest, 
-  TestDataGenerationResponse, 
+import {
+  TestDataGenerationRequest,
+  TestDataGenerationResponse,
   TestDataType,
-  GeneratedTestData
+  GeneratedTestData,
+  TestDataGenerationMetadata,
 } from '@/lib/types/testData';
 import { fakerTypeDefinitions } from '@/lib/data/faker-type-definitions';
 import { faker } from '@faker-js/faker';
+import { createHash } from 'crypto';
 import type { FieldDefinition, FieldOptions } from '@/lib/data-generator/types';
 import { generateCopycatRows, supportsCopycat } from '@/lib/data-generator/copycatMapping';
 
@@ -16,6 +18,34 @@ export class TestDataGeneratorService {
   private aiService: AIService; // Add private member for the core AI service
   private faker = faker;
   private fakerTypeDefinitions = fakerTypeDefinitions;
+  private normalizeSeed(seed: string): number {
+    const digest = createHash('sha256').update(seed).digest();
+    for (let offset = 0; offset <= digest.length - 4; offset += 4) {
+      const candidate = digest.readUInt32BE(offset);
+      if (candidate !== 0) {
+        return candidate;
+      }
+    }
+    return 1;
+  }
+
+  private randomizeSeed(): number {
+    return Math.floor(Math.random() * 0xffffffff);
+  }
+
+  private async runWithFakerSeed<T>(seed: string | undefined, run: () => Promise<T> | T): Promise<T> {
+    if (!seed) {
+      return await run();
+    }
+
+    const normalized = this.normalizeSeed(seed);
+    this.faker.seed(normalized);
+    try {
+      return await run();
+    } finally {
+      this.faker.seed(this.randomizeSeed());
+    }
+  }
   
   // Inject AIService via constructor
   constructor(aiService: AIService) {
@@ -203,7 +233,7 @@ export class TestDataGeneratorService {
           // Use min/max from config if provided
           const minYear = config.min ? Number(config.min) : 1950;
           const maxYear = config.max ? Number(config.max) : currentYear;
-          return Math.floor(Math.random() * (maxYear - minYear + 1)) + minYear;
+          return fakerInstance.number.int({ min: minYear, max: maxYear });
           
         // Health related
         // case "Blood Type":
@@ -213,7 +243,7 @@ export class TestDataGeneratorService {
           
         // Airport related
         case "Airport Name":
-          return `${fakerInstance.location.city()} ${['International', 'Regional', 'Municipal', 'County'][Math.floor(Math.random() * 4)]} Airport`;
+          return `${fakerInstance.location.city()} ${fakerInstance.helpers.arrayElement(['International', 'Regional', 'Municipal', 'County'])} Airport`;
         
         case "Airport Region Code":
           return `${fakerInstance.location.countryCode()}-${fakerInstance.location.state({ abbreviated: true })}`;
@@ -222,13 +252,13 @@ export class TestDataGeneratorService {
           return fakerInstance.airline.iataCode();
           
         case "Airport Continent":
-          return ['NA', 'EU', 'AS', 'AF', 'AU', 'SA'][Math.floor(Math.random() * 6)];
+          return fakerInstance.helpers.arrayElement(['NA', 'EU', 'AS', 'AF', 'AU', 'SA']);
           
         case "Airport Country Code":
           return fakerInstance.location.countryCode();
           
         case "Airport Elevation (Feet)":
-          return Math.floor(Math.random() * 9000);
+          return fakerInstance.number.int({ min: 0, max: 9000 });
           
         case "Airport GPS Code":
           return fakerInstance.airline.icao();
@@ -362,38 +392,80 @@ export class TestDataGeneratorService {
         options: field.options,
       }));
 
+      const hasSeed = Boolean(seed);
+      const hasAiEnhancementPrompt = Boolean(aiEnhancement?.trim());
+      const hasAiSchemaFields = fieldDefinitions.some((field) => field.type === 'AI-Generated');
+
+      const metadata: TestDataGenerationMetadata = {
+        engine: 'copycat',
+        deterministic: hasSeed && !hasAiEnhancementPrompt && !hasAiSchemaFields,
+        seed: seed ?? null,
+        warnings: [],
+      };
+
+      if (hasAiEnhancementPrompt) {
+        metadata.warnings.push('AI enhancements may change generated values across runs even when a seed is provided.');
+      }
+
+      if (hasAiSchemaFields) {
+        metadata.deterministic = false;
+        metadata.warnings.push('AI-generated fields use live model output and may vary between runs even with a seed.');
+      }
+
       if (supportsCopycat(fieldDefinitions)) {
         const { rows, usedFallback } = generateCopycatRows(fieldDefinitions, count, seed);
 
         if (usedFallback) {
           console.log('[TestDataGeneratorService] Copycat fallback triggered, reverting to faker generation');
+          metadata.engine = 'faker';
+          metadata.deterministic = metadata.deterministic && !hasAiSchemaFields;
+          metadata.warnings.push('Copycat fallback triggered for one or more fields; using Faker output.');
         } else {
           const rowsWithReferences = this.applyReferenceFields(rows, fieldDefinitions);
 
           if (aiEnhancement && aiEnhancement.trim()) {
             const enhanced = await this.enhanceDataWithAI(rowsWithReferences, aiEnhancement, model);
             const enhancedRows = this.applyReferenceFields(enhanced.data ?? [], fieldDefinitions);
+            if (!metadata.warnings || metadata.warnings.length === 0) {
+              delete (metadata as { warnings?: string[] }).warnings;
+            }
             return {
               data: enhancedRows,
               count: enhancedRows.length,
               error: enhanced.error,
               aiExplanation: enhanced.aiExplanation,
+              metadata,
             };
           }
 
+          if (!metadata.warnings || metadata.warnings.length === 0) {
+            delete (metadata as { warnings?: string[] }).warnings;
+          }
           return {
             data: rowsWithReferences,
             count: rowsWithReferences.length,
+            metadata,
           };
         }
       }
 
       // Use the existing faker-based generation for unsupported field types
-      const result = await this.generateData(fieldDefinitions, count, aiEnhancement, model);
+      metadata.engine = 'faker';
+      metadata.deterministic = metadata.deterministic && !hasAiSchemaFields;
+      if (!supportsCopycat(fieldDefinitions)) {
+        metadata.warnings.push('Fields not yet supported by Copycat are generated with Faker.');
+      }
+
+      const result = await this.generateData(fieldDefinitions, count, aiEnhancement, model, seed);
+
+      if (!metadata.warnings || metadata.warnings.length === 0) {
+        delete (metadata as { warnings?: string[] }).warnings;
+      }
 
       return {
         data: result,
-        count: result.length
+        count: result.length,
+        metadata,
       };
     } catch (error) {
       console.error('Error generating test data from fields:', error);
@@ -422,7 +494,7 @@ export class TestDataGeneratorService {
         case 'Number': {
           const min = this.toNumber(options.min, 1);
           const max = this.toNumber(options.max, 1000);
-          return Math.floor(Math.random() * (max - min + 1)) + min;
+          return fakerInstance.number.int({ min, max });
         }
 
         case 'Decimal Number':
@@ -770,48 +842,56 @@ Format your response as a valid JSON object like this:
     }
   }
 
-  async generateData(fields: FieldDefinition[], count: number, aiEnhancement?: string, model?: string): Promise<any[]> {
-    try {
-      // Separate regular fields from AI-generated fields
-      const regularFields = fields.filter(field => field.type !== 'AI-Generated');
-      const aiFields = fields.filter(field => field.type === 'AI-Generated');
-      
-      // Generate data for regular fields using faker
-      const data = Array.from({ length: count }, (_, rowIndex) => {
-        const row: GeneratedRow = {};
+  async generateData(
+    fields: FieldDefinition[],
+    count: number,
+    aiEnhancement?: string,
+    model?: string,
+    seed?: string,
+  ): Promise<any[]> {
+    return this.runWithFakerSeed(seed, async () => {
+      try {
+        // Separate regular fields from AI-generated fields
+        const regularFields = fields.filter(field => field.type !== 'AI-Generated');
+        const aiFields = fields.filter(field => field.type === 'AI-Generated');
 
-        // Process regular fields with faker
-        regularFields.forEach(field => {
-          if (!field.type) return;
-          
-          try {
-            row[field.name] = this.generateValueForField(field.type, field.options || {});
-          } catch (error) {
-            console.error(`Error generating value for field ${field.name}:`, error);
-            row[field.name] = `Error: ${field.type}`;
-          }
+        // Generate data for regular fields using faker
+        const data = Array.from({ length: count }, () => {
+          const row: GeneratedRow = {};
+
+          // Process regular fields with faker
+          regularFields.forEach(field => {
+            if (!field.type) return;
+
+            try {
+              row[field.name] = this.generateValueForField(field.type, field.options || {});
+            } catch (error) {
+              console.error(`Error generating value for field ${field.name}:`, error);
+              row[field.name] = `Error: ${field.type}`;
+            }
+          });
+
+          // Initialize AI fields with placeholder values
+          // These will be replaced with AI-generated values later
+          aiFields.forEach(field => {
+            row[field.name] = `[AI: Generating...]`;
+          });
+
+          return row;
         });
-        
-        // Initialize AI fields with placeholder values
-        // These will be replaced with AI-generated values later
-        aiFields.forEach(field => {
-          row[field.name] = `[AI: Generating...]`;
-        });
-        
-        return row;
-      });
-      
-      // If there are AI fields, enhance the data with AI-generated values
-      if (aiFields.length > 0) {
-        const enhanced = await this.enhanceWithAIFields(data, aiFields, count, aiEnhancement, model);
-        return this.applyReferenceFields(enhanced, fields);
+
+        // If there are AI fields, enhance the data with AI-generated values
+        if (aiFields.length > 0) {
+          const enhanced = await this.enhanceWithAIFields(data, aiFields, count, aiEnhancement, model);
+          return this.applyReferenceFields(enhanced, fields);
+        }
+
+        return this.applyReferenceFields(data, fields);
+      } catch (error) {
+        console.error('Error generating test data:', error);
+        throw error;
       }
-
-      return this.applyReferenceFields(data, fields);
-    } catch (error) {
-      console.error('Error generating test data:', error);
-      throw error;
-    }
+    });
   }
 
   /**

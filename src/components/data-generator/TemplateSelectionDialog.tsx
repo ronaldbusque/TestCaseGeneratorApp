@@ -32,7 +32,6 @@ const groupTemplates = (): TemplateGroup[] => {
 
 export function TemplateSelectionDialog({ isOpen, onClose, onApply }: TemplateSelectionDialogProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [view, setView] = useState<'list' | 'grid'>('grid');
   const groupedTemplates = useMemo(() => groupTemplates(), []);
 
   const filteredGroups = useMemo(() => {

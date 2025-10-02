@@ -47,9 +47,21 @@ interface AIPromptSuggestionsProps {
   onSelect: (prompt: string) => void;
   currentPrompt: string;
   disabled?: boolean;
+  aiFieldNames: string[];
+  sampleRow: Record<string, unknown> | null;
+  isSampleLoading: boolean;
+  onGenerateSample: () => void;
 }
 
-export function AIPromptSuggestions({ onSelect, currentPrompt, disabled }: AIPromptSuggestionsProps) {
+export function AIPromptSuggestions({
+  onSelect,
+  currentPrompt,
+  disabled,
+  aiFieldNames,
+  sampleRow,
+  isSampleLoading,
+  onGenerateSample,
+}: AIPromptSuggestionsProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [customPrompts, setCustomPrompts] = useState<PromptSuggestion[]>([]);
@@ -127,7 +139,7 @@ export function AIPromptSuggestions({ onSelect, currentPrompt, disabled }: AIPro
     persistCustomPrompts(next);
   };
 
-const handleCopy = async (prompt: string) => {
+  const handleCopy = async (prompt: string) => {
     try {
       await navigator.clipboard.writeText(prompt);
       setCopyStatus('Copied!');
@@ -140,7 +152,10 @@ const handleCopy = async (prompt: string) => {
   };
 
   return (
-    <div className="bg-slate-800/70 backdrop-blur-sm rounded-xl border border-slate-700 p-4 space-y-3">
+    <div
+      className="bg-slate-800/70 backdrop-blur-sm rounded-xl border border-slate-700 p-4 space-y-3"
+      aria-busy={isSampleLoading}
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <SparklesIcon className="h-5 w-5 text-violet-300" />
@@ -261,7 +276,59 @@ const handleCopy = async (prompt: string) => {
         </div>
       )}
 
-      {copyStatus && <div className="text-xs text-slate-300">{copyStatus}</div>}
+      {copyStatus && (
+        <div role="status" aria-live="polite" className="text-xs text-slate-300">
+          {copyStatus}
+        </div>
+      )}
+
+      <div className="border border-slate-700 rounded-lg p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-slate-300 uppercase tracking-wide">AI Sample Preview</p>
+          <button
+            type="button"
+            onClick={onGenerateSample}
+            disabled={disabled || aiFieldNames.length === 0 || isSampleLoading}
+            className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+              disabled || aiFieldNames.length === 0
+                ? 'border-slate-700 text-slate-500 cursor-not-allowed'
+                : 'border-violet-400 text-violet-200 hover:bg-violet-600/20'
+            }`}
+          >
+            Preview
+          </button>
+        </div>
+        {aiFieldNames.length === 0 ? (
+          <p className="text-xs text-slate-500" role="status" aria-live="polite">
+            Add at least one AI-Generated field to preview AI output.
+          </p>
+        ) : isSampleLoading ? (
+          <p className="text-xs text-slate-400" role="status" aria-live="polite">
+            Generating preview…
+          </p>
+        ) : sampleRow ? (
+          <div className="text-xs text-slate-200 space-y-1">
+            <p className="text-slate-400">Sample row:</p>
+            <div className="bg-slate-900/80 border border-slate-700 rounded-lg p-3 overflow-x-auto">
+              <table className="w-full text-left text-xs" aria-label="AI sample preview values">
+                <caption className="sr-only">Preview of AI-enhanced field values</caption>
+                <tbody>
+                  {Object.entries(sampleRow).map(([key, value]) => (
+                    <tr key={key} className="border-b border-slate-800 last:border-0">
+                      <th className="py-1 pr-3 font-medium text-slate-300 align-top">{key}</th>
+                      <td className="py-1 text-slate-200 align-top whitespace-pre-wrap">
+                        {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value ?? '')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500">Generate a preview to see how AI will enhance your fields.</p>
+        )}
+      </div>
     </div>
   );
 }

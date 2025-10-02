@@ -1,5 +1,7 @@
 'use client';
 
+import { useMemo } from 'react';
+
 import { SchemaBuilder } from '@/components/data-generator/SchemaBuilder';
 import { ExportOptions } from '@/components/data-generator/ExportOptions';
 import { DataPreviewTable } from '@/components/data-generator/DataPreviewTable';
@@ -13,6 +15,7 @@ import { useSchemaBuilder } from '@/lib/hooks/data-generator/useSchemaBuilder';
 import { useExportConfig } from '@/lib/hooks/data-generator/useExportConfig';
 import { useDataGeneration } from '@/lib/hooks/data-generator/useDataGeneration';
 import { AIPromptSuggestions } from '@/components/data-generator/AIPromptSuggestions';
+import { PreviewController } from '@/components/data-generator/PreviewController';
 
 interface Toast {
   title: string;
@@ -42,9 +45,13 @@ export default function TestDataGeneratorPage() {
   const {
     exportData,
     generatePreview,
+    generateAiSample,
     clearPreview,
     previewDataRows,
+    aiSampleRow,
+    generationMetadata,
     isGenerating,
+    isFetchingAiSample,
     isPreviewMode,
   } = useDataGeneration({
     exportConfig,
@@ -56,6 +63,11 @@ export default function TestDataGeneratorPage() {
     model: settings.data.model,
     toast,
   });
+
+  const aiFieldNames = useMemo(
+    () => schema.fields.filter((field) => field.type === 'AI-Generated').map((field) => field.name),
+    [schema.fields]
+  );
 
   return (
     <main className="container mx-auto px-4 py-8">
@@ -91,16 +103,22 @@ export default function TestDataGeneratorPage() {
         <div>
           <h2 className="text-2xl font-semibold text-white mb-4">Export Options</h2>
           <div className="grid lg:grid-cols-[2fr_1fr] gap-4">
-            <ExportOptions
-              config={exportConfig}
-              onConfigChange={setExportConfig}
-              onExport={exportData}
-              onPreview={generatePreview}
-              hasAIGeneratedFields={schema.hasAIGeneratedFields}
-            />
+            <div>
+              <ExportOptions
+                config={exportConfig}
+                onConfigChange={setExportConfig}
+                onExport={exportData}
+                onPreview={generatePreview}
+                hasAIGeneratedFields={schema.hasAIGeneratedFields}
+              />
+            </div>
             <AIPromptSuggestions
               currentPrompt={exportConfig.enhancementPrompt}
               disabled={!schema.hasAIGeneratedFields}
+              aiFieldNames={aiFieldNames}
+              sampleRow={aiSampleRow}
+              isSampleLoading={isFetchingAiSample}
+              onGenerateSample={generateAiSample}
               onSelect={(prompt) =>
                 updateExportConfig({
                   enhancementPrompt: prompt,
@@ -115,13 +133,22 @@ export default function TestDataGeneratorPage() {
           <div>
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-2xl font-semibold text-white">Data Preview</h2>
-              <button
-                onClick={clearPreview}
-                className="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
-              >
-                Close Preview
-              </button>
             </div>
+
+            <PreviewController
+              data={previewDataRows}
+              format={exportConfig.format}
+              options={{
+                lineEnding: exportConfig.lineEnding,
+                includeHeader: exportConfig.includeHeader,
+                includeBOM: exportConfig.includeBOM,
+              }}
+              metadata={generationMetadata}
+              isRefreshing={isGenerating}
+              onRefresh={generatePreview}
+              onClose={clearPreview}
+              toast={toast}
+            />
 
             <Tab.Group>
               <Tab.List className="flex space-x-1 rounded-xl bg-slate-700/50 p-1 mb-4">

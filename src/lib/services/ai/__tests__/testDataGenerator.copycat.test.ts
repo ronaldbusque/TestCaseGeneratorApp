@@ -163,4 +163,48 @@ describe('TestDataGeneratorService - Copycat integration', () => {
       expect(row.price).toBeLessThanOrEqual(75);
     });
   });
+
+  it('falls back to faker deterministically when fields are unsupported by Copycat', async () => {
+    const fallbackFields: FieldDefinition[] = [
+      { id: 'buzz', name: 'buzz', type: 'Buzzword', options: {} },
+    ];
+
+    const first = await service.generateTestDataFromFields({ fields: fallbackFields, count: 3, seed: 'seed-faker' });
+    const second = await service.generateTestDataFromFields({ fields: fallbackFields, count: 3, seed: 'seed-faker' });
+
+    expect(first.data).toEqual(second.data);
+    expect(first.metadata?.engine).toBe('faker');
+    expect(first.metadata?.deterministic).toBe(true);
+    expect(first.metadata?.seed).toBe('seed-faker');
+    expect(first.metadata?.warnings).toContain('Fields not yet supported by Copycat are generated with Faker.');
+  });
+
+  it('reports non-deterministic metadata when no seed is provided', async () => {
+    const fallbackFields: FieldDefinition[] = [
+      { id: 'buzz', name: 'buzz', type: 'Buzzword', options: {} },
+    ];
+
+    const first = await service.generateTestDataFromFields({ fields: fallbackFields, count: 2 });
+    const second = await service.generateTestDataFromFields({ fields: fallbackFields, count: 2 });
+
+    expect(first.data).not.toEqual(second.data);
+    expect(first.metadata?.engine).toBe('faker');
+    expect(first.metadata?.deterministic).toBe(false);
+    expect(first.metadata?.warnings).toContain('Fields not yet supported by Copycat are generated with Faker.');
+  });
+
+  it('marks AI-generated schemas as non-deterministic even with a seed', async () => {
+    const aiFields: FieldDefinition[] = [
+      { id: 'ai', name: 'aiField', type: 'AI-Generated', options: {} },
+    ];
+
+    const result = await service.generateTestDataFromFields({ fields: aiFields, count: 1, seed: 'seed-ai' });
+
+    expect(result.metadata?.deterministic).toBe(false);
+    expect(result.metadata?.warnings).toEqual(
+      expect.arrayContaining([
+        'AI-generated fields use live model output and may vary between runs even with a seed.',
+      ])
+    );
+  });
 });

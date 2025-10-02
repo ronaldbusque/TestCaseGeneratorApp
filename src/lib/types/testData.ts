@@ -18,11 +18,19 @@ export interface TestDataGenerationRequest {
 
 export type GeneratedTestData = Record<string, unknown>;
 
+export interface TestDataGenerationMetadata {
+  engine: 'copycat' | 'faker';
+  deterministic: boolean;
+  seed?: string | null;
+  warnings?: string[];
+}
+
 export interface TestDataGenerationResponse {
   data: GeneratedTestData[];
   count: number;
   error?: string;
   aiExplanation?: string;
+  metadata?: TestDataGenerationMetadata;
   debug?: {
     rawResponse?: string;
     parseError?: string;

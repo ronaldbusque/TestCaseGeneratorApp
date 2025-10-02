@@ -8,6 +8,7 @@ import type {
   SchemaValidationResult,
 } from '@/lib/data-generator/types';
 import { fetchApi } from '@/lib/utils/apiClient';
+import type { TestDataGenerationMetadata, TestDataGenerationResponse } from '@/lib/types/testData';
 
 interface ToastParams {
   title: string;
@@ -24,11 +25,6 @@ interface UseDataGenerationParams {
   provider?: string;
   model?: string;
   toast: (params: ToastParams) => void;
-}
-
-interface GeneratedDataResponse {
-  data: Array<Record<string, unknown>>;
-  error?: string;
 }
 
 const WINDOWS_LINE_ENDING = '\r\n';
@@ -68,6 +64,40 @@ export const useDataGeneration = ({
   const [previewDataRows, setPreviewDataRows] = useState<Array<Record<string, unknown>>>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [aiSampleRow, setAiSampleRow] = useState<Record<string, unknown> | null>(null);
+  const [isFetchingAiSample, setIsFetchingAiSample] = useState(false);
+  const [generationMetadata, setGenerationMetadata] = useState<TestDataGenerationMetadata | null>(null);
+
+  const reportMetadata = useCallback(
+    (metadata?: TestDataGenerationMetadata) => {
+      const next = metadata ?? null;
+      setGenerationMetadata((previous) => {
+        const prevKey = previous ? JSON.stringify(previous) : null;
+        const nextKey = next ? JSON.stringify(next) : null;
+
+        if (next && nextKey !== prevKey) {
+          next.warnings?.forEach((warning) => {
+            toast({
+              title: 'Determinism Notice',
+              description: warning,
+              variant: 'default',
+            });
+          });
+
+          if (exportConfig.useDeterministicSeed && !next.deterministic) {
+            toast({
+              title: 'Deterministic Mode Not Guaranteed',
+              description: 'Some generators or AI enhancements can vary between runs even with a seed.',
+              variant: 'destructive',
+            });
+          }
+        }
+
+        return next;
+      });
+    },
+    [exportConfig.useDeterministicSeed, toast]
+  );
 
   const ensureReady = useCallback(() => {
     const schemaValidation = validateSchema();
@@ -146,7 +176,7 @@ export const useDataGeneration = ({
           method: 'POST',
           body: JSON.stringify(payload),
         }
-      )) as GeneratedDataResponse;
+      )) as TestDataGenerationResponse;
 
       if (!generatedData?.data || generatedData.data.length === 0) {
         toast({
@@ -154,8 +184,11 @@ export const useDataGeneration = ({
           description: 'The generation process did not produce any data.',
           variant: 'destructive',
         });
+        reportMetadata(generatedData.metadata);
         return;
       }
+
+      reportMetadata(generatedData.metadata);
 
       if (exportConfig.format === 'Excel') {
         const blob = await fetchApi<Blob>(
@@ -307,11 +340,12 @@ export const useDataGeneration = ({
               : {}),
           }),
         }
-      )) as GeneratedDataResponse;
+      )) as TestDataGenerationResponse;
 
       if (result.data && result.data.length > 0) {
         setPreviewDataRows(result.data);
         setIsPreviewMode(true);
+        reportMetadata(result.metadata);
         toast({
           title: 'Data Generated',
           description: `Successfully generated ${result.data.length} records`,
@@ -323,6 +357,7 @@ export const useDataGeneration = ({
           description: 'The generation process did not produce any data.',
           variant: 'destructive',
         });
+        reportMetadata(result.metadata);
       }
     } catch (error) {
       console.error('Error generating data:', error);
@@ -351,12 +386,89 @@ export const useDataGeneration = ({
     setIsPreviewMode(false);
   }, []);
 
+  const generateAiSample = useCallback(async () => {
+    if (!hasAIGeneratedFields) {
+      toast({
+        title: 'No AI Fields',
+        description: 'Add an AI-Generated field to preview AI output.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!ensureReady()) {
+      return;
+    }
+
+    setIsFetchingAiSample(true);
+    try {
+      const result = (await fetchApi(
+        '/api/data-generator/generate',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            fields: mapFieldsToApi(),
+            count: 1,
+            format: 'JSON',
+            ...(exportConfig.enhancementPrompt.trim()
+              ? { aiEnhancement: exportConfig.enhancementPrompt.trim() }
+              : {}),
+            provider,
+            model,
+            ...(exportConfig.useDeterministicSeed && exportConfig.seedValue.trim()
+              ? { seed: exportConfig.seedValue.trim() }
+              : {}),
+          }),
+        }
+      )) as TestDataGenerationResponse;
+
+      if (result.data && result.data.length > 0) {
+        setAiSampleRow(result.data[0]);
+        if (result.metadata) {
+          reportMetadata(result.metadata);
+        }
+      } else {
+        setAiSampleRow(null);
+        toast({
+          title: 'No AI Sample Available',
+          description: 'The AI preview did not return any data.',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error generating AI sample:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error occurred';
+      setAiSampleRow(null);
+      toast({
+        title: 'AI Preview Failed',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsFetchingAiSample(false);
+    }
+  }, [
+    ensureReady,
+    exportConfig.enhancementPrompt,
+    exportConfig.seedValue,
+    exportConfig.useDeterministicSeed,
+    hasAIGeneratedFields,
+    mapFieldsToApi,
+    model,
+    provider,
+    toast,
+  ]);
+
   return {
     exportData,
     generatePreview,
+    generateAiSample,
     clearPreview,
     previewDataRows,
+    aiSampleRow,
+    generationMetadata,
     isGenerating,
+    isFetchingAiSample,
     isPreviewMode,
   };
 };
