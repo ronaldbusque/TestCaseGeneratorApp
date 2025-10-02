@@ -1,6 +1,6 @@
 import type { FieldDefinition, FieldOptionValue } from '@/lib/data-generator/types';
 
-const parseNumber = (value: FieldOptionValue) => {
+const parseNumber = (value?: FieldOptionValue) => {
   if (typeof value === 'number') {
     return value;
   }
@@ -11,7 +11,7 @@ const parseNumber = (value: FieldOptionValue) => {
   return null;
 };
 
-const parseDate = (value: FieldOptionValue) => {
+const parseDate = (value?: FieldOptionValue) => {
   if (typeof value === 'string' && value.trim() !== '') {
     const date = new Date(value);
     return Number.isNaN(date.valueOf()) ? null : date;

@@ -247,21 +247,21 @@ export class TestDataGeneratorService {
         
         case "Airport Region Code":
           return `${fakerInstance.location.countryCode()}-${fakerInstance.location.state({ abbreviated: true })}`;
-          
+        
         case "Airport Code":
-          return fakerInstance.airline.iataCode();
-          
+          return fakerInstance.string.alpha({ length: 3, casing: 'upper' });
+        
         case "Airport Continent":
           return fakerInstance.helpers.arrayElement(['NA', 'EU', 'AS', 'AF', 'AU', 'SA']);
-          
+        
         case "Airport Country Code":
           return fakerInstance.location.countryCode();
-          
+        
         case "Airport Elevation (Feet)":
           return fakerInstance.number.int({ min: 0, max: 9000 });
-          
+        
         case "Airport GPS Code":
-          return fakerInstance.airline.icao();
+          return fakerInstance.string.alpha({ length: 4, casing: 'upper' });
           
         case "Airport Latitude":
           return fakerInstance.location.latitude();
@@ -297,7 +297,10 @@ export class TestDataGeneratorService {
           
         // Other types
         case "Binomial Distribution":
-          return faker.number.int(config.max || 100);
+          return fakerInstance.number.int({
+            min: 0,
+            max: this.toNumber(config.max, 100) || 100,
+          });
           
         case "Catch Phrase":
           return faker.company.catchPhrase();
@@ -307,7 +310,33 @@ export class TestDataGeneratorService {
           
         case "City":
           return faker.location.city();
-          
+        
+        case "Product Sku":
+        case "Product SKU": {
+          const prefix = typeof config.prefix === 'string' && config.prefix.trim()
+            ? config.prefix.trim().toUpperCase()
+            : 'SKU';
+          const requestedLength = this.toNumber(config.length, 8);
+          const codeLength = Math.max(1, requestedLength - prefix.length);
+          const code = faker.string.alphanumeric({ length: codeLength, casing: 'upper' });
+          return `${prefix}${code}`;
+        }
+
+        case "Product Price": {
+          const minCandidate = this.toNumber(config.min, 5);
+          const maxCandidate = this.toNumber(config.max, 200);
+          const min = Number.isFinite(minCandidate) ? minCandidate : 5;
+          const max = Number.isFinite(maxCandidate) ? maxCandidate : 200;
+          const resolvedMin = Math.min(min, max);
+          const resolvedMax = Math.max(min, max);
+          const raw = faker.commerce.price({ min: resolvedMin, max: resolvedMax, dec: 2, symbol: '' });
+          const currency = typeof config.currency === 'string' && config.currency.trim()
+            ? config.currency.trim().toUpperCase()
+            : '';
+          const amount = Number.parseFloat(raw);
+          return currency ? `${currency} ${amount.toFixed(2)}` : amount;
+        }
+
         // Add more custom type handlers as needed
         
         default:
@@ -322,10 +351,11 @@ export class TestDataGeneratorService {
               
               // Try different common faker namespaces
               const namespaces = ['person', 'location', 'commerce', 'company', 'vehicle', 'finance'];
+              const namespacedFaker = faker as unknown as Record<string, Record<string, any>>;
               
               for (const namespace of namespaces) {
-                if (faker[namespace] && typeof faker[namespace][methodName] === 'function') {
-                  return faker[namespace][methodName]();
+                if (namespacedFaker[namespace] && typeof namespacedFaker[namespace][methodName] === 'function') {
+                  return namespacedFaker[namespace][methodName]();
                 }
               }
             }
@@ -404,12 +434,12 @@ export class TestDataGeneratorService {
       };
 
       if (hasAiEnhancementPrompt) {
-        metadata.warnings.push('AI enhancements may change generated values across runs even when a seed is provided.');
+        metadata.warnings!.push('AI enhancements may change generated values across runs even when a seed is provided.');
       }
 
       if (hasAiSchemaFields) {
         metadata.deterministic = false;
-        metadata.warnings.push('AI-generated fields use live model output and may vary between runs even with a seed.');
+        metadata.warnings!.push('AI-generated fields use live model output and may vary between runs even with a seed.');
       }
 
       if (supportsCopycat(fieldDefinitions)) {
@@ -419,7 +449,7 @@ export class TestDataGeneratorService {
           console.log('[TestDataGeneratorService] Copycat fallback triggered, reverting to faker generation');
           metadata.engine = 'faker';
           metadata.deterministic = metadata.deterministic && !hasAiSchemaFields;
-          metadata.warnings.push('Copycat fallback triggered for one or more fields; using Faker output.');
+          metadata.warnings!.push('Copycat fallback triggered for one or more fields; using Faker output.');
         } else {
           const rowsWithReferences = this.applyReferenceFields(rows, fieldDefinitions);
 
@@ -453,7 +483,7 @@ export class TestDataGeneratorService {
       metadata.engine = 'faker';
       metadata.deterministic = metadata.deterministic && !hasAiSchemaFields;
       if (!supportsCopycat(fieldDefinitions)) {
-        metadata.warnings.push('Fields not yet supported by Copycat are generated with Faker.');
+        metadata.warnings!.push('Fields not yet supported by Copycat are generated with Faker.');
       }
 
       const result = await this.generateData(fieldDefinitions, count, aiEnhancement, model, seed);

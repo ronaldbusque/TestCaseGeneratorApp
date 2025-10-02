@@ -544,7 +544,7 @@ export function SchemaBuilder({
                   <span className="text-xs text-slate-300 mr-1">from:</span>
                   <input
                     type="text"
-                    value={options.fromDate ?? '01/01/2022'}
+                    value={typeof options.fromDate === 'string' && options.fromDate.length > 0 ? options.fromDate : '01/01/2022'}
                     onChange={(e) => handleOptionChange(index, 'fromDate', e.target.value)}
                     className={`w-24 ${baseInputClass}`}
                   />
@@ -553,7 +553,7 @@ export function SchemaBuilder({
                   <span className="text-xs text-slate-300 mr-1">to:</span>
                   <input
                     type="text"
-                    value={options.toDate ?? '12/31/2022'}
+                    value={typeof options.toDate === 'string' && options.toDate.length > 0 ? options.toDate : '12/31/2022'}
                     onChange={(e) => handleOptionChange(index, 'toDate', e.target.value)}
                     className={`w-24 ${baseInputClass}`}
                   />
@@ -561,7 +561,7 @@ export function SchemaBuilder({
                 <div className="flex items-center shrink-0">
                   <span className="text-xs text-slate-300 mr-1">format:</span>
                   <select
-                    value={options.format ?? 'ISO'}
+                    value={typeof options.format === 'string' && options.format.length > 0 ? options.format : 'ISO'}
                     onChange={(e) => handleOptionChange(index, 'format', e.target.value)}
                     className={`bg-slate-800 px-2 py-1 text-sm rounded-lg border ${hasError ? 'border-red-500' : 'border-slate-700'} text-white`}
                   >
@@ -580,7 +580,7 @@ export function SchemaBuilder({
                 <span className="text-xs text-slate-300 mr-1">values:</span>
                 <input
                   type="text"
-                  value={options.values ?? ''}
+                  value={typeof options.values === 'string' ? options.values : ''}
                   onChange={(e) => handleOptionChange(index, 'values', e.target.value)}
                   placeholder="apple, banana, cherry"
                   className={`w-48 ${baseInputClass}`}

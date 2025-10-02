@@ -295,6 +295,7 @@ export const useDataGeneration = ({
     mapFieldsToApi,
     model,
     provider,
+    reportMetadata,
     toast,
   ]);
 
@@ -372,10 +373,13 @@ export const useDataGeneration = ({
     }
   }, [
     exportConfig.enhancementPrompt,
+    exportConfig.seedValue,
+    exportConfig.useDeterministicSeed,
     hasAIGeneratedFields,
     mapFieldsToApi,
     model,
     provider,
+    reportMetadata,
     toast,
     validateExportConfig,
     validateSchema,
@@ -456,6 +460,7 @@ export const useDataGeneration = ({
     mapFieldsToApi,
     model,
     provider,
+    reportMetadata,
     toast,
   ]);
 

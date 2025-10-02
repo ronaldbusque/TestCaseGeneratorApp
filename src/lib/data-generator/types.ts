@@ -30,7 +30,8 @@ export interface SchemaValidationResult {
   message?: string;
   error?:
     | { type: 'empty' }
-    | { type: 'missingType'; fields: string[] };
+    | { type: 'missingType'; fields: string[] }
+    | { type: 'invalid'; fields: string[] };
 }
 
 export interface ExportValidationResult {

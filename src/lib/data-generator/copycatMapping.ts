@@ -289,36 +289,44 @@ const decimalGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSe
   const precision = parseNumberOption(field.options.multipleOf, 0.01);
   const safePrecision = precision > 0 ? precision : 0.01;
   const range = ensureRange(min, max);
-  return copycat.float(makeSeed(baseSeed, field.id, rowIndex), {
-    min: range.min,
-    max: range.max,
-    precision: safePrecision,
-  });
+  return copycat.float(
+    makeSeed(baseSeed, field.id, rowIndex),
+    {
+      min: range.min,
+      max: range.max,
+      precision: safePrecision,
+    } as any
+  );
 };
 
 const booleanGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) =>
   copycat.bool(makeSeed(baseSeed, field.id, rowIndex));
 
 const emailGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) =>
-  copycat.email(makeSeed(baseSeed, field.id, rowIndex));
+  String(copycat.email(makeSeed(baseSeed, field.id, rowIndex)));
 
 const phoneGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) =>
-  copycat.phoneNumber(makeSeed(baseSeed, field.id, rowIndex));
+  String(copycat.phoneNumber(makeSeed(baseSeed, field.id, rowIndex)));
 
 const fullNameGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) =>
-  copycat.fullName(makeSeed(baseSeed, field.id, rowIndex));
+  String(copycat.fullName(makeSeed(baseSeed, field.id, rowIndex)));
 
 const cityGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) =>
-  copycat.city(makeSeed(baseSeed, field.id, rowIndex));
+  String(copycat.city(makeSeed(baseSeed, field.id, rowIndex)));
 
 const countryGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) =>
-  copycat.country(makeSeed(baseSeed, field.id, rowIndex));
+  String(copycat.country(makeSeed(baseSeed, field.id, rowIndex)));
 
 const uuidGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) =>
-  copycat.uuid(makeSeed(baseSeed, field.id, rowIndex));
+  String(copycat.uuid(makeSeed(baseSeed, field.id, rowIndex)));
 
 const addressLine2Generator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) => {
-  const prefix = copycat.oneOf(makeSeed(baseSeed, field.id, rowIndex, 'prefix'), ADDRESS_LINE2_PREFIXES);
+  const prefix = String(
+    copycat.oneOf(
+      makeSeed(baseSeed, field.id, rowIndex, 'prefix'),
+      Array.from(ADDRESS_LINE2_PREFIXES) as unknown[]
+    )
+  );
   const unitNumber = copycat.int(makeSeed(baseSeed, field.id, rowIndex, 'unit'), {
     min: 1,
     max: 9999,
@@ -327,7 +335,7 @@ const addressLine2Generator = (field: FieldDefinition): CopycatGenerator => ({ b
 };
 
 const addressGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) => {
-  const base = copycat.postalAddress(makeSeed(baseSeed, field.id, rowIndex, 'address'));
+  const base = String(copycat.postalAddress(makeSeed(baseSeed, field.id, rowIndex, 'address')));
   if (!parseBooleanOption(field.options.includeSecondary)) {
     return base;
   }
@@ -373,13 +381,13 @@ const zipCodeGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSe
 };
 
 const companyNameGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) =>
-  copycat.oneOf(makeSeed(baseSeed, field.id, rowIndex), COMPANY_NAMES);
+  String(copycat.oneOf(makeSeed(baseSeed, field.id, rowIndex), Array.from(COMPANY_NAMES) as unknown[]));
 
 const urlGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) =>
-  copycat.url(makeSeed(baseSeed, field.id, rowIndex));
+  String(copycat.url(makeSeed(baseSeed, field.id, rowIndex)));
 
 const ipv4Generator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) =>
-  copycat.ipv4(makeSeed(baseSeed, field.id, rowIndex));
+  String(copycat.ipv4(makeSeed(baseSeed, field.id, rowIndex)));
 
 const characterSequenceGenerator = (field: FieldDefinition): CopycatGenerator => ({ rowIndex }) => {
   const prefix = typeof field.options.prefix === 'string' ? field.options.prefix : '';
@@ -403,7 +411,10 @@ const createDateStringGenerator = (
 ) =>
   (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) => {
     const { min, max } = resolveRange({ field, baseSeed });
-    const iso = copycat.dateString(makeSeed(baseSeed, field.id, rowIndex), { min, max });
+    const iso = copycat.dateString(
+      makeSeed(baseSeed, field.id, rowIndex),
+      { min, max } as any
+    );
     return applyFormat(iso, field);
   };
 
@@ -496,8 +507,12 @@ const appVersionGenerator = (field: FieldDefinition): CopycatGenerator => ({ bas
 const sanitizeForBundle = (value: string) => value.replace(/[^a-z0-9]+/g, '');
 
 const appBundleIdGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) => {
-  const company = copycat.oneOf(makeSeed(baseSeed, field.id, rowIndex, 'bundle-company'), APP_NAMES).toLowerCase();
-  const product = copycat.oneOf(makeSeed(baseSeed, field.id, rowIndex, 'bundle-product'), PRODUCT_NAMES).toLowerCase();
+  const company = String(
+    copycat.oneOf(makeSeed(baseSeed, field.id, rowIndex, 'bundle-company'), Array.from(APP_NAMES) as unknown[])
+  ).toLowerCase();
+  const product = String(
+    copycat.oneOf(makeSeed(baseSeed, field.id, rowIndex, 'bundle-product'), Array.from(PRODUCT_NAMES) as unknown[])
+  ).toLowerCase();
   return `com.${sanitizeForBundle(company)}.${sanitizeForBundle(product) || 'app'}`;
 };
 
@@ -582,7 +597,10 @@ const FIELD_GENERATORS: Record<string, (field: FieldDefinition) => CopycatGenera
 
 const genericStringGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) => {
   if (Array.isArray(field.options.examples) && field.options.examples.length > 0) {
-    return copycat.oneOf(makeSeed(baseSeed, field.id, rowIndex), field.options.examples as unknown[]);
+    return copycat.oneOf(
+      makeSeed(baseSeed, field.id, rowIndex),
+      field.options.examples as unknown[]
+    );
   }
   return copycat.words(makeSeed(baseSeed, field.id, rowIndex));
 };
@@ -598,7 +616,7 @@ export const mapFieldToCopycat = (field: FieldDefinition): CopycatMapperResult =
     }
     return {
       generate: ({ baseSeed, rowIndex }) =>
-        copycat.oneOf(makeSeed(baseSeed, field.id, rowIndex), values),
+        copycat.oneOf(makeSeed(baseSeed, field.id, rowIndex), values as unknown[]),
     };
   }
 

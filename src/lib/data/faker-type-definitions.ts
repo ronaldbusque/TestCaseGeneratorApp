@@ -158,6 +158,66 @@ export const fakerTypeDefinitions: Record<string, FakerTypeDefinition> = {
     fakerMethod: "vehicle.vin",
     options: []
   },
+
+  // Commerce / Product types
+  "Product Name": {
+    fakerMethod: "commerce.productName",
+    options: [],
+  },
+  "Product Category": {
+    fakerMethod: "commerce.department",
+    options: [],
+  },
+  "Product Description": {
+    fakerMethod: "commerce.productDescription",
+    options: [],
+  },
+  "Product SKU": {
+    fakerMethod: "custom",
+    options: [
+      {
+        name: "prefix",
+        label: "Prefix",
+        type: "text",
+        default: "SKU",
+      },
+      {
+        name: "length",
+        label: "Code Length",
+        type: "number",
+        default: 8,
+        min: 4,
+        max: 16,
+      },
+    ],
+  },
+  "Product Price": {
+    fakerMethod: "custom",
+    options: [
+      {
+        name: "min",
+        label: "Min Price",
+        type: "number",
+        default: 5,
+        min: 0,
+        max: 100000,
+      },
+      {
+        name: "max",
+        label: "Max Price",
+        type: "number",
+        default: 200,
+        min: 0,
+        max: 100000,
+      },
+      {
+        name: "currency",
+        label: "Currency (optional)",
+        type: "text",
+        default: "USD",
+      },
+    ],
+  },
   
   // Text types
   "Buzzword": {

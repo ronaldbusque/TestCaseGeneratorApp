@@ -70,10 +70,7 @@ export default function TestDataGeneratorPage() {
     [schema.fields]
   );
 
-  const referenceFields = useMemo(
-    () => schema.fields.filter((field) => field.type === 'Reference'),
-    [schema.fields]
-  );
+  const referenceFields = schema.fields.filter((field) => field.type === 'Reference');
 
   return (
     <main className="container mx-auto px-4 py-8">
@@ -110,7 +107,7 @@ export default function TestDataGeneratorPage() {
           <div>
             <h2 className="text-2xl font-semibold text-white mb-3">Export Options</h2>
             <p className="text-sm text-slate-300 mb-4">
-              Configure your baseline dataset first. If you toggle AI enhancement, be sure to supply clear context so
+              Configure your baseline dataset first. If you enable AI enhancement, provide clear instructions so
               generated fields follow the guidance you expect.
             </p>
             <ExportOptions
@@ -123,15 +120,15 @@ export default function TestDataGeneratorPage() {
           </div>
 
           <div className="bg-slate-800/70 backdrop-blur-sm rounded-xl border border-slate-700 p-4 space-y-3">
-            <div className="flex items-center justify-between">
+            <header className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-white">AI Prompt Guidance</h2>
               <span className="text-xs text-slate-300">
-                Prompts are applied to the “AI Enhancement" field in Export Options.
+                Prompts feed the &quot;AI Enhancement&quot; field inside Export Options.
               </span>
-            </div>
+            </header>
             <p className="text-sm text-slate-300">
-              Choose a preset or add your own instructions, then click <span className="font-semibold">Use</span> to drop
-              it into the enhancement prompt. Prompts only affect fields marked as “AI-Generated.” Use
+              Pick a preset or write your own prompt, then click <span className="font-semibold">Use</span> to copy it
+              into the enhancement prompt. AI instructions only affect fields marked as &quot;AI-Generated.&quot; Use
               <span className="font-semibold"> Preview</span> to sanity-check a single row before exporting.
             </p>
             <AIPromptSuggestions
@@ -153,28 +150,52 @@ export default function TestDataGeneratorPage() {
 
         {isPreviewMode && previewDataRows.length > 0 && (
           <section className="space-y-4">
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-semibold text-white">Data Preview</h2>
-              </div>
+            <header className="flex justify-between items-center">
+              <h2 className="text-2xl font-semibold text-white">Data Preview</h2>
+            </header>
 
-              <PreviewController
-                data={previewDataRows}
-                format={exportConfig.format}
-                options={{
-                  lineEnding: exportConfig.lineEnding,
-                  includeHeader: exportConfig.includeHeader,
-                  includeBOM: exportConfig.includeBOM,
-                }}
-                metadata={generationMetadata}
-                isRefreshing={isGenerating}
-                onRefresh={generatePreview}
-                onClose={clearPreview}
-                toast={toast}
-              />
+            <PreviewController
+              data={previewDataRows}
+              format={exportConfig.format}
+              options={{
+                lineEnding: exportConfig.lineEnding,
+                includeHeader: exportConfig.includeHeader,
+                includeBOM: exportConfig.includeBOM,
+              }}
+              metadata={generationMetadata}
+              isRefreshing={isGenerating}
+              onRefresh={generatePreview}
+              onClose={clearPreview}
+              toast={toast}
+            />
 
-              <Tab.Group>
-                <Tab.List className="flex space-x-1 rounded-xl bg-slate-700/50 p-1 mb-4">
+            <Tab.Group>
+              <Tab.List className="flex space-x-1 rounded-xl bg-slate-700/50 p-1 mb-4">
+                <Tab
+                  className={({ selected }) =>
+                    `w-full rounded-lg py-2.5 text-sm font-medium leading-5 ${
+                      selected
+                        ? 'bg-blue-600 text-white shadow'
+                        : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                    } flex items-center justify-center`
+                  }
+                >
+                  <TableCellsIcon className="h-5 w-5 mr-2" />
+                  Table View
+                </Tab>
+                <Tab
+                  className={({ selected }) =>
+                    `w-full rounded-lg py-2.5 text-sm font-medium leading-5 ${
+                      selected
+                        ? 'bg-blue-600 text-white shadow'
+                        : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                    } flex items-center justify-center`
+                  }
+                >
+                  <CodeBracketIcon className="h-5 w-5 mr-2" />
+                  Raw Format ({exportConfig.format})
+                </Tab>
+                {referenceFields.length > 0 && (
                   <Tab
                     className={({ selected }) =>
                       `w-full rounded-lg py-2.5 text-sm font-medium leading-5 ${
@@ -184,56 +205,31 @@ export default function TestDataGeneratorPage() {
                       } flex items-center justify-center`
                     }
                   >
-                    <TableCellsIcon className="h-5 w-5 mr-2" />
-                    Table View
+                    Relationships
                   </Tab>
-                  <Tab
-                    className={({ selected }) =>
-                      `w-full rounded-lg py-2.5 text-sm font-medium leading-5 ${
-                        selected
-                          ? 'bg-blue-600 text-white shadow'
-                          : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
-                      } flex items-center justify-center`
-                    }
-                  >
-                    <CodeBracketIcon className="h-5 w-5 mr-2" />
-                    Raw Format ({exportConfig.format})
-                  </Tab>
-                  {referenceFields.length > 0 && (
-                    <Tab
-                      className={({ selected }) =>
-                        `w-full rounded-lg py-2.5 text-sm font-medium leading-5 ${
-                          selected
-                            ? 'bg-blue-600 text-white shadow'
-                            : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
-                        } flex items-center justify-center`
-                      }
-                    >
-                      Relationships
-                    </Tab>
-                  )}
-                </Tab.List>
-                <Tab.Panels>
+                )}
+              </Tab.List>
+              <Tab.Panels>
+                <Tab.Panel>
+                  <DataPreviewTable data={previewDataRows} />
+                </Tab.Panel>
+                <Tab.Panel>
+                  <RawDataPreview
+                    data={previewDataRows}
+                    format={exportConfig.format}
+                    options={{
+                      lineEnding: exportConfig.lineEnding,
+                      includeHeader: exportConfig.includeHeader,
+                      includeBOM: exportConfig.includeBOM,
+                    }}
+                  />
+                </Tab.Panel>
+                {referenceFields.length > 0 && (
                   <Tab.Panel>
-                    <DataPreviewTable data={previewDataRows} />
+                    <RelationalPreview data={previewDataRows} fields={referenceFields} />
                   </Tab.Panel>
-                  <Tab.Panel>
-                    <RawDataPreview
-                      data={previewDataRows}
-                      format={exportConfig.format}
-                      options={{
-                        lineEnding: exportConfig.lineEnding,
-                        includeHeader: exportConfig.includeHeader,
-                        includeBOM: exportConfig.includeBOM,
-                      }}
-                    />
-                  </Tab.Panel>
-                  {referenceFields.length > 0 && (
-                    <Tab.Panel>
-                      <RelationalPreview data={previewDataRows} fields={referenceFields} />
-                    </Tab.Panel>
-                  )}
-                </Tab.Panels>
+                )}
+              </Tab.Panels>
             </Tab.Group>
           </section>
         )}
