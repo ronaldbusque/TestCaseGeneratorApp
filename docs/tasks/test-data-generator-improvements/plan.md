@@ -33,7 +33,7 @@ Redesign the Test Data Generator experience to support richer schemas, clearer A
 4. **Unit + integration tests** *(done)*: hook unit tests, generate/excel route integration tests, and Copycat determinism coverage in place.
 
 ### Phase 2 – Schema Authoring Upgrades (Blocked on checklist)
-1. **Type catalog with search** *(in progress)*: enhanced with recent-type shortcuts and local history.
+1. **Type catalog with search** *(done)*: ranked search with keyboard navigation, highlight, and recent-type shortcuts.
 2. **Field templates** *(in progress)*: base duplication + manual reorder available; quick-add templates (Person, Address, Company) wired to schema builder; follow-up for grouped templates and drag/drop.
 3. **Relationship support** *(in progress)*: reference field type duplicates values from other fields (UI + generator path); extend to relational datasets next.
 4. **Inline validation** *(in progress)*: numeric/date/custom list/phone validations with UI feedback shipped; next step is deeper format guidance + Playwright coverage.

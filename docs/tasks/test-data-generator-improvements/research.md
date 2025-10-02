@@ -57,3 +57,4 @@ Assessing the Test Data Generator page (`src/app/data-generator/page.tsx`) to su
 - Introduced useSchemaTemplates hook to centralize saved schema CRUD ahead of Supabase sync.
 - Added templates API + HTTP store scaffold so Supabase-backed sync can slot in once credentials are configured.
 - Hybrid template store prefers Supabase when enabled but falls back to local storage automatically.
+- Type catalog search now ranks results, supports keyboard navigation, and highlights matches.

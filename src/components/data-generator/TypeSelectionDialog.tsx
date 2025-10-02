@@ -1,20 +1,16 @@
 'use client';
 
-import { useState, useEffect, Fragment, useCallback } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import type { KeyboardEvent } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+
 import { fakerCategories } from '@/lib/data/faker-categories';
 import { fakerTypeDefinitions } from '@/lib/data/faker-type-definitions';
+import { rankTypes, splitHighlight, type SearchableType } from '@/lib/data-generator/typeSearch';
 
 const RECENT_TYPES_STORAGE_KEY = 'generator_recent_types';
 const MAX_RECENT_TYPES = 8;
-
-// Define type for a faker type with category information
-interface TypeWithCategory {
-  name: string;
-  description?: string;
-  category: string;
-}
 
 interface TypeSelectionDialogProps {
   isOpen: boolean;
@@ -22,14 +18,11 @@ interface TypeSelectionDialogProps {
   onSelectType: (typeName: string) => void;
 }
 
-export function TypeSelectionDialog({ 
-  isOpen, 
-  onClose, 
-  onSelectType 
-}: TypeSelectionDialogProps) {
+export function TypeSelectionDialog({ isOpen, onClose, onSelectType }: TypeSelectionDialogProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [recentTypes, setRecentTypes] = useState<string[]>([]);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
 
   const loadRecentTypes = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -45,73 +38,58 @@ export function TypeSelectionDialog({
       console.warn('[TypeSelectionDialog] failed to read recent types', error);
     }
   }, []);
-  
-  // Reset search and category when dialog opens
+
   useEffect(() => {
     if (isOpen) {
       setSearchTerm('');
       setActiveCategory('All');
+      setHighlightedIndex(0);
       loadRecentTypes();
     }
   }, [isOpen, loadRecentTypes]);
-  
-  // Filter types based on search term and active category
-  const getFilteredTypes = (): TypeWithCategory[] => {
-    // Start with an empty array for results
-    let results: TypeWithCategory[] = [];
-    
-    // Create a Set to track unique type names and avoid duplicates
-    const addedTypes = new Set<string>();
-    
-    // Get the list of defined types from fakerTypeDefinitions
-    const definedTypes = Object.keys(fakerTypeDefinitions);
-    
-    // Process categories based on selected category or search
-    if (activeCategory === 'All') {
-      // Skip the first "All" category since it's just a container
-      fakerCategories.slice(1).forEach(category => {
-        category.types.forEach(type => {
-          // Only add if:
-          // 1. It passes search filter
-          // 2. It's not already added
-          // 3. It exists in fakerTypeDefinitions
-          if (!addedTypes.has(type.name) && 
-              definedTypes.includes(type.name) &&
-              (!searchTerm.trim() || 
-               type.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-               (type.description && type.description.toLowerCase().includes(searchTerm.toLowerCase())))) {
-            results.push({
-              ...type,
-              category: category.name
-            });
-            addedTypes.add(type.name);
-          }
-        });
-      });
-    } else {
-      // For a specific category, just get types from that category
-      const category = fakerCategories.find(c => c.name === activeCategory);
-      if (category) {
-        category.types.forEach(type => {
-          // Only add if it passes search filter and exists in fakerTypeDefinitions
-          if (definedTypes.includes(type.name) &&
-              (!searchTerm.trim() || 
-              type.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-              (type.description && type.description.toLowerCase().includes(searchTerm.toLowerCase())))) {
-            results.push({
-              ...type,
-              category: category.name
-            });
-          }
-        });
+
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [searchTerm, activeCategory]);
+
+  const definedTypeNames = useMemo(() => new Set(Object.keys(fakerTypeDefinitions)), []);
+
+  const allTypes = useMemo(() => {
+    const types: SearchableType[] = [];
+    fakerCategories.forEach((category) => {
+      if (category.name === 'All') {
+        return;
       }
-    }
-    
-    // Sort results alphabetically by name for consistency
-    return results.sort((a, b) => a.name.localeCompare(b.name));
-  };
-  
-  const filteredTypes = getFilteredTypes();
+      category.types.forEach((type) => {
+        if (definedTypeNames.has(type.name)) {
+          types.push({
+            name: type.name,
+            description: type.description,
+            category: category.name,
+          });
+        }
+      });
+    });
+    return types;
+  }, [definedTypeNames]);
+
+  const filteredTypes = useMemo(
+    () => rankTypes({ types: allTypes, searchTerm, category: activeCategory }),
+    [allTypes, searchTerm, activeCategory]
+  );
+
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    const definedTypes = new Set(allTypes.map((type) => type.name));
+    fakerCategories.forEach((category) => {
+      if (category.name === 'All') {
+        counts[category.name] = definedTypes.size;
+      } else {
+        counts[category.name] = category.types.filter((type) => definedTypes.has(type.name)).length;
+      }
+    });
+    return counts;
+  }, [allTypes]);
 
   const handleSelect = (typeName: string) => {
     setRecentTypes((prev) => {
@@ -124,29 +102,33 @@ export function TypeSelectionDialog({
     onSelectType(typeName);
     onClose();
   };
-  
-  // Count the number of valid types per category (those that exist in fakerTypeDefinitions)
-  const getCategoryTypeCounts = () => {
-    const definedTypes = Object.keys(fakerTypeDefinitions);
-    const counts: Record<string, number> = {};
-    
-    fakerCategories.forEach(category => {
-      if (category.name === 'All') {
-        // For the "All" category, count all valid types
-        counts[category.name] = definedTypes.length;
-      } else {
-        // For other categories, count types that have definitions
-        counts[category.name] = category.types.filter(type => 
-          definedTypes.includes(type.name)
-        ).length;
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (filteredTypes.length === 0) {
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setHighlightedIndex((prev) => (prev + 1) % filteredTypes.length);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setHighlightedIndex((prev) => (prev - 1 + filteredTypes.length) % filteredTypes.length);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      const type = filteredTypes[highlightedIndex];
+      if (type) {
+        handleSelect(type.name);
       }
-    });
-    
-    return counts;
+    }
   };
-  
-  const typeCounts = getCategoryTypeCounts();
-  
+
+  const clearRecent = () => {
+    setRecentTypes([]);
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(RECENT_TYPES_STORAGE_KEY);
+    }
+  };
+
   return (
     <Transition appear show={isOpen} as={Fragment}>
       <Dialog as="div" className="relative z-50" onClose={onClose}>
@@ -186,6 +168,7 @@ export function TypeSelectionDialog({
                         placeholder="Find Type..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
+                        onKeyDown={handleKeyDown}
                         className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <MagnifyingGlassIcon className="h-5 w-5 text-slate-400 absolute left-3 top-2.5" />
@@ -198,30 +181,28 @@ export function TypeSelectionDialog({
                     </button>
                   </div>
                 </Dialog.Title>
-                
+
                 <div className="flex h-[500px] overflow-hidden">
-                  {/* Left Sidebar - Categories */}
                   <div className="w-48 min-w-48 overflow-y-auto border-r border-slate-700 bg-slate-800">
-                    {fakerCategories.filter(category => 
-                      category.name === 'All' || typeCounts[category.name] > 0
-                    ).map(category => (
-                      <button
-                        key={category.name}
-                        className={`w-full px-4 py-2 text-left text-sm transition-colors ${
-                          activeCategory === category.name
-                            ? 'bg-blue-700 text-white font-medium'
-                            : 'text-slate-300 hover:bg-slate-700'
-                        }`}
-                        onClick={() => setActiveCategory(category.name)}
-                      >
-                        {category.name} {typeCounts[category.name] > 0 && `(${typeCounts[category.name]})`}
-                      </button>
-                    ))}
+                    {fakerCategories
+                      .filter((category) => category.name === 'All' || typeCounts[category.name] > 0)
+                      .map((category) => (
+                        <button
+                          key={category.name}
+                          className={`w-full px-4 py-2 text-left text-sm transition-colors ${
+                            activeCategory === category.name
+                              ? 'bg-blue-700 text-white font-medium'
+                              : 'text-slate-300 hover:bg-slate-700'
+                          }`}
+                          onClick={() => setActiveCategory(category.name)}
+                        >
+                          {category.name} {typeCounts[category.name] > 0 && `(${typeCounts[category.name]})`}
+                        </button>
+                      ))}
                   </div>
-                  
-                  {/* Right Content - Type Grid */}
+
                   <div className="flex-1 overflow-y-auto p-2 space-y-3">
-                    {recentTypes.length > 0 && (
+                    {recentTypes.length > 0 && !searchTerm.trim() && (
                       <div className="border border-slate-700/70 rounded-lg bg-slate-800/60 p-3">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-xs font-semibold text-slate-200 uppercase tracking-wide">
@@ -229,12 +210,7 @@ export function TypeSelectionDialog({
                           </span>
                           <button
                             className="text-xs text-slate-400 hover:text-slate-200"
-                            onClick={() => {
-                              setRecentTypes([]);
-                              if (typeof window !== 'undefined') {
-                                window.localStorage.removeItem(RECENT_TYPES_STORAGE_KEY);
-                              }
-                            }}
+                            onClick={clearRecent}
                           >
                             Clear
                           </button>
@@ -252,24 +228,71 @@ export function TypeSelectionDialog({
                         </div>
                       </div>
                     )}
-                    <div className="grid grid-cols-3 gap-2">
+
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-xs text-slate-400">
+                        {filteredTypes.length} {filteredTypes.length === 1 ? 'type' : 'types'}
+                      </span>
+                      {searchTerm.trim() && (
+                        <span className="text-xs text-slate-500">
+                          Showing best matches for “{searchTerm}”
+                        </span>
+                      )}
+                    </div>
+
+                    <div
+                      className="grid grid-cols-3 gap-2"
+                      role="listbox"
+                      aria-activedescendant={filteredTypes[highlightedIndex]?.name ?? undefined}
+                    >
                       {filteredTypes.length === 0 ? (
                         <div className="col-span-3 p-4 text-center text-slate-400">
                           No types found matching your criteria
                         </div>
                       ) : (
-                        filteredTypes.map(type => (
-                          <button
-                            key={type.name}
-                            className="bg-slate-800 hover:bg-slate-700 p-4 rounded-lg text-left transition-colors border border-slate-700 hover:border-blue-500"
-                            onClick={() => handleSelect(type.name)}
-                          >
-                            <h4 className="text-white font-medium">{type.name}</h4>
-                            <p className="text-xs text-slate-400 mt-1">
-                              {type.description || ''}
-                            </p>
-                          </button>
-                        ))
+                        filteredTypes.map((type, index) => {
+                          const isHighlighted = index === highlightedIndex;
+                          const nameSegments = splitHighlight(type.name, searchTerm);
+                          const descriptionSegments = splitHighlight(type.description ?? '', searchTerm);
+                          return (
+                            <button
+                              key={type.name}
+                              className={`bg-slate-800 p-4 rounded-lg text-left transition-colors border ${
+                                isHighlighted
+                                  ? 'border-blue-500 bg-slate-700/70'
+                                  : 'border-slate-700 hover:border-blue-500 hover:bg-slate-700/60'
+                              }`}
+                              onMouseEnter={() => setHighlightedIndex(index)}
+                              onClick={() => handleSelect(type.name)}
+                              role="option"
+                              aria-selected={isHighlighted}
+                            >
+                              <h4 className="text-white font-medium">
+                                {nameSegments.map((segment, segmentIndex) => (
+                                  <span
+                                    key={`${type.name}-name-${segmentIndex}`}
+                                    className={segment.highlighted ? 'text-blue-300' : undefined}
+                                  >
+                                    {segment.text}
+                                  </span>
+                                ))}
+                              </h4>
+                              <p className="text-xs text-slate-400 mt-1 min-h-[2.5rem]">
+                                {descriptionSegments.map((segment, segmentIndex) => (
+                                  <span
+                                    key={`${type.name}-desc-${segmentIndex}`}
+                                    className={segment.highlighted ? 'text-blue-300' : undefined}
+                                  >
+                                    {segment.text}
+                                  </span>
+                                ))}
+                              </p>
+                              <span className="text-[10px] text-slate-500 uppercase tracking-wide">
+                                {type.category}
+                              </span>
+                            </button>
+                          );
+                        })
                       )}
                     </div>
                   </div>
@@ -281,4 +304,4 @@ export function TypeSelectionDialog({
       </Dialog>
     </Transition>
   );
-} 
+}
