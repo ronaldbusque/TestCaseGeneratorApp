@@ -243,7 +243,11 @@ export function TypeSelectionDialog({ isOpen, onClose, onSelectType }: TypeSelec
                     <div
                       className="grid grid-cols-3 gap-2"
                       role="listbox"
-                      aria-activedescendant={filteredTypes[highlightedIndex]?.name ?? undefined}
+                      aria-activedescendant={
+                        filteredTypes[highlightedIndex]
+                          ? `${filteredTypes[highlightedIndex].category}:${filteredTypes[highlightedIndex].name}`
+                          : undefined
+                      }
                     >
                       {filteredTypes.length === 0 ? (
                         <div className="col-span-3 p-4 text-center text-slate-400">
@@ -251,12 +255,13 @@ export function TypeSelectionDialog({ isOpen, onClose, onSelectType }: TypeSelec
                         </div>
                       ) : (
                         filteredTypes.map((type, index) => {
+                          const optionKey = `${type.category}:${type.name}`;
                           const isHighlighted = index === highlightedIndex;
                           const nameSegments = splitHighlight(type.name, searchTerm);
                           const descriptionSegments = splitHighlight(type.description ?? '', searchTerm);
                           return (
                             <button
-                              key={type.name}
+                              key={optionKey}
                               className={`bg-slate-800 p-4 rounded-lg text-left transition-colors border ${
                                 isHighlighted
                                   ? 'border-blue-500 bg-slate-700/70'
@@ -266,11 +271,12 @@ export function TypeSelectionDialog({ isOpen, onClose, onSelectType }: TypeSelec
                               onClick={() => handleSelect(type.name)}
                               role="option"
                               aria-selected={isHighlighted}
+                              id={optionKey}
                             >
                               <h4 className="text-white font-medium">
                                 {nameSegments.map((segment, segmentIndex) => (
                                   <span
-                                    key={`${type.name}-name-${segmentIndex}`}
+                                    key={`${optionKey}-name-${segmentIndex}`}
                                     className={segment.highlighted ? 'text-blue-300' : undefined}
                                   >
                                     {segment.text}
@@ -280,7 +286,7 @@ export function TypeSelectionDialog({ isOpen, onClose, onSelectType }: TypeSelec
                               <p className="text-xs text-slate-400 mt-1 min-h-[2.5rem]">
                                 {descriptionSegments.map((segment, segmentIndex) => (
                                   <span
-                                    key={`${type.name}-desc-${segmentIndex}`}
+                                    key={`${optionKey}-desc-${segmentIndex}`}
                                     className={segment.highlighted ? 'text-blue-300' : undefined}
                                   >
                                     {segment.text}
