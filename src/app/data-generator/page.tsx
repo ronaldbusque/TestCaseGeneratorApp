@@ -12,6 +12,7 @@ import { QuickModelSwitcher } from '@/components/QuickModelSwitcher';
 import { useSchemaBuilder } from '@/lib/hooks/data-generator/useSchemaBuilder';
 import { useExportConfig } from '@/lib/hooks/data-generator/useExportConfig';
 import { useDataGeneration } from '@/lib/hooks/data-generator/useDataGeneration';
+import { AIPromptSuggestions } from '@/components/data-generator/AIPromptSuggestions';
 
 interface Toast {
   title: string;
@@ -30,7 +31,12 @@ const useToast = () => {
 export default function TestDataGeneratorPage() {
   const { settings } = useProviderSettings();
   const schema = useSchemaBuilder();
-  const { config: exportConfig, setConfig: setExportConfig, validateAgainstSchema } = useExportConfig();
+  const {
+    config: exportConfig,
+    setConfig: setExportConfig,
+    updateConfig: updateExportConfig,
+    validateAgainstSchema,
+  } = useExportConfig();
   const { toast } = useToast();
 
   const {
@@ -74,13 +80,25 @@ export default function TestDataGeneratorPage() {
 
         <div>
           <h2 className="text-2xl font-semibold text-white mb-4">Export Options</h2>
-          <ExportOptions
-            config={exportConfig}
-            onConfigChange={setExportConfig}
-            onExport={exportData}
-            onPreview={generatePreview}
-            hasAIGeneratedFields={schema.hasAIGeneratedFields}
-          />
+          <div className="grid lg:grid-cols-[2fr_1fr] gap-4">
+            <ExportOptions
+              config={exportConfig}
+              onConfigChange={setExportConfig}
+              onExport={exportData}
+              onPreview={generatePreview}
+              hasAIGeneratedFields={schema.hasAIGeneratedFields}
+            />
+            <AIPromptSuggestions
+              currentPrompt={exportConfig.enhancementPrompt}
+              disabled={!schema.hasAIGeneratedFields}
+              onSelect={(prompt) =>
+                updateExportConfig({
+                  enhancementPrompt: prompt,
+                  applyAIEnhancement: true,
+                })
+              }
+            />
+          </div>
         </div>
 
         {isPreviewMode && previewDataRows.length > 0 && (
