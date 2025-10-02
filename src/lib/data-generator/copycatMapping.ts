@@ -80,6 +80,13 @@ export const mapFieldToCopycat = (field: FieldDefinition): CopycatMapperResult =
     return { generate: generatorFactory(field) };
   }
 
+  if (field.type === 'Reference') {
+    return {
+      generate: () => null,
+      requiresFallback: false,
+    };
+  }
+
   if (field.type === 'AI-Generated') {
     return {
       generate: genericStringGenerator(field),
@@ -104,18 +111,39 @@ export const generateCopycatRows = (
   let usedFallback = false;
 
   const rows = Array.from({ length: count }).map((_, rowIndex) => {
-    return fields.reduce<Record<string, unknown>>((row, field) => {
+    const row = fields.reduce<Record<string, unknown>>((accumulator, field) => {
+      if (field.type === 'Reference') {
+        return accumulator;
+      }
+
       const { generate, requiresFallback } = mapFieldToCopycat(field);
       if (requiresFallback) {
         usedFallback = true;
       }
-      row[field.name] = generate({ baseSeed, rowIndex });
-      return row;
+      accumulator[field.name] = generate({ baseSeed, rowIndex });
+      return accumulator;
     }, {});
+
+    return row;
   });
 
-  return { rows, usedFallback };
+  return { rows: applyReferenceFields(rows, fields), usedFallback };
 };
 
 export const supportsCopycat = (fields: FieldDefinition[]): boolean =>
   fields.every((field) => !mapFieldToCopycat(field).requiresFallback);
+
+const applyReferenceFields = (
+  rows: Array<Record<string, unknown>>,
+  fields: FieldDefinition[],
+) =>
+  rows.map((row) => {
+    const updated = { ...row };
+    fields.forEach((field) => {
+      if (field.type === 'Reference') {
+        const sourceField = typeof field.options.sourceField === 'string' ? field.options.sourceField : '';
+        updated[field.name] = sourceField && sourceField in updated ? updated[sourceField] : null;
+      }
+    });
+    return updated;
+  });

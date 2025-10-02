@@ -31,8 +31,8 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
 
   useEffect(() => {
     const errors: Record<string, string[]> = {};
-    fields.forEach((field) => {
-      const validation = validateField(field);
+    fields.forEach((field, index) => {
+      const validation = validateField(field, index, fields);
       if (validation.length > 0) {
         errors[field.id] = validation;
       }
@@ -138,7 +138,7 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
 
   const getFieldErrors = (fieldId: string) => fieldErrors[fieldId] ?? [];
 
-  const validateField = (field: FieldDefinition): string[] => {
+  const validateField = (field: FieldDefinition, index: number, allFields: FieldDefinition[]): string[] => {
     const errors: string[] = [];
     const { type, options } = field;
 
@@ -218,7 +218,60 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
       }
     }
 
+    if (type === 'Reference') {
+      const sourceField = typeof options.sourceField === 'string' ? options.sourceField : '';
+      if (!sourceField) {
+        errors.push('Select a source field to reference.');
+      } else {
+        const sourceExists = allFields.some((candidate, candidateIndex) => candidateIndex !== index && candidate.name === sourceField);
+        if (!sourceExists) {
+          errors.push(`Source field "${sourceField}" not found.`);
+        }
+      }
+    }
+
     return errors;
+  };
+
+  const renderReferenceOptions = (field: FieldDefinition, index: number) => {
+    const availableFields = fields.filter((candidate, candidateIndex) => candidateIndex !== index && candidate.name);
+    const sourceField = typeof field.options.sourceField === 'string' ? field.options.sourceField : '';
+    const errors = getFieldErrors(field.id);
+
+    if (availableFields.length === 0) {
+      return (
+        <div className="py-1 text-xs text-slate-400">
+          Add another field first, then select it as a reference.
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col space-y-1 py-1">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-300">Source field:</span>
+          <select
+            value={sourceField}
+            onChange={(e) => handleOptionChange(index, 'sourceField', e.target.value)}
+            className={`bg-slate-800 px-2 py-1 text-sm rounded-lg border ${errors.length ? 'border-red-500' : 'border-slate-700'} text-white`}
+          >
+            <option value="">Select field…</option>
+            {availableFields.map((candidate) => (
+              <option key={candidate.id} value={candidate.name}>
+                {candidate.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {errors.length > 0 && (
+          <ul className="text-xs text-red-400 space-y-0.5">
+            {errors.map((message, idx) => (
+              <li key={`${field.id}-reference-${idx}`}>{message}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
   };
 
   const hasSchemas = useMemo(() => savedSchemas.length > 0, [savedSchemas.length]);
@@ -262,6 +315,10 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
         }
       });
     }
+
+    if (typeName === 'Reference') {
+      defaultOptions.sourceField = '';
+    }
     
     // Set the options with defaults
     newFields[activeFieldIndex].options = defaultOptions;
@@ -294,6 +351,10 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
     const { type, options } = field;
 
     if (!type) return null;
+
+    if (type === 'Reference') {
+      return renderReferenceOptions(field, index);
+    }
 
     const typeDefinition = fakerTypeDefinitions[type];
     if (!typeDefinition || !typeDefinition.options || typeDefinition.options.length === 0) {

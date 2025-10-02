@@ -1,5 +1,6 @@
 import { TestDataGeneratorService } from '../testDataGenerator';
 import type { AIService } from '@/lib/types';
+import type { FieldDefinition } from '@/lib/data-generator/types';
 
 class StubAIService implements AIService {
   async generateTestCases() {
@@ -32,5 +33,17 @@ describe('TestDataGeneratorService - Copycat integration', () => {
     const seedB = await service.generateTestDataFromFields({ fields, count: 3, seed: 'seed-b' });
 
     expect(seedA.data).not.toEqual(seedB.data);
+  });
+
+  it('copies values for reference fields', async () => {
+    const referenceFields: FieldDefinition[] = [
+      ...fields,
+      { id: 'ref', name: 'nameCopy', type: 'Reference', options: { sourceField: 'firstName' } },
+    ];
+
+    const result = await service.generateTestDataFromFields({ fields: referenceFields, count: 2, seed: 'seed-ref' });
+    result.data.forEach((row) => {
+      expect(row.nameCopy).toBe(row.firstName);
+    });
   });
 });

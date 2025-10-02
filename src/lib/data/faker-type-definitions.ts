@@ -53,6 +53,10 @@ export const fakerTypeDefinitions: Record<string, FakerTypeDefinition> = {
       }
     ]
   },
+  "Reference": {
+    fakerMethod: null,
+    options: []
+  },
   
   // Add Number type with range options
   "Number": {

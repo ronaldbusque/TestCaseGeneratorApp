@@ -368,13 +368,22 @@ export class TestDataGeneratorService {
         if (usedFallback) {
           console.log('[TestDataGeneratorService] Copycat fallback triggered, reverting to faker generation');
         } else {
+          const rowsWithReferences = this.applyReferenceFields(rows, fieldDefinitions);
+
           if (aiEnhancement && aiEnhancement.trim()) {
-            return this.enhanceDataWithAI(rows, aiEnhancement, model);
+            const enhanced = await this.enhanceDataWithAI(rowsWithReferences, aiEnhancement, model);
+            const enhancedRows = this.applyReferenceFields(enhanced.data ?? [], fieldDefinitions);
+            return {
+              data: enhancedRows,
+              count: enhancedRows.length,
+              error: enhanced.error,
+              aiExplanation: enhanced.aiExplanation,
+            };
           }
 
           return {
-            data: rows,
-            count: rows.length,
+            data: rowsWithReferences,
+            count: rowsWithReferences.length,
           };
         }
       }
@@ -770,7 +779,7 @@ Format your response as a valid JSON object like this:
       // Generate data for regular fields using faker
       const data = Array.from({ length: count }, (_, rowIndex) => {
         const row: GeneratedRow = {};
-        
+
         // Process regular fields with faker
         regularFields.forEach(field => {
           if (!field.type) return;
@@ -794,16 +803,17 @@ Format your response as a valid JSON object like this:
       
       // If there are AI fields, enhance the data with AI-generated values
       if (aiFields.length > 0) {
-        return await this.enhanceWithAIFields(data, aiFields, count, aiEnhancement, model);
+        const enhanced = await this.enhanceWithAIFields(data, aiFields, count, aiEnhancement, model);
+        return this.applyReferenceFields(enhanced, fields);
       }
-      
-      return data;
+
+      return this.applyReferenceFields(data, fields);
     } catch (error) {
       console.error('Error generating test data:', error);
       throw error;
     }
   }
-  
+
   /**
    * Enhances data with AI-generated values for specific fields
    */
@@ -853,8 +863,6 @@ Return your response as a valid JSON object with this structure:
     "fieldName2": ["1|value1", "2|value2", "3|value3", ... ${requestedCount} total values],
     ...
   }
-}
-
 Important requirements:
 1. Generate EXACTLY ${requestedCount} values for each field - this is non-negotiable
 2. Make sure values follow the context provided: "${aiEnhancement}"
@@ -963,7 +971,20 @@ To help you keep track, number each value from 1 to ${requestedCount} using the 
       return data;
     }
   }
-  
+
+  private applyReferenceFields(rows: GeneratedRow[], fields: FieldDefinition[]): GeneratedRow[] {
+    return rows.map((row) => {
+      const updated = { ...row };
+      fields.forEach((field) => {
+        if (field.type === 'Reference') {
+          const sourceField = typeof field.options.sourceField === 'string' ? field.options.sourceField : '';
+          updated[field.name] = sourceField && sourceField in updated ? updated[sourceField] : null;
+        }
+      });
+      return updated;
+    });
+  }
+
   /**
    * Generates additional values based on patterns in existing values
    */
