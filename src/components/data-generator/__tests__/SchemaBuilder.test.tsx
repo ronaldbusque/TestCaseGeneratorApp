@@ -59,4 +59,16 @@ describe('SchemaBuilder', () => {
     expect(updated.length).toBeGreaterThan(1);
     expect(updated.some((field) => field.name.startsWith('firstName'))).toBe(true);
   });
+
+  it('shows error when min is greater than max for number field', () => {
+    const field: FieldDefinition = {
+      id: 'num1',
+      name: 'quantity',
+      type: 'Number',
+      options: { min: 10, max: 1 },
+    };
+    render(<SchemaBuilder fields={[field]} onChange={jest.fn()} />);
+
+    expect(screen.getByText('Min value cannot exceed Max value.')).toBeInTheDocument();
+  });
 });

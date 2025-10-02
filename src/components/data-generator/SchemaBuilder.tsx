@@ -23,10 +23,22 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
   const [selectedSchemaId, setSelectedSchemaId] = useState<string>('');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedTemplateKey, setSelectedTemplateKey] = useState<string>('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     setSavedSchemas(listSchemas());
   }, []);
+
+  useEffect(() => {
+    const errors: Record<string, string[]> = {};
+    fields.forEach((field) => {
+      const validation = validateField(field);
+      if (validation.length > 0) {
+        errors[field.id] = validation;
+      }
+    });
+    setFieldErrors(errors);
+  }, [fields]);
 
   const handleAddField = () => {
     const newField: FieldDefinition = {
@@ -124,6 +136,53 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
     }
   };
 
+  const getFieldErrors = (fieldId: string) => fieldErrors[fieldId] ?? [];
+
+  const validateField = (field: FieldDefinition): string[] => {
+    const errors: string[] = [];
+    const { type, options } = field;
+
+    const parseNumber = (value: FieldOptionValue) => {
+      if (typeof value === 'number') return value;
+      if (typeof value === 'string' && value.trim() !== '') {
+        const parsed = Number(value);
+        return Number.isNaN(parsed) ? null : parsed;
+      }
+      return null;
+    };
+
+    if (type === 'Number' || type === 'Decimal Number' || type === 'Car Model Year') {
+      const min = parseNumber(options.min);
+      const max = parseNumber(options.max);
+
+      if (options.min !== undefined && min === null) {
+        errors.push('Min value must be a number.');
+      }
+      if (options.max !== undefined && max === null) {
+        errors.push('Max value must be a number.');
+      }
+      if (min !== null && max !== null && min > max) {
+        errors.push('Min value cannot exceed Max value.');
+      }
+
+      if (type === 'Decimal Number') {
+        const multipleOf = parseNumber(options.multipleOf);
+        if (multipleOf !== null && multipleOf <= 0) {
+          errors.push('Multiple Of must be greater than 0.');
+        }
+      }
+    }
+
+    if (type === 'Character Sequence') {
+      const length = parseNumber(options.length);
+      if (length !== null && length <= 0) {
+        errors.push('Length must be greater than 0.');
+      }
+    }
+
+    return errors;
+  };
+
   const hasSchemas = useMemo(() => savedSchemas.length > 0, [savedSchemas.length]);
 
   const handleApplyTemplate = () => {
@@ -197,183 +256,193 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
     const { type, options } = field;
 
     if (!type) return null;
-    
+
     const typeDefinition = fakerTypeDefinitions[type];
-    
     if (!typeDefinition || !typeDefinition.options || typeDefinition.options.length === 0) {
       return null;
     }
-    
+
+    const errors = fieldErrors[field.id] ?? [];
+    const hasError = errors.length > 0;
+    const baseInputClass = hasError ? 'bg-slate-800 border border-red-500 text-white rounded-lg px-2 py-1 text-sm' : 'bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-sm';
+
     return (
-      <div className="flex flex-nowrap items-center space-x-2 overflow-x-auto py-1">
-        {typeDefinition.options.map((option: TypeOption) => {
-          switch (option.type) {
-            case 'number':
-              if (option.name === 'min' || option.name === 'max') {
-                return (
-                  <div key={option.name} className="flex items-center shrink-0">
-                    <span className="text-xs text-slate-300 mr-1">{option.name}:</span>
-                    <input
-                      type="number"
-                      value={resolveOptionValue(options?.[option.name] ?? option.default)}
-                      onChange={(e) =>
-                        handleOptionChange(
-                          index,
-                          option.name,
-                          e.target.value === '' ? '' : Number(e.target.value)
-                        )
-                      }
-                      className="w-16 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-sm"
-                      min={option.min}
-                      max={option.max}
-                    />
-                  </div>
-                );
-              } else if (option.name === 'length') {
+      <div className="flex flex-col space-y-1 py-1">
+        <div className="flex flex-nowrap items-center space-x-2 overflow-x-auto">
+          {typeDefinition.options.map((option: TypeOption) => {
+            switch (option.type) {
+              case 'number':
+                if (option.name === 'min' || option.name === 'max') {
+                  return (
+                    <div key={option.name} className="flex items-center shrink-0">
+                      <span className="text-xs text-slate-300 mr-1">{option.name}:</span>
+                      <input
+                        type="number"
+                        value={resolveOptionValue(options?.[option.name] ?? option.default)}
+                        onChange={(e) =>
+                          handleOptionChange(
+                            index,
+                            option.name,
+                            e.target.value === '' ? '' : Number(e.target.value)
+                          )
+                        }
+                        className={`w-16 ${baseInputClass}`}
+                        min={option.min}
+                        max={option.max}
+                      />
+                    </div>
+                  );
+                } else if (option.name === 'length') {
+                  return (
+                    <div key={option.name} className="flex items-center shrink-0">
+                      <span className="text-xs text-slate-300 mr-1">{option.label}:</span>
+                      <input
+                        type="number"
+                        value={resolveOptionValue(options?.[option.name] ?? option.default)}
+                        onChange={(e) =>
+                          handleOptionChange(
+                            index,
+                            option.name,
+                            e.target.value === '' ? '' : Number(e.target.value)
+                          )
+                        }
+                        className={`w-16 ${baseInputClass}`}
+                        min={option.min}
+                        max={option.max}
+                      />
+                    </div>
+                  );
+                } else if (option.name === 'decimals' || option.name === 'precision' || option.name === 'multipleOf') {
+                  return (
+                    <div key={option.name} className="flex items-center shrink-0">
+                      <span className="text-xs text-slate-300 mr-1">{option.label || option.name}:</span>
+                      <input
+                        type="number"
+                        value={resolveOptionValue(options?.[option.name] ?? option.default)}
+                        onChange={(e) =>
+                          handleOptionChange(
+                            index,
+                            option.name,
+                            e.target.value === '' ? '' : Number(e.target.value)
+                          )
+                        }
+                        className={`w-20 ${baseInputClass}`}
+                        min={option.min}
+                        max={option.max}
+                        step={field.type === 'Number' && option.name === 'multipleOf' ? 1 : option.name === 'multipleOf' ? 0.001 : 1}
+                      />
+                    </div>
+                  );
+                }
+                return null;
+
+              case 'text':
                 return (
                   <div key={option.name} className="flex items-center shrink-0">
                     <span className="text-xs text-slate-300 mr-1">{option.label}:</span>
                     <input
-                      type="number"
+                      type="text"
                       value={resolveOptionValue(options?.[option.name] ?? option.default)}
-                      onChange={(e) =>
-                        handleOptionChange(
-                          index,
-                          option.name,
-                          e.target.value === '' ? '' : Number(e.target.value)
-                        )
-                      }
-                      className="w-16 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-sm"
-                      min={option.min}
-                      max={option.max}
+                      onChange={(e) => handleOptionChange(index, option.name, e.target.value)}
+                      className={`w-28 ${baseInputClass}`}
                     />
                   </div>
                 );
-              } else if (option.name === 'decimals' || option.name === 'precision' || option.name === 'multipleOf') {
+
+              case 'select':
                 return (
                   <div key={option.name} className="flex items-center shrink-0">
-                    <span className="text-xs text-slate-300 mr-1">{option.label || option.name}:</span>
-                    <input
-                      type="number"
+                    <span className="text-xs text-slate-300 mr-1">{option.label}:</span>
+                    <select
                       value={resolveOptionValue(options?.[option.name] ?? option.default)}
-                      onChange={(e) =>
-                        handleOptionChange(
-                          index,
-                          option.name,
-                          e.target.value === '' ? '' : Number(e.target.value)
-                        )
-                      }
-                      className="w-20 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-sm"
-                      min={option.min}
-                      max={option.max}
-                      step={field.type === 'Number' && option.name === 'multipleOf' ? 1 : option.name === 'multipleOf' ? 0.001 : 1}
-                    />
+                      onChange={(e) => handleOptionChange(index, option.name, e.target.value)}
+                      className={`bg-slate-800 px-2 py-1 text-sm rounded-lg border ${hasError ? 'border-red-500' : 'border-slate-700'} text-white`}
+                    >
+                      {option.options?.map(opt => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 );
-              }
-              return null;
-              
-            case 'text':
-              return (
-                <div key={option.name} className="flex items-center shrink-0">
-                  <span className="text-xs text-slate-300 mr-1">{option.label}:</span>
+
+              case 'boolean':
+                return (
+                  <div key={option.name} className="flex items-center shrink-0">
+                    <label className="inline-flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(options?.[option.name])}
+                        onChange={(e) => handleOptionChange(index, option.name, e.target.checked)}
+                        className="form-checkbox h-3 w-3 text-blue-600 bg-slate-800 border-slate-700 rounded"
+                      />
+                      <span className="ml-1 text-xs text-slate-300">{option.label}</span>
+                    </label>
+                  </div>
+                );
+
+              default:
+                return null;
+            }
+          })}
+
+          {(type === 'Datetime' || type.includes('Date')) &&
+            (!typeDefinition || !typeDefinition.options.some(opt => opt.name === 'fromDate' || opt.name === 'toDate')) && (
+              <>
+                <div className="flex items-center shrink-0">
+                  <span className="text-xs text-slate-300 mr-1">from:</span>
                   <input
                     type="text"
-                    value={resolveOptionValue(options?.[option.name] ?? option.default)}
-                    onChange={(e) => handleOptionChange(index, option.name, e.target.value)}
-                    className="w-28 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-sm"
+                    value={options.fromDate ?? '01/01/2022'}
+                    onChange={(e) => handleOptionChange(index, 'fromDate', e.target.value)}
+                    className={`w-24 ${baseInputClass}`}
                   />
                 </div>
-              );
-              
-            case 'select':
-              return (
-                <div key={option.name} className="flex items-center shrink-0">
-                  <span className="text-xs text-slate-300 mr-1">{option.label}:</span>
+                <div className="flex items-center shrink-0">
+                  <span className="text-xs text-slate-300 mr-1">to:</span>
+                  <input
+                    type="text"
+                    value={options.toDate ?? '12/31/2022'}
+                    onChange={(e) => handleOptionChange(index, 'toDate', e.target.value)}
+                    className={`w-24 ${baseInputClass}`}
+                  />
+                </div>
+                <div className="flex items-center shrink-0">
+                  <span className="text-xs text-slate-300 mr-1">format:</span>
                   <select
-                    value={resolveOptionValue(options?.[option.name] ?? option.default)}
-                    onChange={(e) => handleOptionChange(index, option.name, e.target.value)}
-                    className="bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-sm"
+                    value={options.format ?? 'ISO'}
+                    onChange={(e) => handleOptionChange(index, 'format', e.target.value)}
+                    className={`bg-slate-800 px-2 py-1 text-sm rounded-lg border ${hasError ? 'border-red-500' : 'border-slate-700'} text-white`}
                   >
-                    {option.options?.map(opt => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
+                    <option value="ISO">ISO 8601 (UTC)</option>
+                    <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                    <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                    <option value="YYYY-MM-DD">YYYY-MM-DD</option>
                   </select>
                 </div>
-              );
-              
-            case 'boolean':
-              return (
-                <div key={option.name} className="flex items-center shrink-0">
-                  <label className="inline-flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(options?.[option.name])}
-                      onChange={(e) => handleOptionChange(index, option.name, e.target.checked)}
-                      className="form-checkbox h-3 w-3 text-blue-600 bg-slate-800 border-slate-700 rounded"
-                    />
-                    <span className="ml-1 text-xs text-slate-300">{option.label}</span>
-                  </label>
-                </div>
-              );
-              
-            default:
-              return null;
-          }
-        })}
-        
-        {/* Special case for date range - only show if not already defined in type options */}
-        {(type === 'Datetime' || type.includes('Date')) && 
-         (!typeDefinition || !typeDefinition.options.some(opt => opt.name === 'fromDate' || opt.name === 'toDate')) && (
-          <>
+              </>
+            )}
+
+          {type === 'Custom List' && (
             <div className="flex items-center shrink-0">
-              <span className="text-xs text-slate-300 mr-1">from:</span>
+              <span className="text-xs text-slate-300 mr-1">values:</span>
               <input
                 type="text"
-                value={options.fromDate ?? '01/01/2022'}
-                onChange={(e) => handleOptionChange(index, 'fromDate', e.target.value)}
-                className="w-24 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-sm"
+                value={options.values ?? ''}
+                onChange={(e) => handleOptionChange(index, 'values', e.target.value)}
+                placeholder="comma-separated values"
+                className={`w-40 ${baseInputClass}`}
               />
             </div>
-            <div className="flex items-center shrink-0">
-              <span className="text-xs text-slate-300 mr-1">to:</span>
-              <input
-                type="text"
-                value={options.toDate ?? '12/31/2022'}
-                onChange={(e) => handleOptionChange(index, 'toDate', e.target.value)}
-                className="w-24 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-sm"
-              />
-            </div>
-            <div className="flex items-center shrink-0">
-              <span className="text-xs text-slate-300 mr-1">format:</span>
-              <select
-                value={options.format ?? 'ISO'}
-                onChange={(e) => handleOptionChange(index, 'format', e.target.value)}
-                className="bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-sm"
-              >
-                <option value="ISO">ISO 8601 (UTC)</option>
-                <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-                <option value="DD/MM/YYYY">DD/MM/YYYY</option>
-                <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-              </select>
-            </div>
-          </>
-        )}
-        
-        {/* Special case for custom list */}
-        {type === 'Custom List' && (
-          <div className="flex items-center shrink-0">
-            <span className="text-xs text-slate-300 mr-1">values:</span>
-            <input
-              type="text"
-              value={options.values ?? ''}
-              onChange={(e) => handleOptionChange(index, 'values', e.target.value)}
-              placeholder="comma-separated values"
-              className="w-40 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-sm"
-            />
-          </div>
+          )}
+        </div>
+        {hasError && (
+          <ul className="text-xs text-red-400 space-y-0.5">
+            {errors.map((message, idx) => (
+              <li key={`${field.id}-error-${idx}`}>{message}</li>
+            ))}
+          </ul>
         )}
       </div>
     );
