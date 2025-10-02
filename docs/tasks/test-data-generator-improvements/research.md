@@ -59,3 +59,4 @@ Assessing the Test Data Generator page (`src/app/data-generator/page.tsx`) to su
 - Hybrid template store prefers Supabase when enabled but falls back to local storage automatically.
 - Type catalog search now ranks results, supports keyboard navigation, and highlights matches.
 - Inline validation now surfaces contextual hints for number/date/custom list/phone fields plus reference warnings.
+- Field templates now live in a searchable template library with drag-and-drop field reordering.

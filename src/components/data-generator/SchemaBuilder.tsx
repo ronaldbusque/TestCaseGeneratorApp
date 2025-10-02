@@ -1,8 +1,10 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { PlusIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, TrashIcon, DocumentDuplicateIcon, Bars3Icon } from '@heroicons/react/24/outline';
 import { TypeSelectionDialog } from './TypeSelectionDialog';
+import { TemplateSelectionDialog } from './TemplateSelectionDialog';
 import { TypeOptionHint } from './TypeOptionHint';
 import { fakerTypeDefinitions } from '@/lib/data/faker-type-definitions';
 import { TypeOption } from '@/lib/types/testData';
@@ -19,7 +21,10 @@ import {
 import { collectReferenceIssues } from '@/lib/data-generator/referenceValidation';
 import { useSchemaTemplates } from '@/lib/data-generator/useSchemaTemplates';
 import { createHybridSchemaStore } from '@/lib/data-generator/schemaTemplateStore';
-import { SCHEMA_TEMPLATES } from '@/lib/data-generator/templates';
+import type { SchemaTemplate } from '@/lib/data-generator/templates';
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface SchemaBuilderProps {
   fields: FieldDefinition[];
@@ -45,10 +50,10 @@ export function SchemaBuilder({
   onReplaceAll,
 }: SchemaBuilderProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
   const [activeFieldIndex, setActiveFieldIndex] = useState<number | null>(null);
   const [schemaName, setSchemaName] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [selectedTemplateKey, setSelectedTemplateKey] = useState<string>('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const enableRemoteTemplates = process.env.NEXT_PUBLIC_ENABLE_SCHEMA_SYNC === 'true';
   type SyncStatus = 'local' | 'remote' | 'fallback';
@@ -141,13 +146,25 @@ export function SchemaBuilder({
     onChange(duplicateFieldAt(fields, index));
   };
 
-  const handleMoveField = (index: number, direction: 'up' | 'down') => {
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (onMoveField) {
-      onMoveField(index, targetIndex);
+  const handleReorderFields = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || toIndex < 0 || toIndex >= fields.length) {
       return;
     }
-    onChange(moveFieldAction(fields, index, targetIndex));
+    if (onMoveField) {
+      onMoveField(fromIndex, toIndex);
+      return;
+    }
+    onChange(moveFieldAction(fields, fromIndex, toIndex));
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) {
+      return;
+    }
+    const oldIndex = fields.findIndex((field) => field.id === active.id);
+    const newIndex = fields.findIndex((field) => field.id === over.id);
+    handleReorderFields(oldIndex, newIndex);
   };
 
   const handleSaveSchema = async () => {
@@ -248,11 +265,7 @@ export function SchemaBuilder({
 
   const hasSchemas = useMemo(() => schemas.length > 0, [schemas.length]);
 
-  const handleApplyTemplate = () => {
-    if (!selectedTemplateKey) return;
-    const template = SCHEMA_TEMPLATES.find((entry) => entry.key === selectedTemplateKey);
-    if (!template) return;
-
+  const handleApplyTemplate = (template: SchemaTemplate) => {
     const accumulated: FieldDefinition[] = [];
     const templateFields: FieldDefinition[] = withFreshIds(template.fields).map((templateField) => {
       const uniqueName = makeUniqueFieldName(
@@ -273,7 +286,6 @@ export function SchemaBuilder({
     } else {
       onChange(nextFields);
     }
-    setSelectedTemplateKey('');
   };
   
   const handleTypeSelect = (index: number) => {
@@ -607,81 +619,24 @@ export function SchemaBuilder({
               <th className="px-3 py-2 w-10"></th>
             </tr>
           </thead>
-          <tbody>
-            {fields.map((field, index) => (
-              <tr key={field.id} className="border-b border-slate-700/50">
-                <td className="px-3 py-2 flex items-center">
-                  <input
-                    type="text"
-                    value={field.name}
-                    onChange={(e) => handleFieldNameChange(index, e.target.value)}
-                    className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm"
-                    placeholder="Field name"
+          <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={fields.map((field) => field.id)} strategy={verticalListSortingStrategy}>
+              <tbody>
+                {fields.map((field, index) => (
+                  <SortableFieldRow
+                    key={field.id}
+                    field={field}
+                    index={index}
+                    renderOptions={renderOptions}
+                    onFieldNameChange={handleFieldNameChange}
+                    onTypeSelect={handleTypeSelect}
+                    onDuplicateField={handleDuplicateField}
+                    onRemoveField={handleRemoveField}
                   />
-                </td>
-                <td className="px-3 py-2">
-                  <button
-                    onClick={() => handleTypeSelect(index)}
-                    className="w-full flex justify-between items-center bg-slate-700 hover:bg-slate-600 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm transition-colors"
-                  >
-                    <span>{field.type || 'Select Type'}</span>
-                    <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                </td>
-                <td className="px-3 py-2">
-                  {renderOptions(field, index)}
-                </td>
-                <td className="px-3 py-2">
-                  <div className="flex flex-col items-center space-y-1">
-                    <div className="flex space-x-1">
-                      <button
-                        onClick={() => handleMoveField(index, 'up')}
-                        disabled={index === 0}
-                        className={`p-1 rounded-lg transition-colors ${
-                          index === 0
-                            ? 'text-slate-600 cursor-not-allowed'
-                            : 'text-slate-300 hover:bg-slate-600 hover:text-white'
-                        }`}
-                        aria-label="Move field up"
-                      >
-                        <ArrowUpIcon className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleMoveField(index, 'down')}
-                        disabled={index === fields.length - 1}
-                        className={`p-1 rounded-lg transition-colors ${
-                          index === fields.length - 1
-                            ? 'text-slate-600 cursor-not-allowed'
-                            : 'text-slate-300 hover:bg-slate-600 hover:text-white'
-                        }`}
-                        aria-label="Move field down"
-                      >
-                        <ArrowDownIcon className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <div className="flex space-x-1">
-                      <button
-                        onClick={() => handleDuplicateField(index)}
-                        className="p-1 rounded-lg text-slate-300 hover:bg-slate-600 hover:text-white transition-colors"
-                        aria-label="Duplicate field"
-                      >
-                        <DocumentDuplicateIcon className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleRemoveField(index)}
-                        className="p-1 rounded-lg hover:bg-slate-600 text-red-400 hover:text-red-300 transition-colors"
-                        aria-label="Remove field"
-                      >
-                        <TrashIcon className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
+                ))}
+              </tbody>
+            </SortableContext>
+          </DndContext>
         </table>
       </div>
       
@@ -694,37 +649,18 @@ export function SchemaBuilder({
             <PlusIcon className="h-4 w-4 mr-1" />
             Add Another Field
           </button>
+          <button
+            onClick={() => setIsTemplateDialogOpen(true)}
+            className="flex items-center px-3 py-1.5 text-sm rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-600/30 transition-colors"
+          >
+            Browse Templates
+          </button>
           <div className="flex items-center gap-2">
-            <select
-              className="bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm"
-              value={selectedTemplateKey}
-              onChange={(e) => setSelectedTemplateKey(e.target.value)}
-            >
-              <option value="">Add Template…</option>
-              {SCHEMA_TEMPLATES.map((template) => (
-                <option key={template.key} value={template.key}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={handleApplyTemplate}
-              disabled={!selectedTemplateKey}
-              className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
-                selectedTemplateKey
-                  ? 'border-slate-500 text-slate-200 hover:bg-slate-600/40'
-                  : 'border-slate-700 text-slate-500 cursor-not-allowed'
-              }`}
-            >
-              Apply Template
-            </button>
-          </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={schemaName}
-                        onChange={(e) => setSchemaName(e.target.value)}
-                        placeholder="Schema name"
+            <input
+              type="text"
+              value={schemaName}
+              onChange={(e) => setSchemaName(e.target.value)}
+              placeholder="Schema name"
               className="bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm"
             />
             <button
@@ -831,6 +767,97 @@ export function SchemaBuilder({
         onClose={() => setIsDialogOpen(false)}
         onSelectType={handleTypeChange}
       />
+      <TemplateSelectionDialog
+        isOpen={isTemplateDialogOpen}
+        onClose={() => setIsTemplateDialogOpen(false)}
+        onApply={handleApplyTemplate}
+      />
     </div>
   );
-} 
+}
+
+interface SortableFieldRowProps {
+  field: FieldDefinition;
+  index: number;
+  renderOptions: (field: FieldDefinition, index: number) => React.ReactNode;
+  onFieldNameChange: (index: number, value: string) => void;
+  onTypeSelect: (index: number) => void;
+  onDuplicateField: (index: number) => void;
+  onRemoveField: (index: number) => void;
+}
+
+const SortableFieldRow = ({
+  field,
+  index,
+  renderOptions,
+  onFieldNameChange,
+  onTypeSelect,
+  onDuplicateField,
+  onRemoveField,
+}: SortableFieldRowProps) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: field.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className={`border-b border-slate-700/50 ${isDragging ? 'bg-slate-800/80 shadow-lg' : ''}`}
+    >
+      <td className="px-3 py-2 flex items-center">
+        <input
+          type="text"
+          value={field.name}
+          onChange={(event) => onFieldNameChange(index, event.target.value)}
+          className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm"
+          placeholder="Field name"
+        />
+      </td>
+      <td className="px-3 py-2">
+        <button
+          onClick={() => onTypeSelect(index)}
+          className="w-full flex justify-between items-center bg-slate-700 hover:bg-slate-600 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm transition-colors"
+        >
+          <span>{field.type || 'Select Type'}</span>
+          <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      </td>
+      <td className="px-3 py-2">
+        {renderOptions(field, index)}
+      </td>
+      <td className="px-3 py-2">
+        <div className="flex flex-col items-center space-y-2">
+          <button
+            className="p-1 rounded-lg text-slate-400 hover:bg-slate-600 transition-colors cursor-grab active:cursor-grabbing"
+            aria-label="Drag to reorder"
+            {...listeners}
+            {...attributes}
+          >
+            <Bars3Icon className="h-4 w-4" />
+          </button>
+          <div className="flex space-x-1">
+            <button
+              onClick={() => onDuplicateField(index)}
+              className="p-1 rounded-lg text-slate-300 hover:bg-slate-600 hover:text-white transition-colors"
+              aria-label="Duplicate field"
+            >
+              <DocumentDuplicateIcon className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => onRemoveField(index)}
+              className="p-1 rounded-lg hover:bg-slate-600 text-red-400 hover:text-red-300 transition-colors"
+              aria-label="Remove field"
+            >
+              <TrashIcon className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+};
