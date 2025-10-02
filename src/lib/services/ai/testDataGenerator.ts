@@ -76,31 +76,30 @@ export class TestDataGeneratorService {
   
   private generateDataByType(typeName: string, config: FieldOptions): unknown {
     try {
-      // Dynamic import of faker to avoid build errors
-      const { faker } = require('@faker-js/faker');
-      
-      // Direct mappings for common types that might cause issues
-      const directMappings: Record<string, () => any> = {
-        'Car Make': () => faker.vehicle.manufacturer(),
-        'Car Model': () => faker.vehicle.model(),
+      const fakerInstance = this.faker;
+
+      const directMappings: Record<string, () => unknown> = {
+        'Car Make': () => fakerInstance.vehicle.manufacturer(),
+        'Car Model': () => fakerInstance.vehicle.model(),
         'Car Model Year': () => {
-          // Custom implementation for model year
           const currentYear = new Date().getFullYear();
-          return Math.floor(Math.random() * (currentYear - 1950 + 1)) + 1950;
+          const minYear = this.toNumber(config.min, 1950);
+          const maxYear = this.toNumber(config.max, currentYear);
+          return fakerInstance.number.int({ min: minYear, max: maxYear });
         },
-        'Car VIN': () => faker.vehicle.vin(),
-        'Boolean': () => faker.datatype.boolean(),
-        'Buzzword': () => faker.company.buzzPhrase(),
-        'City': () => faker.location.city(),
-        'Address Line 2': () => faker.location.secondaryAddress(),
-        'Bitcoin Address': () => faker.finance.bitcoinAddress()
+        'Car VIN': () => fakerInstance.vehicle.vin(),
+        'Boolean': () => fakerInstance.datatype.boolean(),
+        'Buzzword': () => fakerInstance.company.buzzPhrase(),
+        'City': () => fakerInstance.location.city(),
+        'Address Line 2': () => fakerInstance.location.secondaryAddress(),
+        'Bitcoin Address': () => fakerInstance.finance.bitcoinAddress(),
       };
-      
-      // If we have a direct mapping, use it
-      if (directMappings[typeName]) {
-        return directMappings[typeName]();
+
+      const directMapper = directMappings[typeName];
+      if (directMapper) {
+        return directMapper();
       }
-      
+
       // Get the type definition or use a default if not found
       const typeDefinition = fakerTypeDefinitions[typeName] || { fakerMethod: null, options: [] };
       
@@ -118,7 +117,7 @@ export class TestDataGeneratorService {
       try {
         // Parse the method path (e.g., "location.city" -> ["location", "city"])
         const methodPath = typeDefinition.fakerMethod.split('.');
-        
+
         // Handle methods with parameters
         if (methodPath.join('.').includes('()')) {
           // For methods like "airline.airport().iataCode"
@@ -126,40 +125,42 @@ export class TestDataGeneratorService {
           if (complexPath) {
             const [_, namespace, method, property] = complexPath;
             // Check if method exists
-            if (faker[namespace] && typeof faker[namespace][method] === 'function') {
-              const result = faker[namespace][method]();
+            const namespaceRef = (fakerInstance as unknown as Record<string, any>)[namespace];
+            if (namespaceRef && typeof namespaceRef[method] === 'function') {
+              const result = namespaceRef[method]();
               return result[property];
             }
             return `Error: Method ${namespace}.${method} not found`;
           }
           return null;
         }
-        
+
         // Handle normal methods with configuration
-        let currentObj = faker;
+        let currentObj: Record<string, unknown> = fakerInstance as unknown as Record<string, unknown>;
         
         for (let i = 0; i < methodPath.length - 1; i++) {
           if (!currentObj[methodPath[i]]) {
             console.error(`Namespace ${methodPath[i]} not found in faker`);
             return `Error: ${typeName} (invalid path)`;
           }
-          currentObj = currentObj[methodPath[i]];
+          currentObj = currentObj[methodPath[i]] as Record<string, unknown>;
         }
         
         const method = methodPath[methodPath.length - 1];
         
-        // Check if method exists
-        if (typeof currentObj[method] !== 'function') {
+        const fakerMethod = currentObj[method];
+        if (typeof fakerMethod !== 'function') {
           console.error(`Method ${method} not found in faker namespace ${methodPath.slice(0, -1).join('.')}`);
           return `Error: ${typeName} (method not found)`;
         }
         
-        // If we have configuration options, pass them to the faker method
-        if (Object.keys(config).length > 0) {
-          return currentObj[method](config);
-        } else {
-          return currentObj[method]();
-        }
+        const sanitizedOptions = Object.fromEntries(
+          Object.entries(config).filter(([, value]) => value !== undefined && value !== '')
+        );
+
+        return Object.keys(sanitizedOptions).length > 0
+          ? fakerMethod(sanitizedOptions)
+          : fakerMethod();
       } catch (error) {
         console.error(`Error generating data for type ${typeName}:`, error);
         return `Error: ${typeName}`;
@@ -172,10 +173,8 @@ export class TestDataGeneratorService {
   
   private handleCustomType(typeName: string, config: FieldOptions): unknown {
     try {
-      // Dynamic import of faker to avoid build errors
-      const { faker } = require('@faker-js/faker');
-      
-      // Handle custom types that require special logic
+      const fakerInstance = this.faker;
+
       switch (typeName.toLowerCase()) {
         // Vehicle related
         case "Car Model Year":
@@ -194,48 +193,48 @@ export class TestDataGeneratorService {
           
         // Airport related
         case "Airport Name":
-          return `${faker.location.city()} ${['International', 'Regional', 'Municipal', 'County'][Math.floor(Math.random() * 4)]} Airport`;
+          return `${fakerInstance.location.city()} ${['International', 'Regional', 'Municipal', 'County'][Math.floor(Math.random() * 4)]} Airport`;
         
         case "Airport Region Code":
-          return `${faker.location.countryCode()}-${faker.location.state({ abbreviated: true })}`;
+          return `${fakerInstance.location.countryCode()}-${fakerInstance.location.state({ abbreviated: true })}`;
           
         case "Airport Code":
-          return faker.airline.iataCode();
+          return fakerInstance.airline.iataCode();
           
         case "Airport Continent":
           return ['NA', 'EU', 'AS', 'AF', 'AU', 'SA'][Math.floor(Math.random() * 6)];
           
         case "Airport Country Code":
-          return faker.location.countryCode();
+          return fakerInstance.location.countryCode();
           
         case "Airport Elevation (Feet)":
           return Math.floor(Math.random() * 9000);
           
         case "Airport GPS Code":
-          return faker.airline.icao();
+          return fakerInstance.airline.icao();
           
         case "Airport Latitude":
-          return faker.location.latitude();
+          return fakerInstance.location.latitude();
           
         case "Airport Longitude":
-          return faker.location.longitude();
+          return fakerInstance.location.longitude();
           
         case "Airport Municipality":
-          return faker.location.city();
+          return fakerInstance.location.city();
           
         // Animal related
         case "Animal Common Name":
-          return faker.animal.type();
+          return fakerInstance.animal.type();
           
         case "Animal Scientific Name":
-          return `${faker.science.chemicalElement().name} ${faker.animal.type()}`;
+          return `${fakerInstance.science.chemicalElement().name} ${fakerInstance.animal.type()}`;
           
         // IT related
         case "App Bundle ID":
-          return `com.${faker.company.name().toLowerCase().replace(/\W/g, '')}.${faker.commerce.product().toLowerCase()}`;
+          return `com.${fakerInstance.company.name().toLowerCase().replace(/\W/g, '')}.${fakerInstance.commerce.product().toLowerCase()}`;
           
         case "App Name":
-          return faker.company.name();
+          return fakerInstance.company.name();
           
         case "App Version":
           return faker.system.semver();
