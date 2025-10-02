@@ -69,6 +69,18 @@ export const useSchemaBuilder = (options?: UseSchemaBuilderOptions) => {
     const errors: string[] = [];
     const { type, options } = field;
 
+    const trimmedName = field.name.trim();
+    if (!trimmedName) {
+      errors.push('Field name is required.');
+    } else {
+      const duplicate = allFields.find((candidate, candidateIndex) =>
+        candidateIndex !== index && candidate.name.trim() === trimmedName
+      );
+      if (duplicate) {
+        errors.push('Field name must be unique.');
+      }
+    }
+
     const parseNumber = (value: FieldOptionValue) => {
       if (typeof value === 'number') return value;
       if (typeof value === 'string' && value.trim() !== '') {

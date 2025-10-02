@@ -58,4 +58,26 @@ describe('useSchemaBuilder', () => {
 
     expect(result.current.fields).toHaveLength(1);
   });
+
+  it('marks duplicate names as invalid', () => {
+    const fields = [
+      { ...createDefaultField(), id: '1', name: 'email', type: 'Email' },
+      { ...createDefaultField(), id: '2', name: 'email', type: 'First Name' },
+    ];
+
+    const { result } = renderHook(() => useSchemaBuilder({ initialFields: fields }));
+
+    const validation = result.current.validateSchema();
+    expect(validation.ok).toBe(false);
+    expect(validation.error).toEqual({ type: 'invalid', fields: ['email', 'email'] });
+  });
+
+  it('marks missing name as invalid', () => {
+    const fields = [{ ...createDefaultField(), id: '1', name: '', type: 'Email' }];
+    const { result } = renderHook(() => useSchemaBuilder({ initialFields: fields }));
+
+    const validation = result.current.validateSchema();
+    expect(validation.ok).toBe(false);
+    expect(validation.error).toEqual({ type: 'invalid', fields: [''] });
+  });
 });

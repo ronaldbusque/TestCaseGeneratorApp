@@ -123,4 +123,26 @@ describe('SchemaBuilder', () => {
 
     expect(screen.getByText('Custom phone formats must include # placeholders.')).toBeInTheDocument();
   });
+
+  it('flags duplicate field names', () => {
+    const fields: FieldDefinition[] = [
+      { id: '1', name: 'email', type: 'Email', options: {} },
+      { id: '2', name: 'email', type: 'First Name', options: {} },
+    ];
+
+    render(<SchemaBuilder fields={fields} onChange={jest.fn()} />);
+
+    const errors = screen.getAllByText('Field name must be unique.');
+    expect(errors).toHaveLength(2);
+  });
+
+  it('requires field name', () => {
+    const fields: FieldDefinition[] = [
+      { id: '1', name: '', type: 'Email', options: {} },
+    ];
+
+    render(<SchemaBuilder fields={fields} onChange={jest.fn()} />);
+
+    expect(screen.getByText('Field name is required.')).toBeInTheDocument();
+  });
 });
