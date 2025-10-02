@@ -90,25 +90,29 @@ export default function TestDataGeneratorPage() {
         <QuickModelSwitcher domain="data" />
       </div>
 
-      <div className="grid xl:grid-cols-[3fr_2fr] gap-6 items-start">
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-2xl font-semibold text-white mb-4">Define Your Schema</h2>
-            <SchemaBuilder
-              fields={schema.fields}
-              onChange={schema.setFields}
-              onAddField={schema.addField}
-              onRemoveField={schema.removeField}
-              onDuplicateField={schema.duplicateField}
-              onMoveField={schema.reorderField}
-              onFieldUpdate={schema.updateField}
-              onFieldOptionsUpdate={schema.updateFieldOptions}
-              onReplaceAll={schema.setFields}
-            />
-          </div>
+      <div className="space-y-8">
+        <section>
+          <h2 className="text-2xl font-semibold text-white mb-4">Define Your Schema</h2>
+          <SchemaBuilder
+            fields={schema.fields}
+            onChange={schema.setFields}
+            onAddField={schema.addField}
+            onRemoveField={schema.removeField}
+            onDuplicateField={schema.duplicateField}
+            onMoveField={schema.reorderField}
+            onFieldUpdate={schema.updateField}
+            onFieldOptionsUpdate={schema.updateFieldOptions}
+            onReplaceAll={schema.setFields}
+          />
+        </section>
 
+        <section className="space-y-4">
           <div>
-            <h2 className="text-2xl font-semibold text-white mb-4">Export Options</h2>
+            <h2 className="text-2xl font-semibold text-white mb-3">Export Options</h2>
+            <p className="text-sm text-slate-300 mb-4">
+              Configure your baseline dataset first. If you toggle AI enhancement, be sure to supply clear context so
+              generated fields follow the guidance you expect.
+            </p>
             <ExportOptions
               config={exportConfig}
               onConfigChange={setExportConfig}
@@ -118,7 +122,37 @@ export default function TestDataGeneratorPage() {
             />
           </div>
 
-          {isPreviewMode && previewDataRows.length > 0 && (
+          <div className="bg-slate-800/70 backdrop-blur-sm rounded-xl border border-slate-700 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-white">AI Prompt Guidance</h2>
+              <span className="text-xs text-slate-300">
+                Prompts are applied to the “AI Enhancement" field in Export Options.
+              </span>
+            </div>
+            <p className="text-sm text-slate-300">
+              Choose a preset or add your own instructions, then click <span className="font-semibold">Use</span> to drop
+              it into the enhancement prompt. Prompts only affect fields marked as “AI-Generated.” Use
+              <span className="font-semibold"> Preview</span> to sanity-check a single row before exporting.
+            </p>
+            <AIPromptSuggestions
+              currentPrompt={exportConfig.enhancementPrompt}
+              disabled={!schema.hasAIGeneratedFields}
+              aiFieldNames={aiFieldNames}
+              sampleRow={aiSampleRow}
+              isSampleLoading={isFetchingAiSample}
+              onGenerateSample={generateAiSample}
+              onSelect={(prompt) =>
+                updateExportConfig({
+                  enhancementPrompt: prompt,
+                  applyAIEnhancement: true,
+                })
+              }
+            />
+          </div>
+        </section>
+
+        {isPreviewMode && previewDataRows.length > 0 && (
+          <section className="space-y-4">
             <div>
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-semibold text-white">Data Preview</h2>
@@ -200,33 +234,15 @@ export default function TestDataGeneratorPage() {
                     </Tab.Panel>
                   )}
                 </Tab.Panels>
-              </Tab.Group>
-            </div>
-          )}
+            </Tab.Group>
+          </section>
+        )}
 
-          {isGenerating && (
-            <div className="flex justify-center items-center p-12 bg-slate-800/70 backdrop-blur-sm rounded-xl border border-slate-700">
-              <DataGeneratorLoading message="Generating test data..." />
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-6">
-          <AIPromptSuggestions
-            currentPrompt={exportConfig.enhancementPrompt}
-            disabled={!schema.hasAIGeneratedFields}
-            aiFieldNames={aiFieldNames}
-            sampleRow={aiSampleRow}
-            isSampleLoading={isFetchingAiSample}
-            onGenerateSample={generateAiSample}
-            onSelect={(prompt) =>
-              updateExportConfig({
-                enhancementPrompt: prompt,
-                applyAIEnhancement: true,
-              })
-            }
-          />
-        </div>
+        {isGenerating && (
+          <div className="flex justify-center items-center p-12 bg-slate-800/70 backdrop-blur-sm rounded-xl border border-slate-700">
+            <DataGeneratorLoading message="Generating test data..." />
+          </div>
+        )}
       </div>
     </main>
   );
