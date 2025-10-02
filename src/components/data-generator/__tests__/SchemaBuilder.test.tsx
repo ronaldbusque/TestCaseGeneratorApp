@@ -71,4 +71,30 @@ describe('SchemaBuilder', () => {
 
     expect(screen.getByText('Min value cannot exceed Max value.')).toBeInTheDocument();
   });
+
+  it('validates date range for Date field', () => {
+    const field: FieldDefinition = {
+      id: 'date1',
+      name: 'eventDate',
+      type: 'Date',
+      options: { fromDate: '2025-12-31', toDate: '2025-01-01' },
+    };
+
+    render(<SchemaBuilder fields={[field]} onChange={jest.fn()} />);
+
+    expect(screen.getByText('From date cannot be after To date.')).toBeInTheDocument();
+  });
+
+  it('validates min/max age for Date of Birth field', () => {
+    const field: FieldDefinition = {
+      id: 'dob1',
+      name: 'dob',
+      type: 'Date of Birth',
+      options: { minAge: 50, maxAge: 20 },
+    };
+
+    render(<SchemaBuilder fields={[field]} onChange={jest.fn()} />);
+
+    expect(screen.getByText('Min Age cannot exceed Max Age.')).toBeInTheDocument();
+  });
 });

@@ -180,6 +180,44 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
       }
     }
 
+    const parseDate = (value: FieldOptionValue) => {
+      if (typeof value === 'string' && value.trim() !== '') {
+        const date = new Date(value);
+        return Number.isNaN(date.valueOf()) ? null : date;
+      }
+      return null;
+    };
+
+    if (type === 'Date' || type === 'Future Date' || type === 'Past Date') {
+      const from = parseDate(options.fromDate);
+      const to = parseDate(options.toDate);
+
+      if (options.fromDate && from === null) {
+        errors.push('From date is invalid.');
+      }
+      if (options.toDate && to === null) {
+        errors.push('To date is invalid.');
+      }
+      if (from && to && from > to) {
+        errors.push('From date cannot be after To date.');
+      }
+    }
+
+    if (type === 'Date of Birth') {
+      const minAge = parseNumber(options.minAge);
+      const maxAge = parseNumber(options.maxAge);
+
+      if (options.minAge !== undefined && minAge === null) {
+        errors.push('Min Age must be a number.');
+      }
+      if (options.maxAge !== undefined && maxAge === null) {
+        errors.push('Max Age must be a number.');
+      }
+      if (minAge !== null && maxAge !== null && minAge > maxAge) {
+        errors.push('Min Age cannot exceed Max Age.');
+      }
+    }
+
     return errors;
   };
 
