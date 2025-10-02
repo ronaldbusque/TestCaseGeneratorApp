@@ -1,4 +1,5 @@
 import { copycat } from '@snaplet/copycat';
+import { randomUUID } from 'crypto';
 
 import type { FieldDefinition } from '@/lib/data-generator/types';
 
@@ -8,8 +9,6 @@ export type CopycatMapperResult = {
   generate: CopycatGenerator;
   requiresFallback?: boolean;
 };
-
-const DEFAULT_SEED = 'test-data-generator';
 
 const makeSeed = (baseSeed: string, fieldId: string, rowIndex: number) =>
   `${baseSeed}:${fieldId}:${rowIndex}`;
@@ -91,7 +90,9 @@ export const generateCopycatRows = (
   count: number,
   seed?: string | number
 ): { rows: Array<Record<string, unknown>>; usedFallback: boolean } => {
-  const baseSeed = String(seed ?? DEFAULT_SEED);
+  const baseSeed = seed !== undefined && seed !== null
+    ? String(seed)
+    : randomUUID();
   let usedFallback = false;
 
   const rows = Array.from({ length: count }).map((_, rowIndex) => {
