@@ -2,6 +2,12 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { AI_GENERATED_FIELD_TYPE, createDefaultField } from '@/lib/data-generator/constants';
 import { validateFieldDefinition } from '@/lib/data-generator/fieldValidation';
+import {
+  addBlankField,
+  duplicateFieldAt,
+  moveField as moveFieldAction,
+  removeFieldAt,
+} from '@/lib/data-generator/schemaActions';
 import type { FieldDefinition, SchemaValidationResult } from '@/lib/data-generator/types';
 
 interface UseSchemaBuilderOptions {
@@ -76,10 +82,63 @@ export const useSchemaBuilder = (options?: UseSchemaBuilderOptions) => {
     setFields([createDefaultField()]);
   }, []);
 
+  const addField = useCallback(() => {
+    setFields((previous) => addBlankField(previous));
+  }, []);
+
+  const removeField = useCallback((index: number) => {
+    setFields((previous) => removeFieldAt(previous, index));
+  }, []);
+
+  const duplicateField = useCallback((index: number) => {
+    setFields((previous) => duplicateFieldAt(previous, index));
+  }, []);
+
+  const reorderField = useCallback((fromIndex: number, toIndex: number) => {
+    setFields((previous) => moveFieldAction(previous, fromIndex, toIndex));
+  }, []);
+
+  const updateField = useCallback((index: number, patch: Partial<FieldDefinition>) => {
+    setFields((previous) => {
+      if (index < 0 || index >= previous.length) {
+        return previous;
+      }
+      const next = [...previous];
+      next[index] = { ...next[index], ...patch };
+      return next;
+    });
+  }, []);
+
+  const updateFieldOptions = useCallback(
+    (index: number, optionsPatch: FieldDefinition['options']) => {
+      setFields((previous) => {
+        if (index < 0 || index >= previous.length) {
+          return previous;
+        }
+        const next = [...previous];
+        next[index] = {
+          ...next[index],
+          options: {
+            ...next[index].options,
+            ...optionsPatch,
+          },
+        };
+        return next;
+      });
+    },
+    []
+  );
+
   return {
     fields,
     setFields,
     resetFields,
+    addField,
+    removeField,
+    duplicateField,
+    reorderField,
+    updateField,
+    updateFieldOptions,
     hasAIGeneratedFields,
     missingTypeFields,
     validateSchema,

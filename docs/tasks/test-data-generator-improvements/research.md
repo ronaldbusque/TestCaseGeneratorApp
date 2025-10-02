@@ -51,3 +51,4 @@ Assessing the Test Data Generator page (`src/app/data-generator/page.tsx`) to su
 - Added Copycat support for Date/Time, location, and network field types plus deterministic address line 2 + company samples.
 - Expanded unit coverage for new generators including range formatting and locale-specific options.
 - Introduced seeded date/time anchors so Copycat keeps future/past/DOB outputs stable when a seed is provided.
+- Added schemaActions helpers so add/duplicate/move logic is reusable outside SchemaBuilder.

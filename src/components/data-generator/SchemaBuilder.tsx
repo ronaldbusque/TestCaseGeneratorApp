@@ -5,9 +5,16 @@ import { PlusIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon, DocumentDuplicateIcon 
 import { TypeSelectionDialog } from './TypeSelectionDialog';
 import { fakerTypeDefinitions } from '@/lib/data/faker-type-definitions';
 import { TypeOption } from '@/lib/types/testData';
-import { v4 as uuidv4 } from 'uuid';
 import type { FieldDefinition, FieldOptionValue, FieldOptions } from '@/lib/data-generator/types';
 import { validateFieldDefinition } from '@/lib/data-generator/fieldValidation';
+import {
+  addBlankField,
+  duplicateFieldAt,
+  makeUniqueFieldName,
+  moveField as moveFieldAction,
+  removeFieldAt,
+  withFreshIds,
+} from '@/lib/data-generator/schemaActions';
 import { listSchemas, saveSchema as persistSchema, deleteSchema as removeSchema } from '@/lib/data-generator/schemaStorage';
 import { SCHEMA_TEMPLATES } from '@/lib/data-generator/templates';
 
@@ -42,19 +49,11 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
   }, [fields]);
 
   const handleAddField = () => {
-    const newField: FieldDefinition = {
-      id: uuidv4(),
-      name: `field_${fields.length + 1}`,
-      type: '',
-      options: {},
-    };
-    onChange([...fields, newField]);
+    onChange(addBlankField(fields));
   };
   
   const handleRemoveField = (index: number) => {
-    const newFields = [...fields];
-    newFields.splice(index, 1);
-    onChange(newFields);
+    onChange(removeFieldAt(fields, index));
   };
   
   const handleFieldNameChange = (index: number, name: string) => {
@@ -63,42 +62,13 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
     onChange(newFields);
   };
 
-  const makeUniqueFieldName = (baseName: string, existingNames: Set<string>) => {
-    let candidate = baseName;
-    let counter = 1;
-    while (existingNames.has(candidate)) {
-      candidate = `${baseName}_${counter++}`;
-    }
-    existingNames.add(candidate);
-    return candidate;
-  };
-
   const handleDuplicateField = (index: number) => {
-    const source = fields[index];
-    if (!source) return;
-    const existingNames = new Set(fields.map((field) => field.name));
-    const baseName = source.name ? `${source.name}_copy` : `field_${fields.length + 1}`;
-    const duplicateName = makeUniqueFieldName(baseName, existingNames);
-    const duplicatedField: FieldDefinition = {
-      ...source,
-      id: uuidv4(),
-      name: duplicateName,
-      options: { ...source.options },
-    };
-    const newFields = [...fields];
-    newFields.splice(index + 1, 0, duplicatedField);
-    onChange(newFields);
+    onChange(duplicateFieldAt(fields, index));
   };
 
   const handleMoveField = (index: number, direction: 'up' | 'down') => {
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= fields.length) {
-      return;
-    }
-    const newFields = [...fields];
-    const [moved] = newFields.splice(index, 1);
-    newFields.splice(targetIndex, 0, moved);
-    onChange(newFields);
+    onChange(moveFieldAction(fields, index, targetIndex));
   };
 
   const handleSaveSchema = () => {
@@ -120,11 +90,7 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
     setSelectedSchemaId(schemaId);
     const schema = savedSchemas.find((entry) => entry.id === schemaId);
     if (!schema) return;
-    const restoredFields = schema.fields.map((field) => ({
-      ...field,
-      id: uuidv4(),
-    }));
-    onChange(restoredFields);
+    onChange(withFreshIds(schema.fields));
     setSchemaName(schema.name);
   };
 
@@ -187,13 +153,19 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
     const template = SCHEMA_TEMPLATES.find((entry) => entry.key === selectedTemplateKey);
     if (!template) return;
 
-    const existingNames = new Set(fields.map((field) => field.name));
-    const templateFields: FieldDefinition[] = template.fields.map((templateField) => ({
-      id: uuidv4(),
-      name: makeUniqueFieldName(templateField.name, existingNames),
-      type: templateField.type,
-      options: { ...templateField.options },
-    }));
+    const accumulated: FieldDefinition[] = [];
+    const templateFields: FieldDefinition[] = withFreshIds(template.fields).map((templateField) => {
+      const uniqueName = makeUniqueFieldName(
+        templateField.name || `field_${fields.length + accumulated.length + 1}`,
+        [...fields, ...accumulated]
+      );
+      const nextField: FieldDefinition = {
+        ...templateField,
+        name: uniqueName,
+      };
+      accumulated.push(nextField);
+      return nextField;
+    });
 
     onChange([...fields, ...templateFields]);
     setSelectedTemplateKey('');
