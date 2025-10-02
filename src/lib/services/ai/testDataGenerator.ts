@@ -107,7 +107,7 @@ export class TestDataGeneratorService {
         'Bitcoin Address': () => fakerInstance.finance.bitcoinAddress(),
         'Company Name': () => fakerInstance.company.name(),
         'URL': () => fakerInstance.internet.url(),
-        'IPv4 Address': () => fakerInstance.internet.ip(),
+        'IPv4 Address': () => fakerInstance.internet.ipv4(),
       };
 
       const directMapper = directMappings[typeName];

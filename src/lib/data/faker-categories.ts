@@ -51,6 +51,7 @@ export const fakerCategories: FakerCategory[] = [
       { name: 'Address Line 2', description: 'Room, Apt, Floor, Suite, or PO box number' },
       { name: 'Zip Code', description: 'Postal codes in various formats' },
       { name: 'State', description: 'State or province names' },
+      { name: 'Country', description: 'Country names' },
       { name: 'Airport Code', description: 'LAX, NWR, JFK' },
       { name: 'Airport Continent', description: 'NA, AF, EU' },
       { name: 'Airport Country Code', description: 'US, CA, DE' },
