@@ -54,3 +54,4 @@ Assessing the Test Data Generator page (`src/app/data-generator/page.tsx`) to su
 - Added schemaActions helpers so add/duplicate/move logic is reusable outside SchemaBuilder.
 - SchemaBuilder consumes hook actions so other surfaces can reuse add/remove/duplicate/reorder logic without reimplementing array math.
 - Expanded Copycat support to car/app/product fields so seeded runs avoid faker fallback.
+- Introduced useSchemaTemplates hook to centralize saved schema CRUD ahead of Supabase sync.

@@ -15,7 +15,7 @@ import {
   removeFieldAt,
   withFreshIds,
 } from '@/lib/data-generator/schemaActions';
-import { listSchemas, saveSchema as persistSchema, deleteSchema as removeSchema } from '@/lib/data-generator/schemaStorage';
+import { useSchemaTemplates } from '@/lib/data-generator/useSchemaTemplates';
 import { SCHEMA_TEMPLATES } from '@/lib/data-generator/templates';
 
 interface SchemaBuilderProps {
@@ -43,16 +43,29 @@ export function SchemaBuilder({
 }: SchemaBuilderProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [activeFieldIndex, setActiveFieldIndex] = useState<number | null>(null);
-  const [savedSchemas, setSavedSchemas] = useState(() => listSchemas());
   const [schemaName, setSchemaName] = useState('');
-  const [selectedSchemaId, setSelectedSchemaId] = useState<string>('');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedTemplateKey, setSelectedTemplateKey] = useState<string>('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const {
+    schemas,
+    activeSchemaId,
+    setActiveSchemaId,
+    saveTemplate,
+    deleteTemplate,
+    clearTemplates,
+    refreshTemplates,
+  } = useSchemaTemplates();
 
   useEffect(() => {
-    setSavedSchemas(listSchemas());
-  }, []);
+    if (!activeSchemaId) {
+      return;
+    }
+    const schema = schemas.find((entry) => entry.id === activeSchemaId);
+    if (schema) {
+      setSchemaName(schema.name);
+    }
+  }, [activeSchemaId, schemas]);
 
   useEffect(() => {
     const errors: Record<string, string[]> = {};
@@ -114,18 +127,19 @@ export function SchemaBuilder({
       return;
     }
     const payloadName = schemaName.trim();
-    persistSchema({
+    const existing = schemas.find((schema) => schema.name === payloadName);
+    saveTemplate({
+      id: existing?.id,
       name: payloadName,
       fields,
-      id: savedSchemas.find((schema) => schema.name === payloadName)?.id,
     });
-    setSavedSchemas(listSchemas());
+    setSchemaName(payloadName);
     setSaveError(null);
   };
 
   const handleLoadSchema = (schemaId: string) => {
-    setSelectedSchemaId(schemaId);
-    const schema = savedSchemas.find((entry) => entry.id === schemaId);
+    setActiveSchemaId(schemaId);
+    const schema = schemas.find((entry) => entry.id === schemaId);
     if (!schema) return;
     const restored = withFreshIds(schema.fields);
     if (onReplaceAll) {
@@ -137,12 +151,15 @@ export function SchemaBuilder({
   };
 
   const handleDeleteSchema = (schemaId: string) => {
-    removeSchema(schemaId);
-    const next = listSchemas();
-    setSavedSchemas(next);
-    if (selectedSchemaId === schemaId) {
-      setSelectedSchemaId('');
+    deleteTemplate(schemaId);
+    if (activeSchemaId === schemaId) {
+      setSchemaName('');
     }
+  };
+
+  const handleClearSchemas = () => {
+    clearTemplates();
+    setSchemaName('');
   };
 
   const getFieldErrors = (fieldId: string) => fieldErrors[fieldId] ?? [];
@@ -188,7 +205,7 @@ export function SchemaBuilder({
     );
   };
 
-  const hasSchemas = useMemo(() => savedSchemas.length > 0, [savedSchemas.length]);
+  const hasSchemas = useMemo(() => schemas.length > 0, [schemas.length]);
 
   const handleApplyTemplate = () => {
     if (!selectedTemplateKey) return;
@@ -647,27 +664,41 @@ export function SchemaBuilder({
           <select
             id="saved-schema-select"
             className="bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm"
-            value={selectedSchemaId}
+            value={activeSchemaId ?? ''}
             onChange={(e) => handleLoadSchema(e.target.value)}
             disabled={!hasSchemas}
           >
             <option value="" disabled={!hasSchemas}>
               {hasSchemas ? 'Select schema to load' : 'No schemas saved yet'}
             </option>
-            {savedSchemas.map((schema) => (
+            {schemas.map((schema) => (
               <option key={schema.id} value={schema.id}>
                 {schema.name}
               </option>
             ))}
           </select>
-          {selectedSchemaId && (
+          {activeSchemaId && (
             <button
-              onClick={() => handleDeleteSchema(selectedSchemaId)}
+              onClick={() => handleDeleteSchema(activeSchemaId)}
               className="px-2 py-1 rounded-lg text-xs text-red-300 border border-red-500 hover:bg-red-500/10 transition-colors"
             >
               Delete
             </button>
           )}
+          {hasSchemas && (
+            <button
+              onClick={handleClearSchemas}
+              className="px-2 py-1 rounded-lg text-xs border border-slate-600 text-slate-300 hover:bg-slate-600/40 transition-colors"
+            >
+              Clear All
+            </button>
+          )}
+          <button
+            onClick={() => refreshTemplates()}
+            className="px-2 py-1 rounded-lg text-xs border border-slate-600 text-slate-300 hover:bg-slate-600/40 transition-colors"
+          >
+            Refresh
+          </button>
         </div>
       </div>
       
