@@ -1,7 +1,7 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 import type { StoredSchema } from '@/lib/data-generator/schemaStorage';
-import { useSchemaTemplates } from '@/lib/data-generator/useSchemaTemplates';
+import { useSchemaTemplates, type SchemaTemplatesStore } from '@/lib/data-generator/useSchemaTemplates';
 
 const mockSchemas: StoredSchema[] = [
   {
@@ -18,56 +18,113 @@ const mockSchemas: StoredSchema[] = [
   },
 ];
 
+const createMemoryStore = (initial: StoredSchema[] = []): SchemaTemplatesStore => {
+  let items = [...initial];
+  return {
+    list: async () => [...items],
+    save: async (payload) => {
+      const id = payload.id ?? `memory-${Math.random().toString(36).slice(2, 8)}`;
+      const entry: StoredSchema = {
+        id,
+        name: payload.name,
+        updatedAt: new Date().toISOString(),
+        fields: payload.fields,
+      };
+      const index = items.findIndex((schema) => schema.id === id);
+      if (index >= 0) {
+        items[index] = entry;
+      } else {
+        items = [entry, ...items];
+      }
+      return entry;
+    },
+    delete: async (id) => {
+      items = items.filter((schema) => schema.id !== id);
+    },
+    clear: async () => {
+      items = [];
+    },
+  };
+};
+
 describe('useSchemaTemplates', () => {
-  it('initialises from local storage', () => {
-    const { result } = renderHook(() => useSchemaTemplates({ initialSchemas: mockSchemas }));
-    expect(result.current.schemas).toHaveLength(2);
+  it('initialises from provided store', async () => {
+    const store = createMemoryStore(mockSchemas);
+    const { result } = renderHook(() => useSchemaTemplates({ store }));
+
+    await waitFor(() => {
+      expect(result.current.schemas).toHaveLength(2);
+    });
   });
 
-  it('stores newly saved template', () => {
-    const { result } = renderHook(() => useSchemaTemplates({ initialSchemas: [] }));
+  it('stores newly saved template', async () => {
+    const store = createMemoryStore();
+    const { result } = renderHook(() => useSchemaTemplates({ store }));
 
-    act(() => {
-      result.current.saveTemplate({ name: 'Users', fields: [] });
+    await act(async () => {
+      await result.current.saveTemplate({ name: 'Users', fields: [] });
     });
 
-    expect(result.current.schemas).toHaveLength(1);
+    await waitFor(() => {
+      expect(result.current.schemas).toHaveLength(1);
+    });
     expect(result.current.activeSchema?.name).toBe('Users');
   });
 
-  it('updates existing template in place', () => {
-    const { result } = renderHook(() => useSchemaTemplates({ initialSchemas: mockSchemas }));
+  it('updates existing template in place', async () => {
+    const store = createMemoryStore(mockSchemas);
+    const { result } = renderHook(() => useSchemaTemplates({ store }));
 
-    act(() => {
-      result.current.saveTemplate({ id: 'schema-1', name: 'People Updated', fields: [] });
+    await waitFor(() => {
+      expect(result.current.schemas).toHaveLength(2);
     });
 
-    expect(result.current.schemas[0].name).toBe('People Updated');
+    await act(async () => {
+      await result.current.saveTemplate({ id: 'schema-1', name: 'People Updated', fields: [] });
+    });
+
+    await waitFor(() => {
+      expect(result.current.schemas.find((schema) => schema.id === 'schema-1')?.name).toBe('People Updated');
+    });
   });
 
-  it('deletes templates and clears active id', () => {
-    const { result } = renderHook(() => useSchemaTemplates({ initialSchemas: mockSchemas }));
+  it('deletes templates and clears active id', async () => {
+    const store = createMemoryStore(mockSchemas);
+    const { result } = renderHook(() => useSchemaTemplates({ store }));
+
+    await waitFor(() => {
+      expect(result.current.schemas).toHaveLength(2);
+    });
 
     act(() => {
       result.current.setActiveSchemaId('schema-1');
     });
 
-    act(() => {
-      result.current.deleteTemplate('schema-1');
+    await act(async () => {
+      await result.current.deleteTemplate('schema-1');
     });
 
-    expect(result.current.schemas).toHaveLength(1);
+    await waitFor(() => {
+      expect(result.current.schemas).toHaveLength(1);
+    });
     expect(result.current.activeSchema).toBeNull();
   });
 
-  it('clears all templates', () => {
-    const { result } = renderHook(() => useSchemaTemplates({ initialSchemas: mockSchemas }));
+  it('clears all templates', async () => {
+    const store = createMemoryStore(mockSchemas);
+    const { result } = renderHook(() => useSchemaTemplates({ store }));
 
-    act(() => {
-      result.current.clearTemplates();
+    await waitFor(() => {
+      expect(result.current.schemas).toHaveLength(2);
     });
 
-    expect(result.current.schemas).toHaveLength(0);
+    await act(async () => {
+      await result.current.clearTemplates();
+    });
+
+    await waitFor(() => {
+      expect(result.current.schemas).toHaveLength(0);
+    });
     expect(result.current.activeSchema).toBeNull();
   });
 });

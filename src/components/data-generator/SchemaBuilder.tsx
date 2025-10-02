@@ -55,17 +55,16 @@ export function SchemaBuilder({
     deleteTemplate,
     clearTemplates,
     refreshTemplates,
+    isLoading: templatesLoading,
+    error: templatesError,
+    activeSchema,
   } = useSchemaTemplates();
 
   useEffect(() => {
-    if (!activeSchemaId) {
-      return;
+    if (activeSchema) {
+      setSchemaName(activeSchema.name);
     }
-    const schema = schemas.find((entry) => entry.id === activeSchemaId);
-    if (schema) {
-      setSchemaName(schema.name);
-    }
-  }, [activeSchemaId, schemas]);
+  }, [activeSchema]);
 
   useEffect(() => {
     const errors: Record<string, string[]> = {};
@@ -121,20 +120,24 @@ export function SchemaBuilder({
     onChange(moveFieldAction(fields, index, targetIndex));
   };
 
-  const handleSaveSchema = () => {
+  const handleSaveSchema = async () => {
     if (!schemaName.trim()) {
       setSaveError('Please provide a name before saving.');
       return;
     }
     const payloadName = schemaName.trim();
     const existing = schemas.find((schema) => schema.name === payloadName);
-    saveTemplate({
-      id: existing?.id,
-      name: payloadName,
-      fields,
-    });
-    setSchemaName(payloadName);
-    setSaveError(null);
+    try {
+      await saveTemplate({
+        id: existing?.id,
+        name: payloadName,
+        fields,
+      });
+      setSchemaName(payloadName);
+      setSaveError(null);
+    } catch (error) {
+      setSaveError('Failed to save schema. Please try again.');
+    }
   };
 
   const handleLoadSchema = (schemaId: string) => {
@@ -150,16 +153,24 @@ export function SchemaBuilder({
     setSchemaName(schema.name);
   };
 
-  const handleDeleteSchema = (schemaId: string) => {
-    deleteTemplate(schemaId);
-    if (activeSchemaId === schemaId) {
-      setSchemaName('');
+  const handleDeleteSchema = async (schemaId: string) => {
+    try {
+      await deleteTemplate(schemaId);
+      if (activeSchemaId === schemaId) {
+        setSchemaName('');
+      }
+    } catch (error) {
+      setSaveError('Failed to delete schema.');
     }
   };
 
-  const handleClearSchemas = () => {
-    clearTemplates();
-    setSchemaName('');
+  const handleClearSchemas = async () => {
+    try {
+      await clearTemplates();
+      setSchemaName('');
+    } catch (error) {
+      setSaveError('Failed to clear schemas.');
+    }
   };
 
   const getFieldErrors = (fieldId: string) => fieldErrors[fieldId] ?? [];
@@ -655,6 +666,7 @@ export function SchemaBuilder({
             </button>
           </div>
           {saveError && <span className="text-xs text-red-400">{saveError}</span>}
+          {templatesError && <span className="text-xs text-red-400">{templatesError}</span>}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -666,10 +678,14 @@ export function SchemaBuilder({
             className="bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm"
             value={activeSchemaId ?? ''}
             onChange={(e) => handleLoadSchema(e.target.value)}
-            disabled={!hasSchemas}
+            disabled={!hasSchemas || templatesLoading}
           >
             <option value="" disabled={!hasSchemas}>
-              {hasSchemas ? 'Select schema to load' : 'No schemas saved yet'}
+              {templatesLoading
+                ? 'Loading schemas...'
+                : hasSchemas
+                  ? 'Select schema to load'
+                  : 'No schemas saved yet'}
             </option>
             {schemas.map((schema) => (
               <option key={schema.id} value={schema.id}>
@@ -694,11 +710,16 @@ export function SchemaBuilder({
             </button>
           )}
           <button
-            onClick={() => refreshTemplates()}
+            onClick={() => {
+              void refreshTemplates();
+            }}
             className="px-2 py-1 rounded-lg text-xs border border-slate-600 text-slate-300 hover:bg-slate-600/40 transition-colors"
           >
             Refresh
           </button>
+          {templatesLoading && (
+            <span className="text-xs text-slate-400">Refreshing…</span>
+          )}
         </div>
       </div>
       

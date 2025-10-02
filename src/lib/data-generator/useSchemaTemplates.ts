@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { FieldDefinition } from '@/lib/data-generator/types';
 import {
@@ -9,57 +9,129 @@ import {
   saveSchema,
 } from '@/lib/data-generator/schemaStorage';
 
+export interface SchemaTemplatesStore {
+  list(): Promise<StoredSchema[]>;
+  save(payload: { id?: string; name: string; fields: FieldDefinition[] }): Promise<StoredSchema>;
+  delete(id: string): Promise<void>;
+  clear(): Promise<void>;
+}
+
+const createLocalSchemaStore = (): SchemaTemplatesStore => ({
+  list: async () => listSchemas(),
+  save: async (payload) => saveSchema(payload),
+  delete: async (id) => {
+    deleteSchema(id);
+  },
+  clear: async () => {
+    clearSchemas();
+  },
+});
+
 interface UseSchemaTemplatesOptions {
   initialSchemas?: StoredSchema[];
+  store?: SchemaTemplatesStore;
 }
 
 export const useSchemaTemplates = (options?: UseSchemaTemplatesOptions) => {
-  const [schemas, setSchemas] = useState<StoredSchema[]>(() =>
-    options?.initialSchemas ?? listSchemas()
+  const store = useMemo(
+    () => options?.store ?? createLocalSchemaStore(),
+    [options?.store]
   );
-  const [activeSchemaId, setActiveSchemaId] = useState<string | null>(null);
+  const [schemas, setSchemas] = useState<StoredSchema[]>(options?.initialSchemas ?? []);
+  const [activeSchemaId, setActiveSchemaId] = useState<string | null>(
+    options?.initialSchemas && options.initialSchemas.length > 0
+      ? options.initialSchemas[0].id
+      : null
+  );
+  const [isLoading, setIsLoading] = useState<boolean>(!options?.initialSchemas);
+  const [error, setError] = useState<string | null>(null);
 
   const activeSchema = useMemo(
     () => schemas.find((schema) => schema.id === activeSchemaId) ?? null,
     [activeSchemaId, schemas]
   );
 
-  const refresh = useCallback(() => {
-    setSchemas(listSchemas());
-  }, []);
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const result = await store.list();
+      setSchemas(result);
+      setError(null);
+      if (result.length === 0) {
+        setActiveSchemaId(null);
+      } else if (activeSchemaId && !result.some((schema) => schema.id === activeSchemaId)) {
+        setActiveSchemaId(result[0].id);
+      }
+    } catch (err) {
+      console.warn('[useSchemaTemplates] Failed to list templates', err);
+      setError(err instanceof Error ? err.message : 'Failed to load templates');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [activeSchemaId, store]);
+
+  useEffect(() => {
+    if (options?.initialSchemas) {
+      return;
+    }
+    refresh();
+  }, [options?.initialSchemas, refresh]);
 
   const persistSchema = useCallback(
-    (payload: { id?: string; name: string; fields: FieldDefinition[] }) => {
-      const entry = saveSchema(payload);
-      setSchemas((previous) => {
-        const exists = previous.some((schema) => schema.id === entry.id);
-        return exists
-          ? previous.map((schema) => (schema.id === entry.id ? entry : schema))
-          : [entry, ...previous];
-      });
-      setActiveSchemaId(entry.id);
-      return entry;
+    async (payload: { id?: string; name: string; fields: FieldDefinition[] }) => {
+      try {
+        const entry = await store.save(payload);
+        setSchemas((previous) => {
+          const exists = previous.some((schema) => schema.id === entry.id);
+          return exists
+            ? previous.map((schema) => (schema.id === entry.id ? entry : schema))
+            : [entry, ...previous];
+        });
+        setActiveSchemaId(entry.id);
+        return entry;
+      } catch (err) {
+        console.warn('[useSchemaTemplates] Failed to save template', err);
+        setError(err instanceof Error ? err.message : 'Failed to save template');
+        throw err;
+      }
     },
-    []
+    [store]
   );
 
-  const removeSchema = useCallback((id: string) => {
-    deleteSchema(id);
-    setSchemas((previous) => previous.filter((schema) => schema.id !== id));
-    setActiveSchemaId((previous) => (previous === id ? null : previous));
-  }, []);
+  const removeSchema = useCallback(
+    async (id: string) => {
+      try {
+        await store.delete(id);
+        setSchemas((previous) => previous.filter((schema) => schema.id !== id));
+        setActiveSchemaId((previous) => (previous === id ? null : previous));
+      } catch (err) {
+        console.warn('[useSchemaTemplates] Failed to delete template', err);
+        setError(err instanceof Error ? err.message : 'Failed to delete template');
+        throw err;
+      }
+    },
+    [store]
+  );
 
-  const clearAll = useCallback(() => {
-    clearSchemas();
-    setSchemas([]);
-    setActiveSchemaId(null);
-  }, []);
+  const clearAll = useCallback(async () => {
+    try {
+      await store.clear();
+      setSchemas([]);
+      setActiveSchemaId(null);
+    } catch (err) {
+      console.warn('[useSchemaTemplates] Failed to clear templates', err);
+      setError(err instanceof Error ? err.message : 'Failed to clear templates');
+      throw err;
+    }
+  }, [store]);
 
   return {
     schemas,
     activeSchema,
     activeSchemaId,
     setActiveSchemaId,
+    isLoading,
+    error,
     saveTemplate: persistSchema,
     deleteTemplate: removeSchema,
     clearTemplates: clearAll,
