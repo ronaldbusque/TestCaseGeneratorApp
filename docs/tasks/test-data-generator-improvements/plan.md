@@ -40,7 +40,7 @@ Redesign the Test Data Generator experience to support richer schemas, clearer A
 5. **Schema persistence** *(done)*: `useSchemaTemplates` + hybrid store prefer Supabase when enabled, auto-fallback to local storage, and expose `/api/data-generator/templates` for future Supabase migrations.
 
 ### Phase 3 – AI Guidance & Preview Improvements (Pending Phase 1/2)
-1. **AI prompt panel** *(in progress)*: prompt suggestions surfaced in UI with quick-apply integration.
+1. **AI prompt panel** *(done)*: searchable prompt library with custom prompts, copy-to-clipboard, and AI-field gating.
 2. **Sample AI preview**.
 3. **Deterministic generation** *(Copycat seed integration)*.
 4. **Preview controller**.
