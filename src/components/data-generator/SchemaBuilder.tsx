@@ -15,6 +15,7 @@ import {
   removeFieldAt,
   withFreshIds,
 } from '@/lib/data-generator/schemaActions';
+import { collectReferenceIssues } from '@/lib/data-generator/referenceValidation';
 import { useSchemaTemplates } from '@/lib/data-generator/useSchemaTemplates';
 import { createHybridSchemaStore } from '@/lib/data-generator/schemaTemplateStore';
 import { SCHEMA_TEMPLATES } from '@/lib/data-generator/templates';
@@ -86,6 +87,7 @@ export function SchemaBuilder({
     error: templatesError,
     activeSchema,
   } = useSchemaTemplates({ store: schemaStore });
+  const referenceIssues = useMemo(() => collectReferenceIssues(fields), [fields]);
 
   useEffect(() => {
     if (activeSchema) {
@@ -677,12 +679,12 @@ export function SchemaBuilder({
               Apply Template
             </button>
           </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={schemaName}
-              onChange={(e) => setSchemaName(e.target.value)}
-              placeholder="Schema name"
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={schemaName}
+                        onChange={(e) => setSchemaName(e.target.value)}
+                        placeholder="Schema name"
               className="bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm"
             />
             <button
@@ -767,6 +769,21 @@ export function SchemaBuilder({
             <span className="text-xs text-slate-400">Refreshing…</span>
           )}
         </div>
+        {referenceIssues.length > 0 && (
+          <div className="flex flex-col gap-2 p-3 border border-amber-500/40 bg-amber-500/5 rounded-lg">
+            <span className="text-xs font-semibold text-amber-200 uppercase tracking-wide">
+              Reference issues
+            </span>
+            <ul className="text-xs text-amber-100 space-y-1">
+              {referenceIssues.map((issue) => (
+                <li key={issue.fieldId}>
+                  Field <span className="font-semibold">{issue.fieldName || 'Unnamed'}</span> references missing source
+                  <span className="font-semibold"> {issue.missing.join(', ')}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
       
       <TypeSelectionDialog

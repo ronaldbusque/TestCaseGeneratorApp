@@ -9,6 +9,7 @@
 - Validation utilities for field options, AI prompt requirements, and schema serialization.
 - Copycat mapping helpers to ensure deterministic outputs given a seed.
 - `schemaTemplateStore` local/remote/hybrid fallbacks and async refresh guards.
+- References utilities to flag unresolved dependencies and missing sources.
 
 ### Integration Tests
 - API routes (`/api/data-generator/generate`, `/api/data-generator/export`) using Next.js route testing harness (supertest or Next test utils).
