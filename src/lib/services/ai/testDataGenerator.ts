@@ -972,6 +972,23 @@ To help you keep track, number each value from 1 to ${requestedCount} using the 
     }
   }
 
+  private parseCustomList(values: unknown): string[] {
+    if (Array.isArray(values)) {
+      return values
+        .map((entry) => (typeof entry === 'string' ? entry.trim() : String(entry)))
+        .filter((entry) => entry.length > 0);
+    }
+
+    if (typeof values === 'string') {
+      return values
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0);
+    }
+
+    return [];
+  }
+
   private applyReferenceFields(rows: GeneratedRow[], fields: FieldDefinition[]): GeneratedRow[] {
     return rows.map((row) => {
       const updated = { ...row };

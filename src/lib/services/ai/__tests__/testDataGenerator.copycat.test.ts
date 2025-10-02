@@ -46,4 +46,16 @@ describe('TestDataGeneratorService - Copycat integration', () => {
       expect(row.nameCopy).toBe(row.firstName);
     });
   });
+
+  it('samples from custom list values', async () => {
+    const listFields: FieldDefinition[] = [
+      { id: 'list', name: 'flavor', type: 'Custom List', options: { values: 'vanilla, chocolate, strawberry' } },
+    ];
+
+    const result = await service.generateTestDataFromFields({ fields: listFields, count: 5, seed: 'seed-list' });
+    const allowed = ['vanilla', 'chocolate', 'strawberry'];
+    result.data.forEach((row) => {
+      expect(allowed).toContain(row.flavor as string);
+    });
+  });
 });

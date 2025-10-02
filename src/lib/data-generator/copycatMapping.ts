@@ -58,6 +58,23 @@ const characterSequenceGenerator = (field: FieldDefinition): CopycatGenerator =>
   return `${prefix}${stringValue}`;
 };
 
+const parseCustomListOptions = (values: unknown): string[] => {
+  if (Array.isArray(values)) {
+    return values
+      .map((entry) => (typeof entry === 'string' ? entry.trim() : String(entry)))
+      .filter((entry) => entry.length > 0);
+  }
+
+  if (typeof values === 'string') {
+    return values
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+  }
+
+  return [];
+};
+
 const FIELD_GENERATORS: Record<string, (field: FieldDefinition) => CopycatGenerator> = {
   Number: numberGenerator,
   'Decimal Number': decimalGenerator,
@@ -75,6 +92,20 @@ const FIELD_GENERATORS: Record<string, (field: FieldDefinition) => CopycatGenera
 };
 
 export const mapFieldToCopycat = (field: FieldDefinition): CopycatMapperResult => {
+  if (field.type === 'Custom List') {
+    const values = parseCustomListOptions(field.options?.values);
+    if (values.length === 0) {
+      return {
+        generate: () => null,
+        requiresFallback: true,
+      };
+    }
+    return {
+      generate: ({ baseSeed, rowIndex }) =>
+        copycat.oneOf(makeSeed(baseSeed, field.id, rowIndex), values),
+    };
+  }
+
   const generatorFactory = FIELD_GENERATORS[field.type];
   if (generatorFactory) {
     return { generate: generatorFactory(field) };
