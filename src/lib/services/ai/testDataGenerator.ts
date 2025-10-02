@@ -89,18 +89,18 @@ export class TestDataGeneratorService {
 
     for (let i = 0; i < count; i++) {
       const dataRow: GeneratedRow = {};
-      
-      types.forEach(type => {
+
+      types.forEach((type) => {
         // Get type configuration if available
         const typeConfig = configuration[type.name] || {};
-        
+
         // Generate data based on type
         dataRow[type.name] = this.generateDataByType(type.name, typeConfig);
       });
-      
+
       result.push(dataRow);
     }
-    
+
     return result;
   }
   
@@ -848,7 +848,7 @@ Format your response as a valid JSON object like this:
     aiEnhancement?: string,
     model?: string,
     seed?: string,
-  ): Promise<any[]> {
+  ): Promise<GeneratedTestData[]> {
     return this.runWithFakerSeed(seed, async () => {
       try {
         // Separate regular fields from AI-generated fields
@@ -856,7 +856,7 @@ Format your response as a valid JSON object like this:
         const aiFields = fields.filter(field => field.type === 'AI-Generated');
 
         // Generate data for regular fields using faker
-        const data = Array.from({ length: count }, () => {
+        const data: GeneratedTestData[] = Array.from({ length: count }, () => {
           const row: GeneratedRow = {};
 
           // Process regular fields with faker
@@ -898,12 +898,12 @@ Format your response as a valid JSON object like this:
    * Enhances data with AI-generated values for specific fields
    */
   async enhanceWithAIFields(
-    data: any[], 
-    aiFields: FieldDefinition[], 
-    totalCount: number, 
+    data: GeneratedTestData[],
+    aiFields: FieldDefinition[],
+    totalCount: number,
     aiEnhancement?: string,
     model?: string,
-  ): Promise<any[]> {
+  ): Promise<GeneratedTestData[]> {
     try {
       // Only process a sample of data if there's a lot to avoid token limitations
       const sampleSize = Math.min(5, data.length);
@@ -1027,7 +1027,7 @@ To help you keep track, number each value from 1 to ${requestedCount} using the 
         
         // Replace the placeholder values with the AI-generated values
         const enhancedData = data.map((row, index) => {
-          const enhancedRow = { ...row };
+          const enhancedRow: GeneratedRow = { ...row };
           
           aiFields.forEach(field => {
             const fieldName = field.name;
@@ -1036,9 +1036,9 @@ To help you keep track, number each value from 1 to ${requestedCount} using the 
             }
           });
           
-          return enhancedRow;
+          return enhancedRow as GeneratedTestData;
         });
-        
+
         return enhancedData;
       } catch (error) {
         console.error("Error processing AI field generation response:", error);
@@ -1069,16 +1069,16 @@ To help you keep track, number each value from 1 to ${requestedCount} using the 
     return [];
   }
 
-  private applyReferenceFields(rows: GeneratedRow[], fields: FieldDefinition[]): GeneratedRow[] {
+  private applyReferenceFields(rows: GeneratedTestData[], fields: FieldDefinition[]): GeneratedTestData[] {
     return rows.map((row) => {
-      const updated = { ...row };
+      const updated: GeneratedRow = { ...row };
       fields.forEach((field) => {
         if (field.type === 'Reference') {
           const sourceField = typeof field.options.sourceField === 'string' ? field.options.sourceField : '';
           updated[field.name] = sourceField && sourceField in updated ? updated[sourceField] : null;
         }
       });
-      return updated;
+      return updated as GeneratedTestData;
     });
   }
 

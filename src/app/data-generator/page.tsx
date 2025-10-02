@@ -16,6 +16,7 @@ import { useExportConfig } from '@/lib/hooks/data-generator/useExportConfig';
 import { useDataGeneration } from '@/lib/hooks/data-generator/useDataGeneration';
 import { AIPromptSuggestions } from '@/components/data-generator/AIPromptSuggestions';
 import { PreviewController } from '@/components/data-generator/PreviewController';
+import { RelationalPreview } from '@/components/data-generator/RelationalPreview';
 
 interface Toast {
   title: string;
@@ -66,6 +67,11 @@ export default function TestDataGeneratorPage() {
 
   const aiFieldNames = useMemo(
     () => schema.fields.filter((field) => field.type === 'AI-Generated').map((field) => field.name),
+    [schema.fields]
+  );
+
+  const referenceFields = useMemo(
+    () => schema.fields.filter((field) => field.type === 'Reference'),
     [schema.fields]
   );
 
@@ -151,12 +157,12 @@ export default function TestDataGeneratorPage() {
             />
 
             <Tab.Group>
-              <Tab.List className="flex space-x-1 rounded-xl bg-slate-700/50 p-1 mb-4">
-                <Tab
-                  className={({ selected }) =>
-                    `w-full rounded-lg py-2.5 text-sm font-medium leading-5 ${
-                      selected
-                        ? 'bg-blue-600 text-white shadow'
+            <Tab.List className="flex space-x-1 rounded-xl bg-slate-700/50 p-1 mb-4">
+              <Tab
+                className={({ selected }) =>
+                  `w-full rounded-lg py-2.5 text-sm font-medium leading-5 ${
+                    selected
+                      ? 'bg-blue-600 text-white shadow'
                         : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
                     } flex items-center justify-center`
                   }
@@ -164,6 +170,19 @@ export default function TestDataGeneratorPage() {
                   <TableCellsIcon className="h-5 w-5 mr-2" />
                   Table View
                 </Tab>
+              <Tab
+                className={({ selected }) =>
+                  `w-full rounded-lg py-2.5 text-sm font-medium leading-5 ${
+                    selected
+                      ? 'bg-blue-600 text-white shadow'
+                      : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                  } flex items-center justify-center`
+                }
+              >
+                <CodeBracketIcon className="h-5 w-5 mr-2" />
+                Raw Format ({exportConfig.format})
+              </Tab>
+              {referenceFields.length > 0 && (
                 <Tab
                   className={({ selected }) =>
                     `w-full rounded-lg py-2.5 text-sm font-medium leading-5 ${
@@ -173,29 +192,34 @@ export default function TestDataGeneratorPage() {
                     } flex items-center justify-center`
                   }
                 >
-                  <CodeBracketIcon className="h-5 w-5 mr-2" />
-                  Raw Format ({exportConfig.format})
+                  Relationships
                 </Tab>
-              </Tab.List>
-              <Tab.Panels>
+              )}
+            </Tab.List>
+            <Tab.Panels>
+              <Tab.Panel>
+                <DataPreviewTable data={previewDataRows} />
+              </Tab.Panel>
+              <Tab.Panel>
+                <RawDataPreview
+                  data={previewDataRows}
+                  format={exportConfig.format}
+                  options={{
+                    lineEnding: exportConfig.lineEnding,
+                    includeHeader: exportConfig.includeHeader,
+                    includeBOM: exportConfig.includeBOM,
+                  }}
+                />
+              </Tab.Panel>
+              {referenceFields.length > 0 && (
                 <Tab.Panel>
-                  <DataPreviewTable data={previewDataRows} />
+                  <RelationalPreview data={previewDataRows} fields={referenceFields} />
                 </Tab.Panel>
-                <Tab.Panel>
-                  <RawDataPreview
-                    data={previewDataRows}
-                    format={exportConfig.format}
-                    options={{
-                      lineEnding: exportConfig.lineEnding,
-                      includeHeader: exportConfig.includeHeader,
-                      includeBOM: exportConfig.includeBOM,
-                    }}
-                  />
-                </Tab.Panel>
-              </Tab.Panels>
-            </Tab.Group>
-          </div>
-        )}
+              )}
+            </Tab.Panels>
+          </Tab.Group>
+        </div>
+      )}
 
         {isGenerating && (
           <div className="flex justify-center items-center p-12 bg-slate-800/70 backdrop-blur-sm rounded-xl border border-slate-700">

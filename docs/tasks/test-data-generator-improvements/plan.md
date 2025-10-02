@@ -14,9 +14,9 @@ Redesign the Test Data Generator experience to support richer schemas, clearer A
 - **Supabase schema design**: Draft complete in `docs/tasks/test-data-generator-improvements/supabase-schema.md`; review open questions before migrations.
 - **Export job architecture**: Draft recorded in `docs/tasks/test-data-generator-improvements/export-architecture.md`; awaiting infra confirmation.
 - **Testing strategy refresh**: Draft available in `docs/tasks/test-data-generator-improvements/testing-strategy.md`; first hook + route tests merged.
-- **Type safety audit**: Shared field/option types in place, generate route validated via Zod, and Copycat-backed generation wired into `TestDataGeneratorService` with deterministic coverage (faker fallback still needs cleanup).
+- **Type safety audit**: Shared field/option types in place, generate route validated via Zod, Copycat-backed generation wired into `TestDataGeneratorService`, and faker fallback + Excel export paths now typed end-to-end with shared formatting helpers.
 - **Copycat engine rollout**: Service prefers Copycat for supported fields; deterministic seed control exposed via export options; fallback path active for unsupported types until mappings expand; new mapping coverage for full names + addresses delivered.
-- **Schema authoring UX**: Type picker now tracks “recently used” types and SchemaBuilder supports duplicating/reordering fields inline.
+- **Schema authoring UX**: Type picker now tracks “recently used” types and SchemaBuilder supports duplicating/reordering fields inline, with relationship previews highlighting reference integrity inside the data preview.
 - **AI preview UX**: Prompt sidebar now supports gated AI sample generation with loading/empty states and test coverage for generation hook + prompt panel interactions.
 - **Deterministic fallback**: Faker fallback now respects seeds via hash seeding, API responses expose engine metadata, and client toasts highlight when determinism isn’t guaranteed.
 - **Preview controller**: Dedicated toolbar manages refresh/copy/download/exit actions, surfaces engine + determinism metadata inline, and reuses shared preview formatting helpers.
@@ -29,16 +29,16 @@ Redesign the Test Data Generator experience to support richer schemas, clearer A
 
 ## Phases & Steps
 
-### Phase 1 – Foundation & Cleanup (In Progress)
-1. **Refactor state handling** *(in progress)*: hooks (`useSchemaBuilder`, `useExportConfig`, `useDataGeneration`) landed and page wired to them; shared `fieldValidation` helper and new `schemaActions` utilities back both hook + component, and `SchemaBuilder` now consumes hook-provided actions (add/remove/duplicate/reorder/update) instead of bespoke array transforms.
+### Phase 1 – Foundation & Cleanup (Complete)
+1. **Refactor state handling** *(done)*: hooks (`useSchemaBuilder`, `useExportConfig`, `useDataGeneration`) landed and page wired to them; shared `fieldValidation` helper and new `schemaActions` utilities back both hook + component, and `SchemaBuilder` now consumes hook-provided actions (add/remove/duplicate/reorder/update) instead of bespoke array transforms.
 2. **Centralise constants** *(done)*: defaults now live in `src/lib/data-generator/constants.ts`.
-3. **Type safety audit** *(in progress)*: shared generator types + Zod payload validation landed; Copycat-backed generation now covers dates, time, zip/state, URL/IP, address line variants, vehicle fields, and app/product metadata with seeded helpers for deterministic runs; faker fallback paths use typed helpers instead of dynamic require (final Excel/export wiring still pending).
+3. **Type safety audit** *(done)*: shared generator types + Zod payload validation landed; Copycat-backed generation now covers dates, time, zip/state, URL/IP, address line variants, vehicle fields, and app/product metadata with seeded helpers for deterministic runs; faker fallback paths now run through typed helpers, Excel/export wiring shares a single formatter, and service methods return typed `GeneratedTestData` records.
 4. **Unit + integration tests** *(done)*: hook unit tests, generate/excel route integration tests, and Copycat determinism coverage in place.
 
-### Phase 2 – Schema Authoring Upgrades (Blocked on checklist)
+### Phase 2 – Schema Authoring Upgrades (Complete)
 1. **Type catalog with search** *(done)*: ranked search with keyboard navigation, highlight, and recent-type shortcuts.
 2. **Field templates** *(done)*: template library with categories + search, drag-and-drop field reordering, and quick apply flows.
-3. **Relationship support** *(in progress)*: reference field type duplicates values from other fields (UI + generator path); next up: lint references, display warnings, preview relational datasets.
+3. **Relationship support** *(done)*: reference field type duplicates values from other fields (UI + generator path), SchemaBuilder surfaces inline lint + sidebar warnings, and the preview now includes a relational view that highlights reference integrity and mismatches.
 4. **Inline validation** *(done)*: numeric/date/custom list/phone validations with contextual hints, reference warnings, and preview-ready feedback in SchemaBuilder.
 5. **Schema persistence** *(done)*: `useSchemaTemplates` + hybrid store prefer Supabase when enabled, auto-fallback to local storage, and expose `/api/data-generator/templates` for future Supabase migrations.
 
