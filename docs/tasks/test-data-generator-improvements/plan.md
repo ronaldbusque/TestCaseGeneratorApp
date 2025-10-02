@@ -29,7 +29,7 @@ Redesign the Test Data Generator experience to support richer schemas, clearer A
 ### Phase 1 – Foundation & Cleanup (In Progress)
 1. **Refactor state handling** *(in progress)*: hooks (`useSchemaBuilder`, `useExportConfig`, `useDataGeneration`) landed and page wired to them; shared `fieldValidation` helper and new `schemaActions` utilities back both hook + component, and `SchemaBuilder` now consumes hook-provided actions (add/remove/duplicate/reorder/update) instead of bespoke array transforms.
 2. **Centralise constants** *(done)*: defaults now live in `src/lib/data-generator/constants.ts`.
-3. **Type safety audit** *(in progress)*: shared generator types + Zod payload validation landed; Copycat-backed generation now covers dates, time, zip/state, URL/IP, and address line variants with seeded range helpers for deterministic runs; faker fallback paths use typed helpers instead of dynamic require (final Excel/export wiring still pending).
+3. **Type safety audit** *(in progress)*: shared generator types + Zod payload validation landed; Copycat-backed generation now covers dates, time, zip/state, URL/IP, address line variants, vehicle fields, and app/product metadata with seeded helpers for deterministic runs; faker fallback paths use typed helpers instead of dynamic require (final Excel/export wiring still pending).
 4. **Unit + integration tests** *(done)*: hook unit tests, generate/excel route integration tests, and Copycat determinism coverage in place.
 
 ### Phase 2 – Schema Authoring Upgrades (Blocked on checklist)

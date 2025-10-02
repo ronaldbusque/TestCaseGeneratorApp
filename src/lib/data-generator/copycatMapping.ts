@@ -84,6 +84,79 @@ const STATE_ABBREVIATIONS: Record<string, string> = {
   Wyoming: 'WY',
 };
 
+const CAR_MAKES = [
+  'Toyota',
+  'Honda',
+  'Ford',
+  'Chevrolet',
+  'Nissan',
+  'BMW',
+  'Mercedes-Benz',
+  'Audi',
+  'Hyundai',
+  'Kia',
+  'Subaru',
+  'Volkswagen',
+  'Mazda',
+  'Lexus',
+  'Volvo',
+] as const;
+
+const CAR_MODELS = [
+  'Civic',
+  'Accord',
+  'Model S',
+  'Corolla',
+  'Camry',
+  'F-150',
+  'Mustang',
+  'CX-5',
+  'Forester',
+  'Outback',
+  'Cherokee',
+  'Explorer',
+  'X5',
+  'A4',
+  'S60',
+] as const;
+
+const PRODUCT_NAMES = [
+  'Aurora Lamp',
+  'Nimbus Speaker',
+  'Atlas Backpack',
+  'Lumen Desk',
+  'Pulse Watch',
+  'Summit Bottle',
+  'Mosaic Mug',
+  'Radiant Hoodie',
+  'Echo Earbuds',
+  'Orbit Router',
+] as const;
+
+const PRODUCT_CATEGORIES = [
+  'Electronics',
+  'Home & Kitchen',
+  'Outdoors',
+  'Fitness',
+  'Travel',
+  'Office',
+  'Accessories',
+  'Toys',
+] as const;
+
+const APP_NAMES = [
+  'SnapNote',
+  'FlowPilot',
+  'TaskForge',
+  'BrightSide',
+  'PeakTracker',
+  'AtlasFit',
+  'NimbusMail',
+  'PulseCast',
+  'LumenPay',
+  'EchoDesk',
+] as const;
+
 const makeSeed = (baseSeed: string, fieldId: string, rowIndex: number, variant?: string) =>
   variant ? `${baseSeed}:${fieldId}:${variant}:${rowIndex}` : `${baseSeed}:${fieldId}:${rowIndex}`;
 
@@ -373,6 +446,85 @@ const pastDateGenerator = createDateStringGenerator(pastDateRangeResolver, dateF
 const dateOfBirthGenerator = createDateStringGenerator(dateOfBirthRangeResolver, dateFormatter);
 const timeGenerator = createDateStringGenerator(timeRangeResolver, timeFormatter);
 
+const deterministicOneOf = (
+  field: FieldDefinition,
+  choices: readonly string[],
+  variant: string,
+): CopycatGenerator => ({ baseSeed, rowIndex }) =>
+  copycat.oneOf(makeSeed(baseSeed, field.id, rowIndex, variant), choices as unknown[]);
+
+const carMakeGenerator = (field: FieldDefinition): CopycatGenerator =>
+  deterministicOneOf(field, CAR_MAKES, 'car-make');
+
+const carModelGenerator = (field: FieldDefinition): CopycatGenerator =>
+  deterministicOneOf(field, CAR_MODELS, 'car-model');
+
+const carModelYearGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) => {
+  const min = parseNumberOption(field.options.min, 1995);
+  const max = parseNumberOption(field.options.max, new Date().getFullYear());
+  const range = ensureRange(min, max);
+  return copycat.int(makeSeed(baseSeed, field.id, rowIndex, 'car-year'), {
+    min: range.min,
+    max: range.max,
+  });
+};
+
+const generateVin = (seed: string) => {
+  const characters = 'ABCDEFGHJKLMNPRSTUVWXYZ0123456789';
+  let vin = '';
+  for (let index = 0; index < 17; index += 1) {
+    const charSeed = `${seed}:vin:${index}`;
+    const position = copycat.int(charSeed, { min: 0, max: characters.length - 1 });
+    vin += characters[position];
+  }
+  return vin;
+};
+
+const carVinGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) =>
+  generateVin(makeSeed(baseSeed, field.id, rowIndex, 'car-vin'));
+
+const appNameGenerator = (field: FieldDefinition): CopycatGenerator =>
+  deterministicOneOf(field, APP_NAMES, 'app-name');
+
+const appVersionGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) => {
+  const major = copycat.int(makeSeed(baseSeed, field.id, rowIndex, 'app-version-major'), { min: 1, max: 9 });
+  const minor = copycat.int(makeSeed(baseSeed, field.id, rowIndex, 'app-version-minor'), { min: 0, max: 20 });
+  const patch = copycat.int(makeSeed(baseSeed, field.id, rowIndex, 'app-version-patch'), { min: 0, max: 50 });
+  return `${major}.${minor}.${patch}`;
+};
+
+const sanitizeForBundle = (value: string) => value.replace(/[^a-z0-9]+/g, '');
+
+const appBundleIdGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) => {
+  const company = copycat.oneOf(makeSeed(baseSeed, field.id, rowIndex, 'bundle-company'), APP_NAMES).toLowerCase();
+  const product = copycat.oneOf(makeSeed(baseSeed, field.id, rowIndex, 'bundle-product'), PRODUCT_NAMES).toLowerCase();
+  return `com.${sanitizeForBundle(company)}.${sanitizeForBundle(product) || 'app'}`;
+};
+
+const productNameGenerator = (field: FieldDefinition): CopycatGenerator =>
+  deterministicOneOf(field, PRODUCT_NAMES, 'product-name');
+
+const productCategoryGenerator = (field: FieldDefinition): CopycatGenerator =>
+  deterministicOneOf(field, PRODUCT_CATEGORIES, 'product-category');
+
+const productSkuGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) => {
+  const segment = copycat.int(makeSeed(baseSeed, field.id, rowIndex, 'sku'), { min: 1000, max: 9999 });
+  const suffix = copycat.word(makeSeed(baseSeed, field.id, rowIndex, 'sku-word')).slice(0, 3).toUpperCase();
+  return `SKU-${segment}-${suffix}`;
+};
+
+const productPriceGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) => {
+  const min = parseNumberOption(field.options.min, 10);
+  const max = parseNumberOption(field.options.max, 500);
+  const range = ensureRange(min, max);
+  const dollars = copycat.int(makeSeed(baseSeed, field.id, rowIndex, 'price-dollars'), {
+    min: range.min,
+    max: range.max,
+  });
+  const cents = copycat.int(makeSeed(baseSeed, field.id, rowIndex, 'price-cents'), { min: 0, max: 99 });
+  return Number(`${dollars}.${pad(cents, 2)}`);
+};
+
 const parseCustomListOptions = (values: unknown): string[] => {
   if (Array.isArray(values)) {
     return values
@@ -415,6 +567,17 @@ const FIELD_GENERATORS: Record<string, (field: FieldDefinition) => CopycatGenera
   'Past Date': pastDateGenerator,
   'Date of Birth': dateOfBirthGenerator,
   Time: timeGenerator,
+  'Car Make': carMakeGenerator,
+  'Car Model': carModelGenerator,
+  'Car Model Year': carModelYearGenerator,
+  'Car VIN': carVinGenerator,
+  'App Name': appNameGenerator,
+  'App Version': appVersionGenerator,
+  'App Bundle ID': appBundleIdGenerator,
+  'Product Name': productNameGenerator,
+  'Product Category': productCategoryGenerator,
+  'Product SKU': productSkuGenerator,
+  'Product Price': productPriceGenerator,
 };
 
 const genericStringGenerator = (field: FieldDefinition): CopycatGenerator => ({ baseSeed, rowIndex }) => {

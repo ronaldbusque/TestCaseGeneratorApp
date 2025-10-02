@@ -1,6 +1,7 @@
 import { TestDataGeneratorService } from '../testDataGenerator';
 import type { AIService } from '@/lib/types';
 import type { FieldDefinition } from '@/lib/data-generator/types';
+import { supportsCopycat } from '@/lib/data-generator/copycatMapping';
 
 class StubAIService implements AIService {
   async generateTestCases() {
@@ -109,6 +110,57 @@ describe('TestDataGeneratorService - Copycat integration', () => {
       expect(row.ip).toMatch(/^(\d{1,3}\.){3}\d{1,3}$/);
       expect(typeof row.unit).toBe('string');
       expect((row.unit as string)).toMatch(/(Apt|Suite|Unit|Floor|Room) \d+/);
+    });
+  });
+
+  it('covers vehicle fields without triggering fallback', async () => {
+    const vehicleFields: FieldDefinition[] = [
+      { id: 'make', name: 'make', type: 'Car Make', options: {} },
+      { id: 'model', name: 'model', type: 'Car Model', options: {} },
+      { id: 'year', name: 'year', type: 'Car Model Year', options: {} },
+      { id: 'vin', name: 'vin', type: 'Car VIN', options: {} },
+    ];
+
+    expect(supportsCopycat(vehicleFields)).toBe(true);
+
+    const first = await service.generateTestDataFromFields({ fields: vehicleFields, count: 3, seed: 'seed-vehicle' });
+    const second = await service.generateTestDataFromFields({ fields: vehicleFields, count: 3, seed: 'seed-vehicle' });
+
+    expect(first.data).toEqual(second.data);
+    first.data.forEach((row) => {
+      expect(typeof row.make).toBe('string');
+      expect(typeof row.model).toBe('string');
+      expect(typeof row.year).toBe('number');
+      expect(typeof row.vin).toBe('string');
+      expect((row.vin as string)).toHaveLength(17);
+    });
+  });
+
+  it('generates app and product fields deterministically', async () => {
+    const fields: FieldDefinition[] = [
+      { id: 'appName', name: 'appName', type: 'App Name', options: {} },
+      { id: 'appVersion', name: 'appVersion', type: 'App Version', options: {} },
+      { id: 'bundle', name: 'bundle', type: 'App Bundle ID', options: {} },
+      { id: 'product', name: 'product', type: 'Product Name', options: {} },
+      { id: 'category', name: 'category', type: 'Product Category', options: {} },
+      { id: 'sku', name: 'sku', type: 'Product SKU', options: {} },
+      { id: 'price', name: 'price', type: 'Product Price', options: { min: 25, max: 75 } },
+    ];
+
+    expect(supportsCopycat(fields)).toBe(true);
+
+    const result = await service.generateTestDataFromFields({ fields, count: 2, seed: 'seed-app-product' });
+
+    result.data.forEach((row) => {
+      expect(typeof row.appName).toBe('string');
+      expect((row.appVersion as string)).toMatch(/^\d+\.\d+\.\d+$/);
+      expect((row.bundle as string)).toMatch(/^com\.[a-z0-9]+\.[a-z0-9]+$/);
+      expect(typeof row.product).toBe('string');
+      expect(typeof row.category).toBe('string');
+      expect((row.sku as string)).toMatch(/^SKU-\d{4}-[A-Z]{3}$/);
+      expect(typeof row.price).toBe('number');
+      expect(row.price).toBeGreaterThanOrEqual(25);
+      expect(row.price).toBeLessThanOrEqual(75);
     });
   });
 });
