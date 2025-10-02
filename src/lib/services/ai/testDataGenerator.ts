@@ -105,6 +105,9 @@ export class TestDataGeneratorService {
         'City': () => fakerInstance.location.city(),
         'Address Line 2': () => fakerInstance.location.secondaryAddress(),
         'Bitcoin Address': () => fakerInstance.finance.bitcoinAddress(),
+        'Company Name': () => fakerInstance.company.name(),
+        'URL': () => fakerInstance.internet.url(),
+        'IPv4 Address': () => fakerInstance.internet.ip(),
       };
 
       const directMapper = directMappings[typeName];
@@ -170,9 +173,14 @@ export class TestDataGeneratorService {
           Object.entries(config).filter(([, value]) => value !== undefined && value !== '')
         );
 
-        return Object.keys(sanitizedOptions).length > 0
-          ? fakerMethod(sanitizedOptions)
-          : fakerMethod();
+        try {
+          return Object.keys(sanitizedOptions).length > 0
+            ? fakerMethod(sanitizedOptions)
+            : fakerMethod();
+        } catch (err) {
+          console.warn(`Faker method ${typeDefinition.fakerMethod} failed with sanitized options`, err);
+          return fakerMethod();
+        }
       } catch (error) {
         console.error(`Error generating data for type ${typeName}:`, error);
         return `Error: ${typeName}`;
