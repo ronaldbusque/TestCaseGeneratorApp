@@ -1,10 +1,13 @@
-import { useState } from 'react';
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
 import { PlusIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline';
 import { TypeSelectionDialog } from './TypeSelectionDialog';
 import { fakerTypeDefinitions } from '@/lib/data/faker-type-definitions';
 import { TypeOption } from '@/lib/types/testData';
 import { v4 as uuidv4 } from 'uuid';
 import type { FieldDefinition, FieldOptionValue, FieldOptions } from '@/lib/data-generator/types';
+import { listSchemas, saveSchema as persistSchema, deleteSchema as removeSchema } from '@/lib/data-generator/schemaStorage';
 
 interface SchemaBuilderProps {
   fields: FieldDefinition[];
@@ -14,7 +17,15 @@ interface SchemaBuilderProps {
 export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [activeFieldIndex, setActiveFieldIndex] = useState<number | null>(null);
-  
+  const [savedSchemas, setSavedSchemas] = useState(() => listSchemas());
+  const [schemaName, setSchemaName] = useState('');
+  const [selectedSchemaId, setSelectedSchemaId] = useState<string>('');
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSavedSchemas(listSchemas());
+  }, []);
+
   const handleAddField = () => {
     const newField: FieldDefinition = {
       id: uuidv4(),
@@ -62,6 +73,44 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
     newFields.splice(targetIndex, 0, moved);
     onChange(newFields);
   };
+
+  const handleSaveSchema = () => {
+    if (!schemaName.trim()) {
+      setSaveError('Please provide a name before saving.');
+      return;
+    }
+    const payloadName = schemaName.trim();
+    persistSchema({
+      name: payloadName,
+      fields,
+      id: savedSchemas.find((schema) => schema.name === payloadName)?.id,
+    });
+    setSavedSchemas(listSchemas());
+    setSaveError(null);
+  };
+
+  const handleLoadSchema = (schemaId: string) => {
+    setSelectedSchemaId(schemaId);
+    const schema = savedSchemas.find((entry) => entry.id === schemaId);
+    if (!schema) return;
+    const restoredFields = schema.fields.map((field) => ({
+      ...field,
+      id: uuidv4(),
+    }));
+    onChange(restoredFields);
+    setSchemaName(schema.name);
+  };
+
+  const handleDeleteSchema = (schemaId: string) => {
+    removeSchema(schemaId);
+    const next = listSchemas();
+    setSavedSchemas(next);
+    if (selectedSchemaId === schemaId) {
+      setSelectedSchemaId('');
+    }
+  };
+
+  const hasSchemas = useMemo(() => savedSchemas.length > 0, [savedSchemas.length]);
   
   const handleTypeSelect = (index: number) => {
     setActiveFieldIndex(index);
@@ -389,14 +438,62 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
         </table>
       </div>
       
-      <div className="p-3">
-        <button
-          onClick={handleAddField}
-          className="flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm"
-        >
-          <PlusIcon className="h-4 w-4 mr-1" />
-          Add Another Field
-        </button>
+      <div className="p-3 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleAddField}
+            className="flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm"
+          >
+            <PlusIcon className="h-4 w-4 mr-1" />
+            Add Another Field
+          </button>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={schemaName}
+              onChange={(e) => setSchemaName(e.target.value)}
+              placeholder="Schema name"
+              className="bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm"
+            />
+            <button
+              onClick={handleSaveSchema}
+              className="px-3 py-1.5 text-sm rounded-lg border border-blue-500 text-blue-200 hover:bg-blue-600/20 transition-colors"
+            >
+              Save Schema
+            </button>
+          </div>
+          {saveError && <span className="text-xs text-red-400">{saveError}</span>}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-xs text-slate-300" htmlFor="saved-schema-select">
+            Saved Schemas
+          </label>
+          <select
+            id="saved-schema-select"
+            className="bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-1.5 text-sm"
+            value={selectedSchemaId}
+            onChange={(e) => handleLoadSchema(e.target.value)}
+            disabled={!hasSchemas}
+          >
+            <option value="" disabled={!hasSchemas}>
+              {hasSchemas ? 'Select schema to load' : 'No schemas saved yet'}
+            </option>
+            {savedSchemas.map((schema) => (
+              <option key={schema.id} value={schema.id}>
+                {schema.name}
+              </option>
+            ))}
+          </select>
+          {selectedSchemaId && (
+            <button
+              onClick={() => handleDeleteSchema(selectedSchemaId)}
+              className="px-2 py-1 rounded-lg text-xs text-red-300 border border-red-500 hover:bg-red-500/10 transition-colors"
+            >
+              Delete
+            </button>
+          )}
+        </div>
       </div>
       
       <TypeSelectionDialog
