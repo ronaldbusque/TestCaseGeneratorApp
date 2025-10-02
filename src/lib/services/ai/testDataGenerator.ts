@@ -83,8 +83,20 @@ export class TestDataGeneratorService {
         'Car Model': () => fakerInstance.vehicle.model(),
         'Car Model Year': () => {
           const currentYear = new Date().getFullYear();
-          const minYear = this.toNumber(config.min, 1950);
-          const maxYear = this.toNumber(config.max, currentYear);
+          let minYear = this.toNumber(config.min, 1950);
+          let maxYear = this.toNumber(config.max, currentYear);
+
+          if (Number.isNaN(minYear) || minYear < 0) {
+            minYear = 1950;
+          }
+          if (Number.isNaN(maxYear) || maxYear < 0) {
+            maxYear = currentYear;
+          }
+
+          if (minYear > maxYear) {
+            [minYear, maxYear] = [maxYear, minYear];
+          }
+
           return fakerInstance.number.int({ min: minYear, max: maxYear });
         },
         'Car VIN': () => fakerInstance.vehicle.vin(),
