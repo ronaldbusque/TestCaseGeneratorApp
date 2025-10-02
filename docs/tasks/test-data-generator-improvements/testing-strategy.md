@@ -8,11 +8,13 @@
 - Hooks (`useSchemaBuilder`, `useExportConfig`, `useDataGeneration`) with faker/copycat adapters using Jest + React Testing Library hooks utilities.
 - Validation utilities for field options, AI prompt requirements, and schema serialization.
 - Copycat mapping helpers to ensure deterministic outputs given a seed.
+- `schemaTemplateStore` local/remote/hybrid fallbacks and async refresh guards.
 
 ### Integration Tests
 - API routes (`/api/data-generator/generate`, `/api/data-generator/export`) using Next.js route testing harness (supertest or Next test utils).
 - Ensure `generate` endpoint enforces validation errors and integrates with Copycat mock.
 - Export enqueue route to confirm queue writes + Supabase persistence.
+- `/api/data-generator/templates` route with Supabase + middleware auth harness (mock out Supabase client + user header).
 
 ### E2E / UI Tests
 - Playwright specs covering:
