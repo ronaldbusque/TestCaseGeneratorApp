@@ -4,13 +4,7 @@ import { TypeSelectionDialog } from './TypeSelectionDialog';
 import { fakerTypeDefinitions } from '@/lib/data/faker-type-definitions';
 import { TypeOption } from '@/lib/types/testData';
 import { v4 as uuidv4 } from 'uuid';
-
-interface FieldDefinition {
-  id: string;
-  name: string;
-  type: string;
-  options: Record<string, any>;
-}
+import type { FieldDefinition, FieldOptionValue, FieldOptions } from '@/lib/data-generator/types';
 
 interface SchemaBuilderProps {
   fields: FieldDefinition[];
@@ -26,7 +20,7 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
       id: uuidv4(),
       name: `field_${fields.length + 1}`,
       type: '',
-      options: {}
+      options: {},
     };
     onChange([...fields, newField]);
   };
@@ -50,14 +44,14 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
   
   const handleTypeChange = (typeName: string) => {
     if (activeFieldIndex === null) return;
-    
+
     const newFields = [...fields];
     newFields[activeFieldIndex].type = typeName;
-    
+
     // Initialize options with default values from the type definition
     const typeDefinition = fakerTypeDefinitions[typeName];
-    const defaultOptions: Record<string, any> = {};
-    
+    const defaultOptions: FieldOptions = {};
+
     if (typeDefinition && typeDefinition.options) {
       typeDefinition.options.forEach(option => {
         if (option.default !== undefined) {
@@ -71,19 +65,31 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
     onChange(newFields);
   };
   
-  const handleOptionChange = (index: number, optionName: string, value: any) => {
+  const handleOptionChange = (index: number, optionName: string, value: FieldOptionValue) => {
     const newFields = [...fields];
     newFields[index].options = {
       ...newFields[index].options,
-      [optionName]: value
+      [optionName]: value,
     };
     onChange(newFields);
   };
-  
+
+  const resolveOptionValue = (value: FieldOptionValue | undefined): string | number => {
+    if (typeof value === 'number') {
+      return value;
+    }
+
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    return '';
+  };
+
   // Render type-specific options
   const renderOptions = (field: FieldDefinition, index: number) => {
     const { type, options } = field;
-    
+
     if (!type) return null;
     
     const typeDefinition = fakerTypeDefinitions[type];
@@ -103,11 +109,12 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
                     <span className="text-xs text-slate-300 mr-1">{option.name}:</span>
                     <input
                       type="number"
-                      value={options[option.name] ?? option.default ?? ''}
-                      onChange={(e) => 
-                        handleOptionChange(index, option.name, e.target.value === '' 
-                          ? '' 
-                          : Number(e.target.value)
+                      value={resolveOptionValue(options?.[option.name] ?? option.default)}
+                      onChange={(e) =>
+                        handleOptionChange(
+                          index,
+                          option.name,
+                          e.target.value === '' ? '' : Number(e.target.value)
                         )
                       }
                       className="w-16 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-sm"
@@ -122,11 +129,12 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
                     <span className="text-xs text-slate-300 mr-1">{option.label}:</span>
                     <input
                       type="number"
-                      value={options[option.name] ?? option.default ?? ''}
-                      onChange={(e) => 
-                        handleOptionChange(index, option.name, e.target.value === '' 
-                          ? '' 
-                          : Number(e.target.value)
+                      value={resolveOptionValue(options?.[option.name] ?? option.default)}
+                      onChange={(e) =>
+                        handleOptionChange(
+                          index,
+                          option.name,
+                          e.target.value === '' ? '' : Number(e.target.value)
                         )
                       }
                       className="w-16 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-sm"
@@ -141,11 +149,12 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
                     <span className="text-xs text-slate-300 mr-1">{option.label || option.name}:</span>
                     <input
                       type="number"
-                      value={options[option.name] ?? option.default ?? ''}
-                      onChange={(e) => 
-                        handleOptionChange(index, option.name, e.target.value === '' 
-                          ? '' 
-                          : Number(e.target.value)
+                      value={resolveOptionValue(options?.[option.name] ?? option.default)}
+                      onChange={(e) =>
+                        handleOptionChange(
+                          index,
+                          option.name,
+                          e.target.value === '' ? '' : Number(e.target.value)
                         )
                       }
                       className="w-20 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-sm"
@@ -164,7 +173,7 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
                   <span className="text-xs text-slate-300 mr-1">{option.label}:</span>
                   <input
                     type="text"
-                    value={options[option.name] ?? option.default ?? ''}
+                    value={resolveOptionValue(options?.[option.name] ?? option.default)}
                     onChange={(e) => handleOptionChange(index, option.name, e.target.value)}
                     className="w-28 bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-sm"
                   />
@@ -176,7 +185,7 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
                 <div key={option.name} className="flex items-center shrink-0">
                   <span className="text-xs text-slate-300 mr-1">{option.label}:</span>
                   <select
-                    value={options[option.name] ?? option.default ?? ''}
+                    value={resolveOptionValue(options?.[option.name] ?? option.default)}
                     onChange={(e) => handleOptionChange(index, option.name, e.target.value)}
                     className="bg-slate-800 border border-slate-700 text-white rounded-lg px-2 py-1 text-sm"
                   >
@@ -195,7 +204,7 @@ export function SchemaBuilder({ fields, onChange }: SchemaBuilderProps) {
                   <label className="inline-flex items-center">
                     <input
                       type="checkbox"
-                      checked={!!options[option.name]}
+                      checked={Boolean(options?.[option.name])}
                       onChange={(e) => handleOptionChange(index, option.name, e.target.checked)}
                       className="form-checkbox h-3 w-3 text-blue-600 bg-slate-800 border-slate-700 rounded"
                     />

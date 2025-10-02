@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { TestDataType, GeneratedTestData } from '@/lib/types/testData';
+import type { FieldOptions } from '@/lib/data-generator/types';
 
 // Simple toast implementation since we don't have the actual toast component
 interface Toast {
@@ -21,7 +22,9 @@ export function useTestDataGenerator() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [configOptions, setConfigOptions] = useState({
     rowCount: 10,
-    typeConfigs: {}
+    typeConfigs: {} as Record<string, FieldOptions>,
+    useDeterministicSeed: false,
+    seedValue: '',
   });
   const [generatedData, setGeneratedData] = useState<GeneratedTestData[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);

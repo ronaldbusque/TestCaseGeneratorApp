@@ -7,14 +7,10 @@ import {
 } from '@/lib/types/testData';
 import { fakerTypeDefinitions } from '@/lib/data/faker-type-definitions';
 import { faker } from '@faker-js/faker';
+import type { FieldDefinition, FieldOptions } from '@/lib/data-generator/types';
+import { generateCopycatRows, supportsCopycat } from '@/lib/data-generator/copycatMapping';
 
-// Define the FieldDefinition interface
-interface FieldDefinition {
-  id: string;
-  name: string;
-  type: string;
-  options: Record<string, any>;
-}
+type GeneratedRow = Record<string, unknown>;
 
 export class TestDataGeneratorService {
   private aiService: AIService; // Add private member for the core AI service
@@ -55,14 +51,14 @@ export class TestDataGeneratorService {
   }
   
   private generateRawFakerData(
-    types: TestDataType[], 
-    configuration: Record<string, any>, 
+    types: TestDataType[],
+    configuration: Record<string, FieldOptions>,
     count: number
   ): GeneratedTestData[] {
     const result: GeneratedTestData[] = [];
-    
+
     for (let i = 0; i < count; i++) {
-      const dataRow: Record<string, any> = {};
+      const dataRow: GeneratedRow = {};
       
       types.forEach(type => {
         // Get type configuration if available
@@ -78,7 +74,7 @@ export class TestDataGeneratorService {
     return result;
   }
   
-  private generateDataByType(typeName: string, config: Record<string, any>): any {
+  private generateDataByType(typeName: string, config: FieldOptions): unknown {
     try {
       // Dynamic import of faker to avoid build errors
       const { faker } = require('@faker-js/faker');
@@ -174,7 +170,7 @@ export class TestDataGeneratorService {
     }
   }
   
-  private handleCustomType(typeName: string, config: Record<string, any>): any {
+  private handleCustomType(typeName: string, config: FieldOptions): unknown {
     try {
       // Dynamic import of faker to avoid build errors
       const { faker } = require('@faker-js/faker');
@@ -296,11 +292,11 @@ export class TestDataGeneratorService {
     }
   }
   
-  private generateCharacterSequence(options: Record<string, any>): string {
-    const prefix = options.prefix || '';
-    const length = options.length || 5;
-    const startAt = options.startAt || 1;
-    const padZeros = options.padZeros || false;
+  private generateCharacterSequence(options: FieldOptions): string {
+    const prefix = typeof options.prefix === 'string' ? options.prefix : '';
+    const length = this.toNumber(options.length, 5);
+    const startAt = this.toNumber(options.startAt, 1);
+    const padZeros = Boolean(options.padZeros);
     
     // Calculate the current value
     const currentValue = startAt;
@@ -313,27 +309,60 @@ export class TestDataGeneratorService {
     
     return `${prefix}${sequenceNumber}`;
   }
+
+  private toNumber(value: unknown, fallback: number): number {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === 'string') {
+      const parsed = Number(value);
+      if (!Number.isNaN(parsed)) {
+        return parsed;
+      }
+    }
+
+    return fallback;
+  }
   
-  async generateTestDataFromFields(request: { 
-    fields: Array<{name: string, type: string, options: Record<string, any>}>, 
-    count: number,
-    aiEnhancement?: string,
-    model?: string,
+  async generateTestDataFromFields(request: {
+    fields: Array<{ name: string; type: string; options: FieldOptions }>;
+    count: number;
+    aiEnhancement?: string;
+    model?: string;
+    seed?: string;
   }): Promise<TestDataGenerationResponse> {
     try {
-      const { fields, count = 100, aiEnhancement, model } = request;
-      
+      const { fields, count = 100, aiEnhancement, model, seed } = request;
+
       // Convert fields to FieldDefinition format
-      const fieldDefinitions: FieldDefinition[] = fields.map(field => ({
-        id: Math.random().toString(36).substring(2, 9), // Generate a random ID
+      const fieldDefinitions: FieldDefinition[] = fields.map((field, index) => ({
+        id: field.name ? `${field.name}-${index}` : `field-${index}`,
         name: field.name,
         type: field.type,
-        options: field.options
+        options: field.options,
       }));
-      
-      // Use the new generateData method with aiEnhancement
+
+      if (supportsCopycat(fieldDefinitions)) {
+        const { rows, usedFallback } = generateCopycatRows(fieldDefinitions, count, seed);
+
+        if (usedFallback) {
+          console.log('[TestDataGeneratorService] Copycat fallback triggered, reverting to faker generation');
+        } else {
+          if (aiEnhancement && aiEnhancement.trim()) {
+            return this.enhanceDataWithAI(rows, aiEnhancement, model);
+          }
+
+          return {
+            data: rows,
+            count: rows.length,
+          };
+        }
+      }
+
+      // Use the existing faker-based generation for unsupported field types
       const result = await this.generateData(fieldDefinitions, count, aiEnhancement, model);
-      
+
       return {
         data: result,
         count: result.length
@@ -348,7 +377,7 @@ export class TestDataGeneratorService {
     }
   }
   
-  private generateValueForField(type: string, options: Record<string, any> = {}): any {
+  private generateValueForField(type: string, options: FieldOptions = {}): any {
     try {
       // Handle special cases first
       if (type === 'Character Sequence') {
@@ -362,18 +391,18 @@ export class TestDataGeneratorService {
       
       // Special case handlers for specific types
       switch (type) {
-        case 'Number':
-          // Handle Number type - simple random integer between min and max
-          const min = options.min !== undefined ? Number(options.min) : 1;
-          const max = options.max !== undefined ? Number(options.max) : 1000;
+        case 'Number': {
+          const min = this.toNumber(options.min, 1);
+          const max = this.toNumber(options.max, 1000);
           return Math.floor(Math.random() * (max - min + 1)) + min;
-          
+        }
+
         case 'Decimal Number':
           // Handle Decimal Number type with multipleOf parameter
           return this.faker.number.float({
-            min: options.min !== undefined ? Number(options.min) : 0,
-            max: options.max !== undefined ? Number(options.max) : 100,
-            multipleOf: options.multipleOf !== undefined ? Number(options.multipleOf) : 0.01
+            min: this.toNumber(options.min, 0),
+            max: this.toNumber(options.max, 100),
+            multipleOf: this.toNumber(options.multipleOf, 0.01)
           } as any); // Type assertion to avoid TypeScript errors
           
         case 'Airport Code':
@@ -388,9 +417,14 @@ export class TestDataGeneratorService {
           
         case 'App Bundle ID':
           // Generate an app bundle ID
-          const company = options.company || this.faker.company.name().toLowerCase().replace(/\W/g, '');
+          const company = (typeof options.company === 'string'
+            ? options.company
+            : this.faker.company.name()
+          )
+            .toLowerCase()
+            .replace(/\W/g, '');
           const product = this.faker.commerce.product().toLowerCase().replace(/\W/g, '');
-          const format = options.format || 'com.{company}.{product}';
+          const format = typeof options.format === 'string' ? options.format : 'com.{company}.{product}';
           return format
             .replace('{company}', company)
             .replace('{product}', product);
@@ -442,7 +476,7 @@ export class TestDataGeneratorService {
   }
   
   async enhanceDataWithAI(
-    rawData: Record<string, any>[], 
+    rawData: GeneratedRow[],
     aiEnhancement: string,
     model?: string,
   ): Promise<TestDataGenerationResponse> {
@@ -538,7 +572,7 @@ Format your response as a valid JSON object like this:
         
         // Create a direct function that enhances each row based on the AI response 
         // This bypasses the need to parse and execute the AI-generated code
-        const enhancementFunction = (row: Record<string, any>, index: number): Record<string, any> => {
+        const enhancementFunction = (row: GeneratedRow, index: number): GeneratedRow => {
           try {
             // Check if we have a valid function response from the AI
             const functionMatch = jsonStr.match(/"function"\s*:\s*"([\s\S]+?)"/);
@@ -603,7 +637,7 @@ Format your response as a valid JSON object like this:
         };
         
         // Helper function for generic enhancement
-        const applyGenericEnhancement = (row: Record<string, any>, index: number): Record<string, any> => {
+        const applyGenericEnhancement = (row: GeneratedRow, index: number): GeneratedRow => {
           // Create a copy to avoid modifying the original
           const enhancedRow = { ...row };
           
@@ -716,7 +750,7 @@ Format your response as a valid JSON object like this:
       
       // Generate data for regular fields using faker
       const data = Array.from({ length: count }, (_, rowIndex) => {
-        const row: Record<string, any> = {};
+        const row: GeneratedRow = {};
         
         // Process regular fields with faker
         regularFields.forEach(field => {

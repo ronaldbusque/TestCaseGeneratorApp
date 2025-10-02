@@ -1,4 +1,5 @@
 import { LLMProvider } from './providers';
+import type { FieldOptions } from '@/lib/data-generator/types';
 
 export interface TestDataType {
   name: string;
@@ -8,14 +9,14 @@ export interface TestDataType {
 
 export interface TestDataGenerationRequest {
   types: TestDataType[];
-  configuration: Record<string, any>;
+  configuration: Record<string, FieldOptions>;
   count: number;
   aiEnhancement?: string;
   provider?: LLMProvider;
   model?: string;
 }
 
-export type GeneratedTestData = Record<string, any>;
+export type GeneratedTestData = Record<string, unknown>;
 
 export interface TestDataGenerationResponse {
   data: GeneratedTestData[];

@@ -1,346 +1,56 @@
 'use client';
 
-import { useState } from 'react';
 import { SchemaBuilder } from '@/components/data-generator/SchemaBuilder';
 import { ExportOptions } from '@/components/data-generator/ExportOptions';
 import { DataPreviewTable } from '@/components/data-generator/DataPreviewTable';
-import { v4 as uuidv4 } from 'uuid';
 import { RawDataPreview } from '@/components/data-generator/RawDataPreview';
 import { Tab } from '@headlessui/react';
 import { TableCellsIcon, CodeBracketIcon } from '@heroicons/react/24/outline';
 import { DataGeneratorLoading } from '@/components/data-generator/DataGeneratorLoading';
-import { fetchApi } from '@/lib/utils/apiClient';
 import { useProviderSettings } from '@/lib/context/ProviderSettingsContext';
 import { QuickModelSwitcher } from '@/components/QuickModelSwitcher';
+import { useSchemaBuilder } from '@/lib/hooks/data-generator/useSchemaBuilder';
+import { useExportConfig } from '@/lib/hooks/data-generator/useExportConfig';
+import { useDataGeneration } from '@/lib/hooks/data-generator/useDataGeneration';
 
-const DEFAULT_SQL_TABLE_NAME = 'test_data';
-const DEFAULT_FILE_PREFIX = 'test-data';
-const PREVIEW_ROW_COUNT = 10;
-
-interface FieldDefinition {
-  id: string;
-  name: string;
-  type: string;
-  options: Record<string, any>;
-}
-
-interface ExportConfig {
-  rowCount: number;
-  format: 'CSV' | 'JSON' | 'SQL' | 'Excel';
-  lineEnding: 'Unix (LF)' | 'Windows (CRLF)';
-  includeHeader: boolean;
-  includeBOM: boolean;
-  applyAIEnhancement: boolean;
-  enhancementPrompt: string;
-}
-
-const createDefaultField = (): FieldDefinition => ({
-  id: uuidv4(),
-  name: 'id',
-  type: 'Number',
-  options: { min: 1, max: 1000, decimals: 0 },
-});
-
-const DEFAULT_EXPORT_CONFIG: ExportConfig = {
-  rowCount: 100,
-  format: 'CSV',
-  lineEnding: 'Unix (LF)',
-  includeHeader: true,
-  includeBOM: false,
-  applyAIEnhancement: false,
-  enhancementPrompt: '',
-};
-
-// Simple toast implementation since we don't have the actual Toast component
 interface Toast {
   title: string;
   description: string;
   variant: 'default' | 'destructive';
 }
 
-// Mock useToast hook
 const useToast = () => {
   const toast = (params: Toast) => {
     console.log(`TOAST: ${params.title} - ${params.description}`);
   };
-  
+
   return { toast };
 };
 
 export default function TestDataGeneratorPage() {
   const { settings } = useProviderSettings();
-  // Field definitions for the schema builder
-  const [fields, setFields] = useState<FieldDefinition[]>([createDefaultField()]);
-  
-  // Export configuration
-  const [exportConfig, setExportConfig] = useState<ExportConfig>({ ...DEFAULT_EXPORT_CONFIG });
-  
-  // Data generation state
-  const [previewDataRows, setPreviewDataRows] = useState<any[]>([]);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isPreviewMode, setIsPreviewMode] = useState(false);
-  
-  // Toast for showing notifications
+  const schema = useSchemaBuilder();
+  const { config: exportConfig, setConfig: setExportConfig, validateAgainstSchema } = useExportConfig();
   const { toast } = useToast();
-  
-  // Function to convert field definitions to API request format
-  const mapFieldsToAPI = () => {
-    return fields.map(field => ({
-      name: field.name,
-      type: field.type,
-      options: field.options
-    }));
-  };
-  
-  // Function to export data
-  const exportData = async () => {
-    if (fields.length === 0) {
-      toast({
-        title: 'No fields defined',
-        description: 'Please add at least one field with a type',
-        variant: 'destructive'
-      });
-      return;
-    }
-    
-    // Check if all fields have types
-    const missingTypes = fields.filter(field => !field.type);
-    if (missingTypes.length > 0) {
-      toast({
-        title: 'Missing field types',
-        description: `Please select types for all fields: ${missingTypes.map(f => f.name).join(', ')}`,
-        variant: 'destructive'
-      });
-      return;
-    }
-    
-    // Check if there are AI-Generated fields but no context is provided
-    const hasAIGeneratedFields = fields.some(field => field.type === 'AI-Generated');
-    if (hasAIGeneratedFields && !exportConfig.enhancementPrompt.trim()) {
-      toast({
-        title: 'AI Context Missing',
-        description: 'You have AI-Generated fields but no context is provided. Please add context to help the AI generate appropriate values.',
-        variant: 'destructive'
-      });
-      return;
-    }
-    
-    setIsGenerating(true);
-    
-    try {
-      // Generate the data using the fetchApi utility
-      const generatedData = await fetchApi('/api/data-generator/generate', {
-        method: 'POST',
-        body: JSON.stringify({
-          fields: mapFieldsToAPI(),
-          count: exportConfig.rowCount,
-          format: exportConfig.format,
-          options: {
-            lineEnding: exportConfig.lineEnding,
-            includeHeader: exportConfig.includeHeader,
-            includeBOM: exportConfig.includeBOM
-          },
-          // Include AI enhancement if there's a prompt
-          ...(exportConfig.enhancementPrompt.trim() 
-            ? { aiEnhancement: exportConfig.enhancementPrompt.trim() } 
-            : {}),
-          provider: settings.data.provider,
-          model: settings.data.model,
-        })
-      });
-      
-      // Success toast for AI enhancement
-      if (exportConfig.enhancementPrompt.trim() && !generatedData.error && hasAIGeneratedFields) {
-        toast({
-          title: 'Data Generated with AI Enhancement',
-          description: 'Successfully generated data with AI-Generated fields',
-          variant: 'default'
-        });
-      }
-      
-      // Create a download based on the format
-      let fileContent = '';
-      let fileName = `${DEFAULT_FILE_PREFIX}-${new Date().toISOString().slice(0, 10)}`;
-      let fileType = '';
-      
-      if (exportConfig.format === 'CSV') {
-        const { data } = generatedData;
-        // Create header row
-        const header = exportConfig.includeHeader 
-          ? Object.keys(data[0]).join(',') + (exportConfig.lineEnding === 'Windows (CRLF)' ? '\r\n' : '\n')
-          : '';
-          
-        // Create content rows
-        const rows = data.map((row: any) => 
-          Object.values(row).map(value => 
-            typeof value === 'string' ? `"${value.replace(/"/g, '""')}"` : value
-          ).join(',')
-        ).join(exportConfig.lineEnding === 'Windows (CRLF)' ? '\r\n' : '\n');
-        
-        fileContent = header + rows;
-        fileName += '.csv';
-        fileType = 'text/csv';
-        
-        // Add BOM if requested
-        if (exportConfig.includeBOM) {
-          fileContent = '\ufeff' + fileContent;
-        }
-      } else if (exportConfig.format === 'JSON') {
-        fileContent = JSON.stringify(generatedData.data, null, 2);
-        fileName += '.json';
-        fileType = 'application/json';
-      } else if (exportConfig.format === 'SQL') {
-        // Build SQL insert statements
-        const { data } = generatedData;
-        const tableName = DEFAULT_SQL_TABLE_NAME;
-        const columns = Object.keys(data[0]);
-        
-        fileContent = data.map((row: any) => {
-          const values = Object.values(row).map(value => {
-            if (value === null) return 'NULL';
-            if (typeof value === 'string') return `'${value.replace(/'/g, "''")}'`;
-            return value;
-          }).join(', ');
-          
-          return `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${values});`;
-        }).join(exportConfig.lineEnding === 'Windows (CRLF)' ? '\r\n' : '\n');
-        
-        fileName += '.sql';
-        fileType = 'text/plain';
-      } else if (exportConfig.format === 'Excel') {
-        // For Excel, we need to redirect to a server endpoint that will generate the Excel file
-        const blob = await fetchApi<Blob>('/api/data-generator/export-excel', {
-          method: 'POST',
-          body: JSON.stringify({ data: generatedData.data }),
-          headers: { 'Accept': 'application/octet-stream' }
-        }, true); // Pass true to get binary response
-        
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `test-data-${new Date().toISOString().slice(0, 10)}.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        a.remove();
-        
-        setIsGenerating(false);
-        return;
-      }
-      
-      // Create and trigger download
-      const blob = new Blob([fileContent], { type: fileType });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      a.remove();
-      
-      toast({
-        title: 'Export Successful',
-        description: `Generated ${generatedData.data.length} rows of data.`,
-        variant: 'default'
-      });
-    } catch (error: any) {
-      console.error('Error generating data:', error);
-      toast({
-        title: 'Generation Failed',
-        description: error.message || 'Unknown error occurred',
-        variant: 'destructive'
-      });
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-  
-  // Function to generate preview
-  const generatePreview = async () => {
-    if (fields.length === 0) {
-      toast({
-        title: 'No fields defined',
-        description: 'Please add at least one field with a type',
-        variant: 'destructive'
-      });
-      return;
-    }
-    
-    // Check if all fields have types
-    const missingTypes = fields.filter(field => !field.type);
-    if (missingTypes.length > 0) {
-      toast({
-        title: 'Missing field types',
-        description: `Please select types for all fields: ${missingTypes.map(f => f.name).join(', ')}`,
-        variant: 'destructive'
-      });
-      return;
-    }
-    
-    // Check if there are AI-Generated fields but no context is provided
-    const hasAIGeneratedFields = fields.some(field => field.type === 'AI-Generated');
-    if (hasAIGeneratedFields && !exportConfig.enhancementPrompt.trim()) {
-      toast({
-        title: 'AI Context Missing',
-        description: 'You have AI-Generated fields but no context is provided. Please add context to help the AI generate appropriate values.',
-        variant: 'destructive'
-      });
-      return;
-    }
-    
-    setIsGenerating(true);
-    
-    try {
-      // Generate the data using fetchApi utility
-      const result = await fetchApi('/api/data-generator/generate', {
-        method: 'POST',
-        body: JSON.stringify({
-          fields: mapFieldsToAPI(),
-          count: PREVIEW_ROW_COUNT,
-          format: 'JSON',
-          // Include AI enhancement if there's a prompt
-          ...(exportConfig.enhancementPrompt.trim() 
-            ? { aiEnhancement: exportConfig.enhancementPrompt.trim() } 
-            : {}),
-          provider: settings.data.provider,
-          model: settings.data.model,
-        })
-      });
-      
-      if (result.data && result.data.length > 0) {
-        setPreviewDataRows(result.data);
-        setIsPreviewMode(true);
-        toast({
-          title: 'Data Generated',
-          description: `Successfully generated ${result.data.length} records`,
-          variant: 'default'
-        });
-      } else {
-        toast({
-          title: 'No Data Generated',
-          description: 'The generation process did not produce any data',
-          variant: 'destructive'
-        });
-      }
-    } catch (error: any) {
-      console.error('Error generating data:', error);
-      toast({
-        title: 'Generation Failed',
-        description: error.message || 'Unknown error occurred',
-        variant: 'destructive'
-      });
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-  
-  // Function to clear preview
-  const clearPreview = () => {
-    setPreviewDataRows([]);
-    setIsPreviewMode(false);
-  };
-  
+
+  const {
+    exportData,
+    generatePreview,
+    clearPreview,
+    previewDataRows,
+    isGenerating,
+    isPreviewMode,
+  } = useDataGeneration({
+    exportConfig,
+    hasAIGeneratedFields: schema.hasAIGeneratedFields,
+    mapFieldsToApi: schema.mapFieldsToApi,
+    validateSchema: schema.validateSchema,
+    validateExportConfig: validateAgainstSchema,
+    provider: settings.data.provider,
+    model: settings.data.model,
+    toast,
+  });
+
   return (
     <main className="container mx-auto px-4 py-8">
       <div className="text-center mb-16">
@@ -355,18 +65,13 @@ export default function TestDataGeneratorPage() {
       <div className="mb-6 flex justify-center sm:justify-end">
         <QuickModelSwitcher domain="data" />
       </div>
-      
+
       <div className="space-y-6">
-        {/* Schema Builder */}
         <div>
           <h2 className="text-2xl font-semibold text-white mb-4">Define Your Schema</h2>
-          <SchemaBuilder 
-            fields={fields}
-            onChange={setFields}
-          />
+          <SchemaBuilder fields={schema.fields} onChange={schema.setFields} />
         </div>
-        
-        {/* Export Options */}
+
         <div>
           <h2 className="text-2xl font-semibold text-white mb-4">Export Options</h2>
           <ExportOptions
@@ -374,11 +79,10 @@ export default function TestDataGeneratorPage() {
             onConfigChange={setExportConfig}
             onExport={exportData}
             onPreview={generatePreview}
-            hasAIGeneratedFields={fields.some(field => field.type === 'AI-Generated')}
+            hasAIGeneratedFields={schema.hasAIGeneratedFields}
           />
         </div>
-        
-        {/* Preview Data Section */}
+
         {isPreviewMode && previewDataRows.length > 0 && (
           <div>
             <div className="flex justify-between items-center mb-4">
@@ -390,26 +94,30 @@ export default function TestDataGeneratorPage() {
                 Close Preview
               </button>
             </div>
-            
+
             <Tab.Group>
               <Tab.List className="flex space-x-1 rounded-xl bg-slate-700/50 p-1 mb-4">
-                <Tab className={({ selected }) =>
-                  `w-full rounded-lg py-2.5 text-sm font-medium leading-5 
-                   ${selected
-                     ? 'bg-blue-600 text-white shadow'
-                     : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
-                   } flex items-center justify-center`
-                }>
+                <Tab
+                  className={({ selected }) =>
+                    `w-full rounded-lg py-2.5 text-sm font-medium leading-5 ${
+                      selected
+                        ? 'bg-blue-600 text-white shadow'
+                        : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                    } flex items-center justify-center`
+                  }
+                >
                   <TableCellsIcon className="h-5 w-5 mr-2" />
                   Table View
                 </Tab>
-                <Tab className={({ selected }) =>
-                  `w-full rounded-lg py-2.5 text-sm font-medium leading-5
-                   ${selected
-                     ? 'bg-blue-600 text-white shadow'
-                     : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
-                   } flex items-center justify-center`
-                }>
+                <Tab
+                  className={({ selected }) =>
+                    `w-full rounded-lg py-2.5 text-sm font-medium leading-5 ${
+                      selected
+                        ? 'bg-blue-600 text-white shadow'
+                        : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                    } flex items-center justify-center`
+                  }
+                >
                   <CodeBracketIcon className="h-5 w-5 mr-2" />
                   Raw Format ({exportConfig.format})
                 </Tab>
@@ -419,13 +127,13 @@ export default function TestDataGeneratorPage() {
                   <DataPreviewTable data={previewDataRows} />
                 </Tab.Panel>
                 <Tab.Panel>
-                  <RawDataPreview 
+                  <RawDataPreview
                     data={previewDataRows}
                     format={exportConfig.format}
                     options={{
                       lineEnding: exportConfig.lineEnding,
                       includeHeader: exportConfig.includeHeader,
-                      includeBOM: exportConfig.includeBOM
+                      includeBOM: exportConfig.includeBOM,
                     }}
                   />
                 </Tab.Panel>
@@ -433,8 +141,7 @@ export default function TestDataGeneratorPage() {
             </Tab.Group>
           </div>
         )}
-        
-        {/* Loading Indicator */}
+
         {isGenerating && (
           <div className="flex justify-center items-center p-12 bg-slate-800/70 backdrop-blur-sm rounded-xl border border-slate-700">
             <DataGeneratorLoading message="Generating test data..." />
@@ -443,4 +150,4 @@ export default function TestDataGeneratorPage() {
       </div>
     </main>
   );
-} 
+}

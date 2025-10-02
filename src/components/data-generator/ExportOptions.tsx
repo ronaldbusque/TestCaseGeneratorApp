@@ -1,15 +1,5 @@
-import { useState, useEffect } from 'react';
 import { EyeIcon, LightBulbIcon } from '@heroicons/react/24/outline';
-
-interface ExportConfig {
-  rowCount: number;
-  format: 'CSV' | 'JSON' | 'SQL' | 'Excel';
-  lineEnding: 'Unix (LF)' | 'Windows (CRLF)';
-  includeHeader: boolean;
-  includeBOM: boolean;
-  applyAIEnhancement: boolean;
-  enhancementPrompt: string;
-}
+import type { ExportConfig } from '@/lib/data-generator/types';
 
 interface ExportOptionsProps {
   config: ExportConfig;
@@ -64,12 +54,26 @@ export function ExportOptions({ config, onConfigChange, onExport, onPreview, has
       applyAIEnhancement: !config.applyAIEnhancement
     });
   };
-  
+
   const handleEnhancementPromptChange = (prompt: string) => {
     onConfigChange({
       ...config,
       enhancementPrompt: prompt,
       applyAIEnhancement: prompt.trim().length > 0
+    });
+  };
+
+  const handleToggleSeed = () => {
+    onConfigChange({
+      ...config,
+      useDeterministicSeed: !config.useDeterministicSeed,
+    });
+  };
+
+  const handleSeedValueChange = (value: string) => {
+    onConfigChange({
+      ...config,
+      seedValue: value,
     });
   };
   
@@ -192,6 +196,35 @@ export function ExportOptions({ config, onConfigChange, onExport, onPreview, has
           </div>
         </div>
       )}
+
+      <div className="mt-4 border-t border-slate-700 pt-4">
+        <div className="flex items-center mb-2 justify-between">
+          <span className="text-white text-sm font-medium">Deterministic Seed</span>
+          <label className="inline-flex items-center gap-2 text-sm text-white">
+            <input
+              type="checkbox"
+              checked={config.useDeterministicSeed}
+              onChange={handleToggleSeed}
+              className="form-checkbox h-4 w-4 text-blue-600 bg-slate-700 border-slate-600 rounded"
+            />
+            Lock Random Seed
+          </label>
+        </div>
+        {config.useDeterministicSeed && (
+          <div className="mt-2">
+            <input
+              type="text"
+              value={config.seedValue}
+              onChange={(e) => handleSeedValueChange(e.target.value)}
+              placeholder="e.g. ecommerce-demo"
+              className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-xs text-slate-400 mt-2">
+              Using the same seed reproduces identical datasets. Leave empty or disable the toggle for randomised output.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
-} 
+}

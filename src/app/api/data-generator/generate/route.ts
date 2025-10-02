@@ -3,63 +3,68 @@ import { TestDataGeneratorService } from '@/lib/services/ai/testDataGenerator';
 import { createAIService } from '@/lib/services/ai/factory';
 import { LLMProvider } from '@/lib/types';
 import usageTracker from '@/lib/server/usageTracker';
-
-interface FieldDefinition {
-  name: string;
-  type: string;
-  options: Record<string, any>;
-}
-
-interface GenerateRequest {
-  fields: FieldDefinition[];
-  count: number;
-  format: 'CSV' | 'JSON' | 'SQL' | 'Excel';
-  options: {
-    lineEnding: 'Unix (LF)' | 'Windows (CRLF)';
-    includeHeader: boolean;
-    includeBOM: boolean;
-  };
-  aiEnhancement?: string;
-  provider?: LLMProvider;
-  model?: string;
-}
+import { generateDataPayloadSchema } from '@/lib/data-generator/validation';
+import type { TestDataGenerationResponse } from '@/lib/types/testData';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { fields, count = 100, format = 'JSON', options, aiEnhancement, provider, model } = body as GenerateRequest;
+    const rawBody = await request.json();
+    const parsedPayload = generateDataPayloadSchema.safeParse(rawBody);
+
+    if (!parsedPayload.success) {
+      const { fieldErrors } = parsedPayload.error.flatten();
+      if (fieldErrors.fields) {
+        return NextResponse.json(
+          { error: 'Missing required field: fields', details: fieldErrors.fields },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json(
+        { error: 'Invalid payload', details: fieldErrors },
+        { status: 400 }
+      );
+    }
+
+    const {
+      fields,
+      count = 100,
+      format = 'JSON',
+      options,
+      aiEnhancement,
+      provider,
+      model,
+      seed,
+    } = parsedPayload.data;
     
     console.log("=== TEST DATA GENERATION API REQUEST ===");
-    console.log({ 
-      fields: fields.map(f => `${f.name} (${f.type})`),
+    console.log({
+      fields: Array.isArray(fields) ? fields.map((f) => `${f.name} (${f.type})`) : 'invalid',
       count, 
       format,
       options,
       hasAiEnhancement: !!aiEnhancement,
       provider: provider ?? 'openai',
       model: model ?? 'default',
+      seed: seed ?? null,
     });
     console.log("=======================================");
     
-    if (!fields || !Array.isArray(fields) || fields.length === 0) {
-      return NextResponse.json(
-        { error: 'Missing required field: fields' },
-        { status: 400 }
-      );
-    }
-    
-    const coreAIService = createAIService(provider);
+    const providerForService: LLMProvider | undefined = provider as LLMProvider | undefined;
+
+    const coreAIService = createAIService(providerForService);
     const userIdentifier = request.headers.get('X-User-Identifier') ?? undefined;
     console.log(`Core AI Service created: ${coreAIService.constructor.name}`);
     
     const dataGeneratorService = new TestDataGeneratorService(coreAIService);
     console.log('TestDataGeneratorService instantiated with the core AI service');
     
-    const result = await dataGeneratorService.generateTestDataFromFields({ 
-      fields, 
+    const result = await dataGeneratorService.generateTestDataFromFields({
+      fields,
       count,
       aiEnhancement,
       model,
+      seed,
     });
     
     console.log("=== TEST DATA GENERATION API RESPONSE ===");
@@ -69,13 +74,13 @@ export async function POST(request: NextRequest) {
     if (result.error) {
       console.warn(`Test data generation encountered an issue: ${result.error}`);
       // Still return with 200 status as we might have partial results
-      return NextResponse.json(result);
+      return NextResponse.json(result satisfies TestDataGenerationResponse);
     }
-    
+
     if (userIdentifier && !result.error) {
       console.log('[API][Test Data Generate] Recording usage', {
         userIdentifier,
-        provider: provider ?? 'openai',
+        provider: providerForService ?? 'openai',
         model,
         count,
         format,
@@ -83,13 +88,13 @@ export async function POST(request: NextRequest) {
       await usageTracker.recordUsage({
         userIdentifier,
         feature: 'test-data-generator',
-        provider: provider ?? 'openai',
+        provider: providerForService ?? 'openai',
         model: model ?? null,
         metadata: { count, format },
       });
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json(result satisfies TestDataGenerationResponse);
   } catch (error) {
     console.error('Error generating test data:', error);
     return NextResponse.json(
