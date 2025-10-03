@@ -30,9 +30,9 @@ export default function AboutPage() {
             </p>
             
             <p className="text-blue-100 mt-4">
-              Our suite of tools is designed to streamline the testing process, from generating test cases 
-              to creating SQL queries and test data. We believe that by automating the repetitive aspects 
-              of testing, QA professionals can focus on what truly matters: ensuring software quality.
+              Our suite of tools streamlines everything from exploratory test planning to deterministic data exports. 
+              Agentic pipelines, SQL assistance, and a Copycat-backed data generator work together so QA professionals 
+              can spend more time on insight and less time on manual setup.
             </p>
           </div>
         </section>
@@ -67,14 +67,24 @@ export default function AboutPage() {
               </Link>
             </div>
             
-            <div className="bg-white/5 p-6 rounded-xl border border-white/10 opacity-80">
+            <div className="bg-white/5 p-6 rounded-xl border border-white/10">
               <h3 className="text-xl font-semibold text-white mb-3">
                 Test Data Generator
-                <span className="ml-2 bg-blue-600/30 text-blue-200 text-xs px-2 py-0.5 rounded-full">Coming Soon</span>
               </h3>
               <p className="text-blue-100 text-sm mb-4">
-                Create realistic test data for your applications.
+                Design relational schemas, preview deterministic datasets, and apply AI guidance with reusable prompts.
               </p>
+              <ul className="text-blue-100 text-xs space-y-1 mb-4 list-disc list-inside">
+                <li>Drag-and-drop schema builder with relationship linting</li>
+                <li>AI prompt library and one-click sample generation</li>
+                <li>Multi-format exports with header/BOM controls</li>
+              </ul>
+              <Link
+                href="/data-generator"
+                className="text-blue-400 hover:text-blue-300 text-sm"
+              >
+                Explore the generator
+              </Link>
             </div>
           </div>
         </section>

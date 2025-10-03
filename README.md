@@ -61,32 +61,28 @@ A comprehensive suite of AI-powered tools for quality assurance and testing prof
 ### 📊 Test Data Generator
 
 - 🧩 **Flexible Schema Definition**
-  - Visual schema builder with field editor
-  - 50+ data types across multiple categories
-  - Customizable field options and constraints
+  - Rich schema builder with drag-and-drop reordering, duplication, and templates
+  - 50+ field types plus relationship support with referential linting and relational preview
+  - Inline validation for numeric, date, list, and reference constraints
 
 - 🤖 **AI-Enhanced Data Generation**
-  - Contextual data enhancement through AI
-  - Custom rules for more realistic test data
-  - Correlated field values generation
+  - Prompt library with curated presets and single-click AI sample previews
+  - Per-export AI enhancement toggle that only activates when AI fields are present
+  - Deterministic Copycat engine with Faker fallback when needed
 
 - 📤 **Multiple Export Formats**
-  - CSV with custom delimiters
-  - JSON with formatting options
-  - SQL insert statements
-  - Excel spreadsheets
+  - CSV, JSON, SQL insert statements, and Excel downloads
+  - Configurable line endings, optional UTF-8 BOM for Excel compatibility, and header row control
 
 - 🔄 **Preview and Iteration**
-  - Live data preview before export
-  - Table and raw format views
-  - Quick field adjustments
-  - One-click regeneration
+  - Live preview with table, raw, and relational tabs, plus metadata on engine/determinism
+  - Preview controller with refresh, copy, and download options
+  - Automatically scrolls to progress updates during generation runs
 
 - 🔧 **Advanced Options**
-  - Custom line endings
-  - BOM inclusion options
-  - Header control for CSV exports
-  - Customizable data ranges and patterns
+  - Seed management with deterministic locking for reproducible data sets
+  - Schema persistence with Supabase or local storage (when available)
+  - Shared format helpers and copy-safe downloads across export formats
 
 ## 🚀 Getting Started
 
@@ -100,8 +96,8 @@ A comprehensive suite of AI-powered tools for quality assurance and testing prof
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/qualityforge-suite.git
-cd qualityforge-suite
+git clone https://github.com/ronaldbusque/TestCaseGeneratorApp.git
+cd TestCaseGeneratorApp
 ```
 
 2. Install dependencies:
@@ -134,7 +130,9 @@ yarn dev
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-6. Visit **Settings → Provider Settings** to choose your provider for each tool and override the model names as needed.
+6. Visit **Settings → Provider Settings** to choose your provider for each tool and override the model names as needed. The test data generator also exposes a quick model switcher on the page itself for fast context changes.
+
+7. Open **Data Generator** to try the revamped schema builder, preview controller, and AI prompt guidance. Toggle "Include header row" or "Add UTF-8 BOM" in the export options when targeting spreadsheet workflows.
 
 ## 🛠️ Technology Stack
 
