@@ -43,22 +43,11 @@ export default function TestDataGeneratorPage() {
   } = useExportConfig();
   const { toast } = useToast();
 
-  const {
-    exportData,
-    generatePreview,
-    generateAiSample,
-    clearPreview,
-    previewDataRows,
-    aiSampleRow,
-    generationMetadata,
-    isGenerating,
-    isFetchingAiSample,
-    isPreviewMode,
-  const progressRef = useRef<HTMLDivElement | null>(null);
+  const progressCardRef = useRef<HTMLDivElement | null>(null);
 
   const scrollToProgress = useCallback(() => {
     window.requestAnimationFrame(() => {
-      progressRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      progressCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }, []);
 
@@ -107,7 +96,7 @@ export default function TestDataGeneratorPage() {
         <QuickModelSwitcher domain="data" />
       </div>
 
-      <div className="space-y-8" ref={progressRef}>
+      <div className="space-y-8">
         <section>
           <h2 className="text-2xl font-semibold text-white mb-4">Define Your Schema</h2>
           <SchemaBuilder
@@ -254,11 +243,13 @@ export default function TestDataGeneratorPage() {
           </section>
         )}
 
-        {isGenerating && (
-          <div className="flex justify-center items-center p-12 bg-slate-800/70 backdrop-blur-sm rounded-xl border border-slate-700">
-            <DataGeneratorLoading message="Generating test data..." />
-          </div>
-        )}
+        <div ref={progressCardRef}>
+          {isGenerating && (
+            <div className="flex justify-center items-center p-12 bg-slate-800/70 backdrop-blur-sm rounded-xl border border-slate-700">
+              <DataGeneratorLoading message="Generating test data..." />
+            </div>
+          )}
+        </div>
       </div>
     </main>
   );
