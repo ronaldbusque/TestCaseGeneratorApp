@@ -1,6 +1,12 @@
 import { EyeIcon, LightBulbIcon } from '@heroicons/react/24/outline';
 import type { ExportConfig } from '@/lib/data-generator/types';
 
+const ENHANCEMENT_PROMPT_EXAMPLES = [
+  'Generate sci-fi character names',
+  'Create realistic product descriptions for a tech company',
+  'Generate addresses in the Boston area',
+];
+
 interface ExportOptionsProps {
   config: ExportConfig;
   onConfigChange: (config: ExportConfig) => void;
@@ -10,6 +16,8 @@ interface ExportOptionsProps {
 }
 
 export function ExportOptions({ config, onConfigChange, onExport, onPreview, hasAIGeneratedFields }: ExportOptionsProps) {
+  const enhancementPlaceholder = `Examples: ${ENHANCEMENT_PROMPT_EXAMPLES.map((example) => `"${example}"`).join(', ')}`;
+
   const handleRowCountChange = (value: string) => {
     const count = parseInt(value);
     if (!isNaN(count) && count > 0) {
@@ -133,26 +141,29 @@ export function ExportOptions({ config, onConfigChange, onExport, onPreview, has
         </div>
         
         <div className="flex items-center">
-          <label className="inline-flex items-center">
+          <label className="inline-flex items-center gap-2 text-sm text-white">
             <input
               type="checkbox"
               checked={config.includeHeader}
               onChange={handleToggleHeader}
               className="form-checkbox h-4 w-4 text-blue-600 bg-slate-700 border-slate-600 rounded"
             />
-            <span className="ml-2 text-white text-sm font-medium">header</span>
+            <span className="font-medium">Include header row</span>
           </label>
         </div>
         
         <div className="flex items-center">
-          <label className="inline-flex items-center">
+          <label
+            className="inline-flex items-center gap-2 text-sm text-white"
+            title="Adds a UTF-8 byte order mark so tools like Excel detect the encoding correctly"
+          >
             <input
               type="checkbox"
               checked={config.includeBOM}
               onChange={handleToggleBOM}
               className="form-checkbox h-4 w-4 text-blue-600 bg-slate-700 border-slate-600 rounded"
             />
-            <span className="ml-2 text-white text-sm font-medium">BOM</span>
+            <span className="font-medium">Add UTF-8 BOM (for Excel)</span>
           </label>
         </div>
         
@@ -185,12 +196,12 @@ export function ExportOptions({ config, onConfigChange, onExport, onPreview, has
           
           <div className="mt-2">
             <p className="text-slate-300 text-xs mb-2">
-              Provide context and instructions for AI-Generated fields. This helps the AI understand how to generate values for fields with the &quot;AI-Generated&quot; type.
+              {'Provide context and instructions for AI-Generated fields. This helps the AI understand how to generate values for fields with the "AI-Generated" type.'}
             </p>
             <textarea
               value={config.enhancementPrompt}
               onChange={(e) => handleEnhancementPromptChange(e.target.value)}
-              placeholder={'Examples: &quot;Generate sci-fi character names&quot;, &quot;Create realistic product descriptions for a tech company&quot;, &quot;Generate addresses in the Boston area&quot;'}
+              placeholder={enhancementPlaceholder}
               className="w-full h-20 bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
           </div>
